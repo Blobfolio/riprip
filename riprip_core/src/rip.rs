@@ -404,7 +404,7 @@ impl Rip {
 						}
 						// Assume C2 is fine since we aren't asking for any.
 						else {
-							for v in &mut c2 { *v = true; }
+							for v in &mut c2 { *v = false; }
 						},
 					// Assume total C2 failure.
 					Err(RipRipError::CdRead(_)) => {
