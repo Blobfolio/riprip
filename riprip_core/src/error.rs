@@ -60,14 +60,14 @@ pub enum RipRipError {
 	/// # Unable to parse paranoia.
 	Paranoia,
 
-	/// # Unable to parse passes.
-	Passes,
-
 	/// # Read Offset.
 	ReadOffset,
 
 	/// # Reconfirm/Paranoia conflict.
 	ReconfirmParanoia,
+
+	/// # Unable to parse passes.
+	Refine,
 
 	/// # Numbers can't be converted to the necessary types.
 	RipOverflow(u8),
@@ -132,9 +132,9 @@ impl fmt::Display for RipRipError {
 			Self::NoTracks => f.write_str("No tracks were found."),
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
 			Self::Paranoia => f.write_str("Invalid paranoia level."),
-			Self::Passes => f.write_str("Invalid number of passes."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
 			Self::ReconfirmParanoia => f.write_str("Reconfirmation requires a paranoia level of at least 2."),
+			Self::Refine => f.write_str("Invalid number of refine passes."),
 			Self::RipOverflow(n) => write!(f, "Track #{n} cannot be ripped on this system."),
 			Self::RipTracks => f.write_str("Invalid rip track or range."),
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),

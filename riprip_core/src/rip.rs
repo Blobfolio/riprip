@@ -42,9 +42,6 @@ const FLAG_RECONFIRM: u8 = 0b0010;
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_C2;
 
-/// # Max Passes.
-const MAX_PASSES: u8 = 10;
-
 /// # Quality Bar.
 const QUALITY_BAR: &str = "########################################################################";
 
@@ -70,7 +67,7 @@ const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
 pub struct RipOptions {
 	offset: ReadOffset,
 	paranoia: u8,
-	passes: u8,
+	refine: u8,
 	flags: u8,
 	tracks: Vec<u8>,
 }
@@ -80,7 +77,7 @@ impl Default for RipOptions {
 		Self {
 			offset: ReadOffset::default(),
 			paranoia: 3,
-			passes: 0,
+			refine: 0,
 			flags: FLAG_DEFAULT,
 			tracks: Vec::new(),
 		}
@@ -147,28 +144,6 @@ impl RipOptions {
 	}
 
 	#[must_use]
-	/// # With Passes.
-	///
-	/// Set the number of passes to run over each track (before moving on).
-	/// Only sectors containing unread/unconfirmed samples are queried during
-	/// a given pass, so each run should be that much quicker than the last.
-	///
-	/// When zero — the default — the process is interactive instead, asking
-	/// you after each pass if you'd like to give it another go.
-	///
-	/// This value is ignored when there's nothing to refine.
-	///
-	/// Custom values are automatically capped at `0..=10`.
-	pub fn with_passes(self, mut passes: u8) -> Self {
-		if passes == 0 { passes = 1; }
-		else if passes > MAX_PASSES { passes = MAX_PASSES; }
-		Self {
-			passes,
-			..self
-		}
-	}
-
-	#[must_use]
 	/// # With Reconfirmation.
 	///
 	/// If true, previously-accepted samples will be downgraded, requring
@@ -182,6 +157,21 @@ impl RipOptions {
 
 		Self {
 			flags,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # With Refine Passes.
+	///
+	/// Execute this many additional rip passes so long as any samples remain
+	/// unread or unconfirmed.
+	///
+	/// The default is zero; the max is 15.
+	pub fn with_refine(self, mut refine: u8) -> Self {
+		if refine > 15 { refine = 15; }
+		Self {
+			refine,
 			..self
 		}
 	}
@@ -219,11 +209,17 @@ impl RipOptions {
 
 	#[must_use]
 	/// # Number of Passes.
-	pub const fn passes(&self) -> u8 { self.passes }
+	///
+	/// Return the total number of passes, e.g. `1 + refine`.
+	pub const fn passes(&self) -> u8 { self.refine() + 1 }
 
 	#[must_use]
 	/// # Require Reconfirmation?
 	pub const fn reconfirm(&self) -> bool { FLAG_RECONFIRM == self.flags & FLAG_RECONFIRM }
+
+	#[must_use]
+	/// # Number of Refine Passes.
+	pub const fn refine(&self) -> u8 { self.refine }
 
 	#[must_use]
 	/// # Tracks.
@@ -367,7 +363,7 @@ impl Rip {
 		loop {
 			let _res = progress.reset(total); // This won't fail.
 			progress.set_title(Some(Msg::custom(
-				format!("{}Ripping", "Re-".repeat(usize::from(pass + resume))),
+				format!("{}Ripping", "Re-".repeat(usize::min(5, usize::from(pass + resume)))),
 				199,
 				format!("Track #{}…", self.idx)
 			)));
@@ -460,13 +456,9 @@ impl Rip {
 			}
 
 			// Should we stop or keep going?
-			if killed.killed() || self.offset_good(opt.offset()) { break; }
-			if opt.passes() == 0 && pass < MAX_PASSES {
-				if ! fyi_msg::confirm!(yes: "Do you want to refine this rip?") {
-					break;
-				}
+			if pass == opt.passes() || killed.killed() || self.offset_good(opt.offset()) {
+				break;
 			}
-			else if pass == MAX_PASSES || pass == opt.passes() { break; }
 		}
 
 		// Don't forget to save the track.

@@ -77,10 +77,9 @@ label = "<NUM>"
 description = "When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
-short = "-p"
-long = "--passes"
+long = "--refine"
 label = "<NUM>"
-description = "Iteratively rip each track <NUM> times, or until all samples have been successfully read and confirmed, whichever comes first. If zero, you will be asked after incomplete pass if you'd like another go-around. [default: 0; range: 0..=10]"
+description = "Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]"
 
 [[package.metadata.bashman.options]]
 short = "-t"

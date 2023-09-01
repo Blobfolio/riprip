@@ -143,9 +143,9 @@ fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 		opt = opt.with_paranoia(paranoia);
 	}
 
-	if let Some(v) = args.option2(b"-p", b"--passes") {
-		let passes = u8::btou(v).ok_or(RipRipError::Passes)?;
-		opt = opt.with_passes(passes);
+	if let Some(v) = args.option(b"--refine") {
+		let refine = u8::btou(v).ok_or(RipRipError::Refine)?;
+		opt = opt.with_refine(refine);
 	}
 
 	// Parsing the tracks is slightly more involved. Haha.
@@ -197,7 +197,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		else { tracks.oxford_and() };
 	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
 	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
-	let nice_pass = NiceU8::from(opts.passes());
+	let nice_passes = NiceU8::from(opts.passes());
 	let nice_paranoia = NiceU8::from(opts.paranoia());
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 
@@ -207,20 +207,16 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("C2:", nice_c2, opts.c2()),
 		("Paranoia:", Cow::Borrowed(nice_paranoia.as_str()), 1 < opts.paranoia()),
-		(
-			"Passes:",
-			if opts.passes() == 0 { Cow::Borrowed("Interactive") } else { Cow::Borrowed(nice_pass.as_str()) },
-			1 != opts.passes()
-		),
+		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
 	];
 
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:12} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:12} {v}\x1b[0m");
 		}
 	}
 
@@ -294,12 +290,10 @@ OPTIONS:
                       been confirmed <NUM> times. Similarly, if a sample moves
                       from bad to good, require <NUM> confirmations before
                       believing it. [default: 3; range: 1..=32]
-    -p, --passes <NUM>
-                      Iteratively rip each track <NUM> times, or until all
-                      samples have been successfully read and confirmed,
-                      whichever comes first. If zero, you will be asked after
-                      incomplete pass if you'd like another go-around.
-                      [default: 0; range: 0..=10]
+        --refine <NUM>
+                      Execute up to <NUM> additional rip passes for each track
+                      while any samples remain unread/unconfirmed.
+                      [default: 0; max: 15]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
