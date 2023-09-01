@@ -1,0 +1,101 @@
+[package]
+name = "riprip"
+version = "0.0.1"
+license = "WTFPL"
+authors = ["Josh Stoik <josh@blobfolio.com>"]
+edition = "2021"
+rust-version = "1.70"
+description = "An incremental, second-stage audio CD ripper for advanced data recovery."
+repository = "https://github.com/Blobfolio/riprip"
+readme = "README.md"
+publish = false
+
+[package.metadata.deb]
+maintainer = "Josh Stoik <hello@blobfolio.com>"
+copyright = "2022, Blobfolio, LLC <hello@blobfolio.com>"
+license-file = ["../LICENSE", "0"]
+revision = "1"
+depends = "$auto"
+section = "sound"
+extended-description = """\
+.\n\
+Rip Rip Hooray! is a second-stage audio CD ripper for advanced data recovery."""
+assets = [
+    ["../target/x86_64-unknown-linux-gnu/release/riprip", "usr/bin/", "755"],
+    ["../release/completions/riprip.bash", "etc/bash_completion.d/", "644"],
+    ["../release/man/riprip.1.gz", "usr/share/man/man1/", "644"],
+]
+
+[package.metadata.bashman]
+name = "Rip Rip Hooray!"
+bash-dir = "../release/completions"
+man-dir = "../release/man"
+credits-dir = "../"
+
+[[package.metadata.bashman.switches]]
+long = "--clean"
+description = "Clear any previous riprip/state files from the current working directory before doing anything else."
+
+[[package.metadata.bashman.switches]]
+short = "-h"
+long = "--help"
+description = "Print help information."
+
+[[package.metadata.bashman.switches]]
+long = "--no-c2"
+description = "Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)"
+
+[[package.metadata.bashman.switches]]
+long = "--no-rip"
+description = "Just print the basic disc information to STDERR and exit."
+
+[[package.metadata.bashman.switches]]
+short = "-V"
+long = "--version"
+description = "Print program version."
+
+[[package.metadata.bashman.options]]
+short = "-d"
+long = "--dev"
+label = "<PATH>"
+description = "The device path for the optical drive containing the CD of interest. If omitted, the default — likely /dev/cdrom — will be assumed."
+path = true
+
+[[package.metadata.bashman.options]]
+short = "-o"
+long = "--offset"
+label = "<SAMPLES>"
+description = "The AccurateRip, et al, read offset to apply when ripping. May be negative. [default: 0; range: ±5880]"
+
+[[package.metadata.bashman.options]]
+long = "--paranoia"
+label = "<NUM>"
+description = "When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]"
+
+[[package.metadata.bashman.options]]
+short = "-p"
+long = "--passes"
+label = "<NUM>"
+description = "Iteratively rip each track <NUM> times, or until all samples have been successfully read and confirmed, whichever comes first. If zero, you will be asked after incomplete pass if you'd like another go-around. [default: 0; range: 0..=10]"
+
+[[package.metadata.bashman.options]]
+short = "-t"
+long = "--track"
+label = "<NUM>"
+description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). [default: the whole disc]"
+duplicate = true
+
+[dependencies]
+argyle = "0.6.*"
+ctrlc = "=3.4.0"
+dactyl = "0.5"
+oxford_join = "0.2.*"
+trimothy = "0.1.*"
+
+[dependencies.fyi_msg]
+version = "0.11.*"
+features = [ "progress" ]
+
+[dependencies.riprip_core]
+path = "../riprip_core"
+features = [ "bin" ]

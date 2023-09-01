@@ -1,0 +1,40 @@
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.1" "User Commands"
+.SH NAME
+Rip Rip Hooray! \- Manual page for riprip v0.0.1.
+.SH DESCRIPTION
+An incremental, second\-stage audio CD ripper for advanced data recovery.
+.SS USAGE:
+.TP
+riprip [FLAGS] [OPTIONS]
+.SS FLAGS:
+.TP
+\fB\-\-clean\fR
+Clear any previous riprip/state files from the current working directory before doing anything else.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help information.
+.TP
+\fB\-\-no\-c2\fR
+Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)
+.TP
+\fB\-\-no\-rip\fR
+Just print the basic disc information to STDERR and exit.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print program version.
+.SS OPTIONS:
+.TP
+\fB\-d\fR, \fB\-\-dev\fR <PATH>
+The device path for the optical drive containing the CD of interest. If omitted, the default — likely /dev/cdrom — will be assumed.
+.TP
+\fB\-o\fR, \fB\-\-offset\fR <SAMPLES>
+The AccurateRip, et al, read offset to apply when ripping. May be negative. [default: 0; range: ±5880]
+.TP
+\fB\-\-paranoia\fR <NUM>
+When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]
+.TP
+\fB\-p\fR, \fB\-\-passes\fR <NUM>
+Iteratively rip each track <NUM> times, or until all samples have been successfully read and confirmed, whichever comes first. If zero, you will be asked after incomplete pass if you'd like another go\-around. [default: 0; range: 0..=10]
+.TP
+\fB\-t\fR, \fB\-\-track\fR <NUM>
+Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2\-3), and/or given their own \-t/\-\-track (\-t 2 \-t 3). [default: the whole disc]

@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "riprip",
+    "riprip_core",
+]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

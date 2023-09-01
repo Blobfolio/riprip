@@ -1,0 +1,41 @@
+[package]
+name = "riprip_core"
+version = "0.0.1"
+license = "WTFPL"
+authors = ["Josh Stoik <josh@blobfolio.com>"]
+edition = "2021"
+rust-version = "1.70"
+description = "The library for Rip Rip Hooray."
+repository = "https://github.com/Blobfolio/riprip"
+readme = "README.md"
+publish = false
+
+[dependencies]
+bincode = "1.3.3"
+cdtoc = "0.2.*"
+dactyl = "0.5.*"
+write_atomic = "0.4.*"
+
+[dependencies.argyle]
+version = "0.6.*"
+optional = true
+
+[dependencies.fyi_msg]
+version = "0.11.*"
+features = [ "progress" ]
+
+[dependencies.libcdio-sys]
+version = "=0.5.0"
+default-features = false
+features = [ "cdio" ]
+
+[dependencies.serde]
+version = "1.0.*"
+features = [ "derive" ]
+
+[features]
+default = []
+
+# This feature adds a few generic RipRipError types for the binary. It is not
+# something external crates need to worry about.
+bin = [ "argyle" ]
