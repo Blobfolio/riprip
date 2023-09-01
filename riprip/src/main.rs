@@ -239,7 +239,7 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 fn helper() {
 	println!(concat!(
 		r"
-╚⊙ ⊙╝
+ ╚⊙ ⊙╝
 ╚═(███)═╝
  ╚═(███)═╝
   ╚═(███)═╝
