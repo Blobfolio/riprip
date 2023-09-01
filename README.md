@@ -49,11 +49,10 @@ Rip-Rip-wise, it supports:
 * Individual track(s) or whole-disc ripping
 * Automated or interactive pass limits
 * Sample confirmation (to workaround faulty C2 data)
-* RAW PCM output
+* Raw PCM and WAV output
 
 Additional items on the roadmap:
 
-* Support for WAV output
 * AccurateRip verification
 * CTDB verification
 * Drive offset auto-detection

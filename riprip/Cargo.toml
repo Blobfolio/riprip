@@ -50,6 +50,14 @@ long = "--no-rip"
 description = "Just print the basic disc information to STDERR and exit."
 
 [[package.metadata.bashman.switches]]
+long = "--raw"
+description = "Save ripped tracks in raw PCM format (instead of WAV)."
+
+[[package.metadata.bashman.switches]]
+long = "--reconfirm"
+description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
+
+[[package.metadata.bashman.switches]]
 long = "--reconfirm"
 description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
 

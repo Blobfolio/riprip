@@ -131,6 +131,7 @@ fn _main() -> Result<(), RipRipError> {
 fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 	let mut opt = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
+		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
@@ -196,27 +197,29 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		if tracks.is_empty() { Cow::Borrowed("EVERYTHING") }
 		else { tracks.oxford_and() };
 	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
-	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
-	let nice_passes = NiceU8::from(opts.passes());
-	let nice_paranoia = NiceU8::from(opts.paranoia());
+	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
+	let nice_paranoia = NiceU8::from(opts.paranoia());
+	let nice_passes = NiceU8::from(opts.passes());
+	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
 
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
-		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("C2:", nice_c2, opts.c2()),
+		("Format:", nice_format, true),
+		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Paranoia:", Cow::Borrowed(nice_paranoia.as_str()), 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
+		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
 	];
 
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:12} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:12} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
 		}
 	}
 
@@ -271,6 +274,7 @@ FLAGS:
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
         --no-rip      Just print the basic disc information to STDERR and exit.
+        --raw         Save ripped tracks in raw PCM format (instead of WAV).
         --reconfirm   Reset the status of all previously-accepted samples to
                       require reconfirmation. This has no effect when the
                       paranoia level is less than 2.

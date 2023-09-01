@@ -25,19 +25,30 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
+use hound::{
+	SampleFormat,
+	WavSpec,
+	WavWriter,
+};
 use serde::{
 	Serialize,
 	Deserialize,
 };
-use std::ops::Range;
+use std::{
+	io::Cursor,
+	ops::Range,
+};
 
 
 
 /// # FLAG: C2 Support.
 const FLAG_C2: u8 =        0b0001;
 
+/// # FLAG: RAW PCM (instead of WAV).
+const FLAG_RAW: u8 =       0b0010;
+
 /// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 = 0b0010;
+const FLAG_RECONFIRM: u8 = 0b0100;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_C2;
@@ -144,6 +155,24 @@ impl RipOptions {
 	}
 
 	#[must_use]
+	/// # With Raw PCM Output.
+	///
+	/// When `true`, tracks will be exported in raw PCM format. When `false`,
+	/// they'll be saved as WAV files.
+	///
+	/// The default is false.
+	pub fn with_raw(self, raw: bool) -> Self {
+		let flags =
+			if raw { self.flags | FLAG_RAW }
+			else { self.flags & ! FLAG_RAW };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
 	/// # With Reconfirmation.
 	///
 	/// If true, previously-accepted samples will be downgraded, requring
@@ -212,6 +241,10 @@ impl RipOptions {
 	///
 	/// Return the total number of passes, e.g. `1 + refine`.
 	pub const fn passes(&self) -> u8 { self.refine() + 1 }
+
+	#[must_use]
+	/// # Save as Raw PCM?
+	pub const fn raw(&self) -> bool { FLAG_RAW == self.flags & FLAG_RAW }
 
 	#[must_use]
 	/// # Require Reconfirmation?
@@ -462,20 +495,56 @@ impl Rip {
 		}
 
 		// Don't forget to save the track.
-		self.extract(opt.offset())?;
-		Ok(Some(rip_path(self.idx)))
+		let dst = self.extract(opt.offset(), opt.raw())?;
+		Ok(Some(dst))
 	}
 
+	#[allow(clippy::cast_possible_truncation)]
 	/// # Extract the Track.
-	fn extract(&self, offset: ReadOffset) -> Result<(), RipRipError> {
-		let dst = rip_path(self.idx);
+	fn extract(&self, offset: ReadOffset, raw: bool) -> Result<String, RipRipError> {
+		let dst = rip_path(self.idx, raw);
 		let rng = self.offset_range(offset);
-		let mut flat: Vec<u8> = Vec::with_capacity((rng.end - rng.start) * BYTES_PER_SAMPLE as usize);
-		for v in &self.state[rng] {
-			flat.extend_from_slice(v.as_slice());
+
+		// Raw is easy; we just need to flatten the samples.
+		if raw {
+			let mut flat: Vec<u8> = Vec::with_capacity((rng.end - rng.start) * BYTES_PER_SAMPLE as usize);
+			for v in &self.state[rng] {
+				flat.extend_from_slice(v.as_slice());
+			}
+			cache_write(&dst, &flat)?;
 		}
-		cache_write(dst, &flat)?;
-		Ok(())
+		// Wav requires _headers_ and shit.
+		else {
+			let spec = WavSpec {
+				channels: 2,
+				sample_rate: 44100,
+				bits_per_sample: 16,
+				sample_format: SampleFormat::Int,
+			};
+			let mut buf = Cursor::new(Vec::with_capacity((rng.end - rng.start) * BYTES_PER_SAMPLE as usize + 44));
+			let mut wav = WavWriter::new(&mut buf, spec)
+				.map_err(|_| RipRipError::Write(dst.clone()))?;
+
+			// Our samples are pairs of L/R, but hound considers L and R to be
+			// separate, hence we're doubling the count.
+			{
+				let mut writer = wav.get_i16_writer((rng.end - rng.start) as u32 * 2);
+				for sample in &self.state[rng] {
+					let sample = sample.as_slice();
+					debug_assert!(sample.len() == 4, "Sample is not 4-bytes!");
+					writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
+					writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
+				}
+				writer.flush().map_err(|_| RipRipError::Write(dst.clone()))?;
+			}
+
+			wav.flush().ok()
+				.and_then(|_| wav.finalize().ok())
+				.and_then(|_| cache_write(&dst, &buf.into_inner()).ok())
+				.ok_or_else(|| RipRipError::Write(dst.clone()))?;
+		}
+
+		Ok(dst)
 	}
 }
 
@@ -649,8 +718,9 @@ fn print_bar(good: usize, maybe: usize, bad: usize) {
 /// # Extraction Path.
 ///
 /// Return the relative path for the ripped track.
-fn rip_path(idx: u8) -> String {
-	format!("{idx:02}.pcm")
+fn rip_path(idx: u8, raw: bool) -> String {
+	if raw { format!("{idx:02}.pcm") }
+	else   { format!("{idx:02}.wav") }
 }
 
 /// # State Path.
