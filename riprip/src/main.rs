@@ -130,7 +130,8 @@ fn _main() -> Result<(), RipRipError> {
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 	let mut opt = RipOptions::default()
-		.with_c2(! args.switch(b"--no-c2"));
+		.with_c2(! args.switch(b"--no-c2"))
+		.with_reconfirm(args.switch(b"--reconfirm"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let offset = ReadOffset::try_from(v)?;
@@ -174,6 +175,11 @@ fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 		opt = opt.with_tracks(tracks);
 	}
 
+	// Conflict checks.
+	if opt.reconfirm() && opt.paranoia() < 2 {
+		return Err(RipRipError::ReconfirmParanoia);
+	}
+
 	// Done!
 	Ok(opt)
 }
@@ -189,14 +195,17 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_tracks =
 		if tracks.is_empty() { Cow::Borrowed("EVERYTHING") }
 		else { tracks.oxford_and() };
-	let nice_c2 = if opts.c2() { "Enabled" } else { "Disabled" };
+	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
+	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
 	let nice_pass = NiceU8::from(opts.passes());
 	let nice_paranoia = NiceU8::from(opts.paranoia());
-	let nice_offset = format!("{}", opts.offset().samples());
+	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
+
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("Offset:", Cow::Owned(nice_offset), 0 != opts.offset().samples_abs()),
-		("C2:", Cow::Borrowed(nice_c2), opts.c2()),
+		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
+		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
+		("C2:", nice_c2, opts.c2()),
 		("Paranoia:", Cow::Borrowed(nice_paranoia.as_str()), 1 < opts.paranoia()),
 		(
 			"Passes:",
@@ -204,13 +213,14 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 			1 != opts.passes()
 		),
 	];
+
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:9} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:9} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
 		}
 	}
 
@@ -265,6 +275,9 @@ FLAGS:
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
         --no-rip      Just print the basic disc information to STDERR and exit.
+        --reconfirm   Reset the status of all previously-accepted samples to
+                      require reconfirmation. This has no effect when the
+                      paranoia level is less than 2.
     -V, --version     Print version information and exit.
 
 OPTIONS:

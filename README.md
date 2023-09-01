@@ -56,7 +56,6 @@ Additional items on the roadmap:
 * Support for WAV output
 * AccurateRip verification
 * CTDB verification
-* Confirmation resets (for when you know there's a problem but don't want to start over from scratch)
 * Drive offset auto-detection
 
 

@@ -33,6 +33,15 @@ use std::ops::Range;
 
 
 
+/// # FLAG: C2 Support.
+const FLAG_C2: u8 =        0b0001;
+
+/// # FLAG: Reconfirm samples.
+const FLAG_RECONFIRM: u8 = 0b0010;
+
+/// # FLAG: Default.
+const FLAG_DEFAULT: u8 = FLAG_C2;
+
 /// # Max Passes.
 const MAX_PASSES: u8 = 10;
 
@@ -60,9 +69,9 @@ const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
 /// then chain any desired `with_` methods.
 pub struct RipOptions {
 	offset: ReadOffset,
-	c2: bool,
 	paranoia: u8,
 	passes: u8,
+	flags: u8,
 	tracks: Vec<u8>,
 }
 
@@ -70,9 +79,9 @@ impl Default for RipOptions {
 	fn default() -> Self {
 		Self {
 			offset: ReadOffset::default(),
-			c2: true,
 			paranoia: 3,
 			passes: 0,
+			flags: FLAG_DEFAULT,
 			tracks: Vec::new(),
 		}
 	}
@@ -108,8 +117,12 @@ impl RipOptions {
 	///
 	/// The default is enabled.
 	pub fn with_c2(self, c2: bool) -> Self {
+		let flags =
+			if c2 { self.flags | FLAG_C2 }
+			else { self.flags & ! FLAG_C2 };
+
 		Self {
-			c2,
+			flags,
 			..self
 		}
 	}
@@ -156,6 +169,24 @@ impl RipOptions {
 	}
 
 	#[must_use]
+	/// # With Reconfirmation.
+	///
+	/// If true, previously-accepted samples will be downgraded, requring
+	/// reconfirmation (from an additional read).
+	///
+	/// The default is disabled.
+	pub fn with_reconfirm(self, reconfirm: bool) -> Self {
+		let flags =
+			if reconfirm { self.flags | FLAG_RECONFIRM }
+			else { self.flags & ! FLAG_RECONFIRM };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
 	/// # With Tracks.
 	///
 	/// Set the tracks-of-interest by their indexes. If empty, all tracks will
@@ -180,7 +211,7 @@ impl RipOptions {
 
 	#[must_use]
 	/// # Use C2 Error Pointers?
-	pub const fn c2(&self) -> bool { self.c2 }
+	pub const fn c2(&self) -> bool { FLAG_C2 == self.flags & FLAG_C2 }
 
 	#[must_use]
 	/// # Paranoia Level.
@@ -189,6 +220,10 @@ impl RipOptions {
 	#[must_use]
 	/// # Number of Passes.
 	pub const fn passes(&self) -> u8 { self.passes }
+
+	#[must_use]
+	/// # Require Reconfirmation?
+	pub const fn reconfirm(&self) -> bool { FLAG_RECONFIRM == self.flags & FLAG_RECONFIRM }
 
 	#[must_use]
 	/// # Tracks.
@@ -276,9 +311,19 @@ impl Rip {
 		// to meet a lower paranoia requirement.
 		let paranoia = opt.paranoia();
 		for sample in &mut self.state {
-			if let RipSample::Iffy(ref mut set) = sample {
+			if let RipSample::Iffy(set) = sample {
 				if paranoia <= set[0].1 {
 					*sample = RipSample::Good(set[0].0);
+				}
+			}
+		}
+
+		// If we're reconfirming, let's also downgrade before we begin.
+		if 1 < paranoia && opt.reconfirm() {
+			let count = paranoia - 1;
+			for sample in &mut self.state {
+				if let RipSample::Good(nope) = sample {
+					*sample = RipSample::Iffy(vec![(*nope, count)]);
 				}
 			}
 		}
@@ -312,7 +357,7 @@ impl Rip {
 		if killed.killed() { return Ok(None) }
 
 		let mut pass: u8 = 0;
-		let resume = u8::from(self.state.iter().any(|v| matches!(v, RipSample::Good(_))));
+		let resume = u8::from(self.state.iter().any(RipSample::is_good));
 		let total = self.state.len() as u32 / SAMPLES_PER_SECTOR;
 		let state_path = state_path(self.ar, self.idx);
 		let mut c2 = [false; SAMPLES_PER_SECTOR as usize];
@@ -331,7 +376,7 @@ impl Rip {
 			// Update the data, one sector at a time.
 			for (k, state) in self.state.chunks_exact_mut(SAMPLES_PER_SECTOR as usize).enumerate() {
 				// Skip the range if we're done or there's nothing to refine.
-				if killed.killed() || state.iter().all(|v| matches!(v, RipSample::Good(_))) {
+				if killed.killed() || state.iter().all(RipSample::is_good) {
 					progress.increment();
 					continue;
 				}
@@ -451,7 +496,7 @@ impl Rip {
 	/// # Offset All Good?
 	fn offset_good(&self, offset: ReadOffset) -> bool {
 		let rng = self.offset_range(offset);
-		self.state[rng].iter().all(|v| matches!(v, RipSample::Good(_)))
+		self.state[rng].iter().all(RipSample::is_good)
 	}
 
 	/// # Count Up Good / Maybe / Bad Samples at offset.
@@ -519,6 +564,9 @@ impl RipSample {
 		}
 	}
 
+	/// # Is Good?
+	const fn is_good(&self) -> bool { matches!(self, Self::Good(_)) }
+
 	/// # Update.
 	///
 	/// Potentially update an entry.
@@ -540,7 +588,7 @@ impl RipSample {
 			},
 
 			// Iffy entries are a little more involved.
-			Self::Iffy(ref mut set) => if ! sample_c2 {
+			Self::Iffy(set) => if ! sample_c2 {
 				// See if the sample is in the set.
 				let mut found = false;
 				for (old, count) in &mut *set {
