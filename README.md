@@ -8,7 +8,7 @@
 
 Rip Rip Hooray! is an iterative, [second-stage](#what-does-second-stage-mean) audio CD-ripper for Linux CLI, designed for advanced recovery/salvage of tracks from discs that have seen better days.
 
-It also provides a pretty summary of the disc details.
+(It also provides a pretty summary of the disc details!)
 
 
 
@@ -44,6 +44,8 @@ If that's all you want, there's a `--no-rip` flag you can pass to the program.
 Rip-Rip-wise, it supports:
 
 * [AccurateRip](http://www.accuraterip.com/), _et al_, drive-specific read offsets
+* AccurateRip rip verification
+* [CUETools](http://cue.tools/wiki/CUETools_Database) rip verification
 * C2 Error Pointers
 * Statefulness (you can pick up previous rips from where you left off)
 * Individual track(s) or whole-disc ripping
@@ -53,9 +55,9 @@ Rip-Rip-wise, it supports:
 
 Additional items on the roadmap:
 
-* AccurateRip verification
-* CTDB verification
 * Drive offset auto-detection
+* Ability to disable EAN/UPC/ISRC lookups
+* Offline mode (disable AccurateRip/CTDB)
 
 
 

@@ -4,6 +4,7 @@
 
 use cdtoc::{
 	AccurateRip,
+	Toc,
 	Track,
 };
 use crate::{
@@ -13,6 +14,8 @@ use crate::{
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_LEADIN,
+	chk_accuraterip,
+	chk_ctdb,
 	Disc,
 	KillSwitch,
 	NULL_SAMPLE,
@@ -68,6 +71,12 @@ const SECTOR_BUFFER: u32 = 10;
 ///
 /// Same as the sector buffer, but in samples.
 const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
+
+/// # C2 Sample Set.
+///
+/// This contains a `bool` for each sample in a sector indicating whether or
+/// not it contains an error.
+type SectorC2s = [bool; SAMPLES_PER_SECTOR as usize];
 
 
 
@@ -270,7 +279,7 @@ impl RipOptions {
 /// the actual ripping.
 pub(super) struct Rip {
 	ar: AccurateRip,
-	idx: u8,
+	track: Track,
 	rip_lsn: Range<i32>, // The track range with 10 extra sectors on either end.
 	state: Vec<RipSample>,
 }
@@ -323,7 +332,7 @@ impl Rip {
 			state.resize(expected_len, RipSample::Tbd);
 		}
 
-		Ok(Self { ar, idx, rip_lsn, state })
+		Ok(Self { ar, track, rip_lsn, state })
 	}
 }
 
@@ -359,24 +368,30 @@ impl Rip {
 			}
 		}
 
-		// The buffer needs to be different sizes depending on whether or not
-		// C2 error data is being fetched. To make lives easier, figure that
-		// out now and defer to a sub-method.
-		if opts.c2() {
-			let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-			self._rip(disc, opts, &mut buf, progress, killed)
+		if ! killed.killed() {
+			// Same method two ways. The only difference is the buffer size.
+			if opts.c2() {
+				let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
+				self._rip(disc, opts, &mut buf, progress, killed)?;
+			}
+			else {
+				let mut buf = [0_u8; CD_DATA_SIZE as usize];
+				self._rip(disc, opts, &mut buf, progress, killed)?;
+			}
 		}
-		else {
-			let mut buf = [0_u8; CD_DATA_SIZE as usize];
-			self._rip(disc, opts, &mut buf, progress, killed)
-		}
+
+		// Lastly, save the track!
+		let dst = self.extract(opts.raw())?;
+		Ok(Some(dst))
 	}
 
-	#[allow(
-		clippy::cast_possible_truncation,
-		clippy::cast_possible_wrap,
-		clippy::integer_division,
-	)]
+	#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+	/// # Actual Rip.
+	///
+	/// This is split into its own method primarily because the static buffer
+	/// array needs to be one size or another depending on whether or not C2
+	/// error pointers are being requested. Since Rust is strictly typed, we
+	/// have to instantiate that somewhere else.
 	fn _rip(
 		&mut self,
 		disc: &Disc,
@@ -384,40 +399,22 @@ impl Rip {
 		buf: &mut [u8],
 		progress: &Progless,
 		killed: &KillSwitch,
-	) -> Result<Option<String>, RipRipError> {
-		if killed.killed() { return Ok(None) }
-
-		let mut pass: u8 = 0;
-		let resume = u8::from(self.state.iter().any(RipSample::is_good));
-		let mut total = self.state.len() as u32 / SAMPLES_PER_SECTOR;
-		let state_path = state_path(self.ar, self.idx);
-		let mut c2 = [false; SAMPLES_PER_SECTOR as usize];
-		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
+	) -> Result<(), RipRipError> {
 		let offset = opts.offset();
-
-		// We won't rip the entire padded range if there's an offset…
-		let mut min_sector: usize = 0;
-		let mut max_sector: usize = total as usize;
-		{
-			let sectors_abs = offset.sectors_abs() as usize;
-			total -= sectors_abs as u32;
-
-			// Negative offsets require the data be pushed forward to "start"
-			// at the right place.
-			if offset.is_negative() { max_sector -= sectors_abs; }
-			// Positive offsets require the data be pulled backward instead.
-			else { min_sector += sectors_abs; }
-		}
+		let resume = u8::from(self.state.iter().any(RipSample::is_good));
+		let (min_sector, max_sector) = self.rippable_sectors(offset);
+		let state_path = state_path(self.ar, self.track.number());
+		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
+		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
 
 		// Onto the pass(es)!
-		loop {
-			let _res = progress.reset(total); // This won't fail.
+		for pass in 0..opts.passes() {
+			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
 			progress.set_title(Some(Msg::custom(
 				format!("{}Ripping", "Re-".repeat(usize::min(5, usize::from(pass + resume)))),
 				199,
-				format!("Track #{}…", self.idx)
+				format!("Track #{}…", self.track.number())
 			)));
-			pass += 1;
 
 			// Update the data, one sector at a time.
 			for k in min_sector..max_sector {
@@ -460,13 +457,9 @@ impl Rip {
 							}
 						}
 						// Assume C2 is fine since we aren't asking for any.
-						else {
-							for v in &mut c2 { *v = false; }
-						},
+						else { reset_c2(&mut c2, false); },
 					// Assume total C2 failure.
-					Err(RipRipError::CdRead(_)) => {
-						for v in &mut c2 { *v = true; }
-					},
+					Err(RipRipError::CdRead(_)) => { reset_c2(&mut c2, true); },
 					// Other errors are show-stoppers; we should abort.
 					Err(e) => return Err(e),
 				}
@@ -488,21 +481,48 @@ impl Rip {
 
 			// Summarize the quality.
 			progress.finish();
-			let (q_good, q_maybe, q_bad) = self.track_quality();
-			let q_all = q_good + q_maybe + q_bad;
-			let p1 = dactyl::int_div_float(q_good, q_all).unwrap_or(0.0);
-			Msg::custom(
-				"Ripped",
-				10,
-				&format!(
+			let (mut q_good, mut q_maybe, q_bad) = self.track_quality();
+
+			// Verify it.
+			let (ar, ctdb) =
+				if q_bad == 0 { self.verify(disc.toc()) }
+				else { (None, None) };
+			let verified =
+				ar.map_or(false, |(v1, v2)| v1 != 0 || v2 != 0) ||
+				ctdb.map_or(false, |v| 0 != v);
+
+			// If we verified, upgrade the maybes, if any.
+			if verified && 0 != q_maybe {
+				q_good += q_maybe;
+				q_maybe = 0;
+				let rng = self.track_range();
+				for sample in &mut self.state[rng] {
+					if let RipSample::Iffy(set) = sample {
+						*sample = RipSample::Good(set[0].0);
+					}
+				}
+			}
+
+			// Okay, *now* we're summarizing!
+			if verified {
+				Msg::custom("Ripped", 10, &format!(
+					"Track #{} has been accurately ripped!",
+					self.track.number(),
+				))
+			}
+			else {
+				let p1 = dactyl::int_div_float(q_good, q_good + q_maybe + q_bad).unwrap_or(0.0);
+				Msg::custom("Ripped", 10, &format!(
 					"Track #{} is \x1b[2m(roughly)\x1b[0m {} complete.",
-					self.idx,
+					self.track.number(),
 					NicePercent::from(p1),
-				)
-			)
+				))
+			}
 				.with_newline(true)
 				.eprint();
-			print_bar(q_good, q_maybe, q_bad);
+
+			// Add a kinda graphical breakdown.
+			print_bar(q_good, q_maybe, q_bad, ar, ctdb);
 
 			// Save the state file.
 			if bincode::serialize(&self.state).ok()
@@ -512,21 +532,26 @@ impl Rip {
 				Msg::warning("The rip state couldn't be saved.").eprint();
 			}
 
-			// Should we stop or keep going?
-			if pass == opts.passes() || killed.killed() || self.track_good() {
-				break;
-			}
+			// Should we stop early?
+			if killed.killed() || self.track_good() { break; }
 		}
 
-		// Don't forget to save the track.
-		let dst = self.extract(opts.raw())?;
-		Ok(Some(dst))
+		Ok(())
 	}
 
 	#[allow(clippy::cast_possible_truncation)]
 	/// # Extract the Track.
+	///
+	/// This extracts and saves the offset-adjusted track — using the best data
+	/// available — to disk in either raw PCM or WAV format.
+	///
+	/// It returns the destination path used for reference.
+	///
+	/// ## Errors
+	///
+	/// This will bubble up any file I/O-type errors encountered.
 	fn extract(&self, raw: bool) -> Result<String, RipRipError> {
-		let dst = rip_path(self.idx, raw);
+		let dst = rip_path(self.track.number(), raw);
 		let rng = self.track_range();
 
 		// Raw is easy; we just need to flatten the samples.
@@ -554,8 +579,7 @@ impl Rip {
 			{
 				let mut writer = wav.get_i16_writer((rng.end - rng.start) as u32 * 2);
 				for sample in &self.state[rng] {
-					let sample = sample.as_slice();
-					debug_assert!(sample.len() == 4, "Sample is not 4-bytes!");
+					let sample = sample.as_array();
 					writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
 					writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
 				}
@@ -570,15 +594,45 @@ impl Rip {
 
 		Ok(dst)
 	}
+
+	/// # Verify Rip!
+	///
+	/// Check the rip against the AccurateRip and CUETools databases and return
+	/// the confidences.
+	fn verify(&self, toc: &Toc) -> (Option<(u8, u8)>, Option<u16>) {
+		let state = self.track_slice();
+		let ar = chk_accuraterip(self.ar, self.track, state);
+		let ctdb = chk_ctdb(toc, self.ar, self.track, state);
+		(ar, ctdb)
+	}
 }
 
 impl Rip {
+	#[allow(clippy::integer_division)]
+	/// # Rippable Sectors.
+	///
+	/// The padding can't be ripped in its entirety if there's a read offset.
+	/// This method returns the minimum and maximum number of sectors that can
+	/// be added to the starting LSN.
+	fn rippable_sectors(&self, offset: ReadOffset) -> (usize, usize) {
+		let mut min_sector: usize = 0;
+		let mut max_sector: usize = self.state.len() / SAMPLES_PER_SECTOR as usize;
+		let sectors_abs = offset.sectors_abs() as usize;
+
+		// Negative offsets require the data be pushed forward to "start"
+		// at the right place.
+		if offset.is_negative() { max_sector -= sectors_abs; }
+		// Positive offsets require the data be pulled backward instead.
+		else { min_sector += sectors_abs; }
+
+		(min_sector, max_sector)
+	}
+
 	/// # Track All Good?
 	///
 	/// Returns `true` if all samples within the offset track range are good.
 	fn track_good(&self) -> bool {
-		let rng = self.track_range();
-		self.state[rng].iter().all(RipSample::is_good)
+		self.track_slice().iter().all(RipSample::is_good)
 	}
 
 	/// # Count Up Good / Maybe / Bad Samples at offset.
@@ -586,8 +640,7 @@ impl Rip {
 		let mut good = 0;
 		let mut maybe = 0;
 		let mut bad = 0;
-		let rng = self.track_range();
-		for v in &self.state[rng] {
+		for v in self.track_slice() {
 			match v {
 				RipSample::Good(_) => { good += 1; },
 				RipSample::Iffy(_) => { maybe += 1; },
@@ -604,6 +657,14 @@ impl Rip {
 	fn track_range(&self) -> Range<usize> {
 		SAMPLE_BUFFER as usize..self.state.len() - SAMPLE_BUFFER as usize
 	}
+
+	/// # Track Slice.
+	///
+	/// Return the samples comprising the track.
+	fn track_slice(&self) -> &[RipSample] {
+		let rng = self.track_range();
+		&self.state[rng]
+	}
 }
 
 
@@ -613,7 +674,7 @@ impl Rip {
 ///
 /// This is a combined sample/status structure, making it easy to know where
 /// any given sample stands at a glance.
-enum RipSample {
+pub(super) enum RipSample {
 	#[default]
 	/// # Not yet read.
 	Tbd,
@@ -632,11 +693,20 @@ impl RipSample {
 	/// # As Slice.
 	///
 	/// Return the most appropriate single 4-byte sample as a slice.
-	fn as_slice(&self) -> &[u8] {
+	pub(super) fn as_slice(&self) -> &[u8] {
 		match self {
 			Self::Tbd => NULL_SAMPLE.as_slice(),
 			Self::Bad(s) | Self::Good(s) => s.as_slice(),
 			Self::Iffy(ref s) => s[0].0.as_slice(),
+		}
+	}
+
+	/// # As Array.
+	pub(super) fn as_array(&self) -> [u8; 4] {
+		match self {
+			Self::Tbd => NULL_SAMPLE,
+			Self::Bad(s) | Self::Good(s) => *s,
+			Self::Iffy(ref s) => s[0].0,
 		}
 	}
 
@@ -706,6 +776,12 @@ impl RipSample {
 
 
 
+#[inline]
+/// # Reset C2 Statuses.
+fn reset_c2(set: &mut SectorC2s, val: bool) {
+	for c2 in set { *c2 = val; }
+}
+
 #[allow(
 	clippy::cast_possible_truncation,
 	clippy::cast_precision_loss,
@@ -714,7 +790,13 @@ impl RipSample {
 /// # Print Quality Bar.
 ///
 /// Note: the left padding is the equivalent of "Ripped: ".
-fn print_bar(good: usize, maybe: usize, bad: usize) {
+fn print_bar(
+	good: usize,
+	maybe: usize,
+	bad: usize,
+	ar: Option<(u8, u8)>,
+	ctdb: Option<u16>,
+) {
 	let all = good + maybe + bad;
 	let b_total = QUALITY_BAR.len() as f64;
 	let b_maybe =
@@ -739,10 +821,40 @@ fn print_bar(good: usize, maybe: usize, bad: usize) {
 	if 0 != bad { breakdown.push(format!("\x1b[91m{bad}\x1b[0m")); }
 	if 0 != maybe { breakdown.push(format!("\x1b[93m{maybe}\x1b[0m")); }
 	if 0 != good { breakdown.push(format!("\x1b[92m{good}\x1b[0m")); }
-	if breakdown.is_empty() { eprintln!(); }
-	else {
-		eprintln!("        {} \x1b[2msamples\x1b[0m\n", breakdown.join(" \x1b[2m+\x1b[0m "));
+	if ! breakdown.is_empty() {
+		eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join(" \x1b[2m+\x1b[0m "));
 	}
+
+	if ar.is_some() || ctdb.is_some() {
+		eprintln!("        \x1b[38;5;4m-----\x1b[0m");
+
+		if let Some((v1, v2)) = ar {
+			if v1 == 0 && v2 == 0 {
+				eprintln!("        AccurateRip: \x1b[91m00+00\x1b[0m");
+			}
+			else {
+				eprintln!(
+					"        AccurateRip: \x1b[92m{:02}+{:02}\x1b[0m",
+					u8::min(99, v1),
+					u8::min(99, v2),
+				);
+			}
+		}
+
+		if let Some(v) = ctdb {
+			if v == 0 {
+				eprintln!("        CUETools: \x1b[91m000\x1b[0m");
+			}
+			else {
+				eprintln!(
+					"        CUETools: \x1b[92m{:03}\x1b[0m",
+					u16::min(999, v),
+				);
+			}
+		}
+	}
+
+	eprintln!();
 }
 
 /// # Extraction Path.

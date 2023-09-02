@@ -36,6 +36,7 @@ mod abort;
 mod cache;
 mod cdio;
 mod cdtext;
+mod chk;
 mod disc;
 mod error;
 mod offset;
@@ -50,11 +51,18 @@ pub(crate) use cache::{
 };
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;
+pub(crate) use chk::{
+	chk_accuraterip,
+	chk_ctdb,
+};
 pub use disc::Disc;
 pub use error::RipRipError;
 pub use offset::ReadOffset;
 pub use rip::RipOptions;
-pub(crate) use rip::Rip;
+pub(crate) use rip::{
+	Rip,
+	RipSample,
+};
 
 
 
