@@ -265,7 +265,8 @@ impl RipOptions {
 /// # A Rip!
 ///
 /// This struct represents a rip-in-progress. It holds the data gathered, as
-/// well as various state information.
+/// well as various state information. Its eponymous `Rip::rip` method handles
+/// the actual ripping.
 pub(super) struct Rip {
 	ar: AccurateRip,
 	idx: u8,
@@ -387,10 +388,25 @@ impl Rip {
 
 		let mut pass: u8 = 0;
 		let resume = u8::from(self.state.iter().any(RipSample::is_good));
-		let total = self.state.len() as u32 / SAMPLES_PER_SECTOR;
+		let mut total = self.state.len() as u32 / SAMPLES_PER_SECTOR;
 		let state_path = state_path(self.ar, self.idx);
 		let mut c2 = [false; SAMPLES_PER_SECTOR as usize];
 		let leadout = disc.toc().audio_leadout() as i32;
+		let offset = opt.offset();
+
+		// We won't rip the entire padded range if there's an offset…
+		let mut min_sector: usize = 0;
+		let mut max_sector: usize = total as usize;
+		{
+			let sectors_abs = offset.sectors_abs() as usize;
+			total -= sectors_abs as u32;
+
+			// Negative offsets require the data be pushed forward to "start"
+			// at the right place.
+			if offset.is_negative() { max_sector -= sectors_abs; }
+			// Positive offsets require the data be pulled backward instead.
+			else { min_sector += sectors_abs; }
+		}
 
 		// Onto the pass(es)!
 		loop {
@@ -403,7 +419,14 @@ impl Rip {
 			pass += 1;
 
 			// Update the data, one sector at a time.
-			for (k, state) in self.state.chunks_exact_mut(SAMPLES_PER_SECTOR as usize).enumerate() {
+			for k in min_sector..max_sector {
+				// Cut out the part of the offset-adjusted portion of the
+				// state.
+				let state_start =
+					if offset.is_negative() { k * SAMPLES_PER_SECTOR as usize + offset.samples_abs() as usize }
+					else { k * SAMPLES_PER_SECTOR as usize - offset.samples_abs() as usize };
+				let state = &mut self.state[state_start..=state_start + 588];
+
 				// Skip the range if we're done or there's nothing to refine.
 				if killed.killed() || state.iter().all(RipSample::is_good) {
 					progress.increment();
@@ -464,7 +487,7 @@ impl Rip {
 
 			// Summarize the quality.
 			progress.finish();
-			let (q_good, q_maybe, q_bad) = self.offset_quality(opt.offset());
+			let (q_good, q_maybe, q_bad) = self.track_quality();
 			let q_all = q_good + q_maybe + q_bad;
 			let p1 = dactyl::int_div_float(q_good, q_all).unwrap_or(0.0);
 			Msg::custom(
@@ -489,21 +512,21 @@ impl Rip {
 			}
 
 			// Should we stop or keep going?
-			if pass == opt.passes() || killed.killed() || self.offset_good(opt.offset()) {
+			if pass == opt.passes() || killed.killed() || self.track_good() {
 				break;
 			}
 		}
 
 		// Don't forget to save the track.
-		let dst = self.extract(opt.offset(), opt.raw())?;
+		let dst = self.extract(opt.raw())?;
 		Ok(Some(dst))
 	}
 
 	#[allow(clippy::cast_possible_truncation)]
 	/// # Extract the Track.
-	fn extract(&self, offset: ReadOffset, raw: bool) -> Result<String, RipRipError> {
+	fn extract(&self, raw: bool) -> Result<String, RipRipError> {
 		let dst = rip_path(self.idx, raw);
-		let rng = self.offset_range(offset);
+		let rng = self.track_range();
 
 		// Raw is easy; we just need to flatten the samples.
 		if raw {
@@ -549,23 +572,20 @@ impl Rip {
 }
 
 impl Rip {
-	/// # Track Sample Length.
-	fn track_sample_len(&self) -> usize {
-		self.state.len() - SAMPLE_BUFFER as usize * 2
-	}
-
-	/// # Offset All Good?
-	fn offset_good(&self, offset: ReadOffset) -> bool {
-		let rng = self.offset_range(offset);
+	/// # Track All Good?
+	///
+	/// Returns `true` if all samples within the offset track range are good.
+	fn track_good(&self) -> bool {
+		let rng = self.track_range();
 		self.state[rng].iter().all(RipSample::is_good)
 	}
 
 	/// # Count Up Good / Maybe / Bad Samples at offset.
-	fn offset_quality(&self, offset: ReadOffset) -> (usize, usize, usize) {
+	fn track_quality(&self) -> (usize, usize, usize) {
 		let mut good = 0;
 		let mut maybe = 0;
 		let mut bad = 0;
-		let rng = self.offset_range(offset);
+		let rng = self.track_range();
 		for v in &self.state[rng] {
 			match v {
 				RipSample::Good(_) => { good += 1; },
@@ -577,17 +597,11 @@ impl Rip {
 		(good, maybe, bad)
 	}
 
-	#[allow(clippy::cast_possible_truncation)]
-	/// # Offset Range.
+	/// # Track Range.
 	///
-	/// Return the (state) index range of the offset set.
-	fn offset_range(&self, offset: ReadOffset) -> Range<usize> {
-		let skip = usize::from(
-			if offset.is_negative() { SAMPLE_BUFFER as u16 - offset.samples_abs() }
-			else { SAMPLE_BUFFER as u16 + offset.samples_abs() }
-		);
-		let take = self.track_sample_len();
-		skip..take+skip
+	/// Return the (state) index range corresponding to the actual track.
+	fn track_range(&self) -> Range<usize> {
+		SAMPLE_BUFFER as usize..self.state.len() - SAMPLE_BUFFER as usize
 	}
 }
 
@@ -616,7 +630,7 @@ enum RipSample {
 impl RipSample {
 	/// # As Slice.
 	///
-	/// Return the most appropriate single sample as a slice.
+	/// Return the most appropriate single 4-byte sample as a slice.
 	fn as_slice(&self) -> &[u8] {
 		match self {
 			Self::Tbd => NULL_SAMPLE.as_slice(),
@@ -631,6 +645,21 @@ impl RipSample {
 	/// # Update.
 	///
 	/// Potentially update an entry.
+	///
+	/// Good entries don't change.
+	///
+	/// TBD entries _always_ change:
+	/// * If `sample_c2`, to Bad
+	/// * If `sector_c2` and `paranoia`, to Iffy
+	/// * Otherwise to Good
+	///
+	/// Bad samples change if not `sample_c2`:
+	/// * If `paranoia`, to Iffy
+	/// * Otherwise to Good
+	///
+	/// Iffy samples change if not `sample_c2`:
+	/// * If confirmed `paranoia` times, to Good
+	/// * Otherwise still Iffy, but with updated table
 	fn update(&mut self, new: Sample, paranoia: u8, sample_c2: bool, sector_c2: bool) {
 		match self {
 			// Leave good entries alone.
@@ -728,4 +757,81 @@ fn rip_path(idx: u8, raw: bool) -> String {
 /// Return the relative path for the track's state file.
 fn state_path(ar: AccurateRip, idx: u8) -> String {
 	format!("state/{ar}__{idx:02}.state")
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_rip_options_c2() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_c2(v);
+			assert_eq!(opts.c2(), v);
+		}
+	}
+
+	#[test]
+	fn t_rip_options_offset() {
+		let offset5 = ReadOffset::try_from(b"5".as_slice()).expect("Read offset 5 failed.");
+		let offset667 = ReadOffset::try_from(b"-667".as_slice()).expect("Read offset -667 failed.");
+		for v in [offset5, offset667] {
+			let opts = RipOptions::default().with_offset(v);
+			assert_eq!(opts.offset(), v);
+		}
+	}
+
+	#[test]
+	fn t_rip_options_paranoia() {
+		for v in [1, 2, 3] {
+			let opts = RipOptions::default().with_paranoia(v);
+			assert_eq!(opts.paranoia(), v);
+		}
+
+		// Min.
+		let opts = RipOptions::default().with_paranoia(0);
+		assert_eq!(opts.paranoia(), 1);
+
+		// Max.
+		let opts = RipOptions::default().with_paranoia(64);
+		assert_eq!(opts.paranoia(), 32);
+	}
+
+	#[test]
+	fn t_rip_options_raw() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_raw(v);
+			assert_eq!(opts.raw(), v);
+		}
+	}
+
+	#[test]
+	fn t_rip_options_reconfirm() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_reconfirm(v);
+			assert_eq!(opts.reconfirm(), v);
+		}
+	}
+
+	#[test]
+	fn t_rip_options_refine() {
+		for v in [0, 1, 2, 3] {
+			let opts = RipOptions::default().with_refine(v);
+			assert_eq!(opts.refine(), v);
+			assert_eq!(opts.passes(), v + 1);
+		}
+
+		// Max.
+		let opts = RipOptions::default().with_refine(64);
+		assert_eq!(opts.refine(), 15);
+		assert_eq!(opts.passes(), 16);
+	}
+
+	#[test]
+	fn t_rip_options_tracks() {
+		let opts = RipOptions::default().with_tracks([1, 5, 5, 2, 3]);
+		assert_eq!(opts.tracks(), &[1, 2, 3, 5]);
+	}
 }

@@ -63,14 +63,11 @@ impl ReadOffset {
 	#[allow(clippy::cast_possible_wrap)]
 	/// # Sectors.
 	///
-	/// Return the minimum containing sector amount and the sample overhead
-	/// from rounding.
-	pub const fn sectors(self) -> (i16, u16) {
-		let (a, b) = self.sectors_abs();
-
+	/// Return the minimum containing sector amount.
+	pub const fn sectors(self) -> i16 {
 		// Flip the sector count negative if needed.
-		if self.is_negative() { (0 - a as i16, b) }
-		else { (a as i16, b) }
+		if self.is_negative() { 0 - self.sectors_abs() as i16 }
+		else { self.sectors_abs() as i16 }
 	}
 
 	#[must_use]
@@ -80,19 +77,19 @@ impl ReadOffset {
 	)]
 	/// # Sectors (Absolute).
 	///
-	/// Return the minimum containing sector amount and the sample overhead
-	/// from rounding.
+	/// Return the minimum containing sector amount.
 	///
 	/// TODO: use div_ceil as soon as that is stabilized!
-	pub const fn sectors_abs(self) -> (u16, u16) {
-		if self.0 == 0 { return (0, 0); }
+	pub const fn sectors_abs(self) -> u16 {
+		if self.0 == 0 { return 0; }
 
 		let samples_abs = self.samples_abs();
-		let div = samples_abs / SAMPLES_PER_SECTOR as u16;
-		let rem = samples_abs % SAMPLES_PER_SECTOR as u16;
 
-		let sectors = div + (0 != rem) as u16;
-		let extra = sectors * SAMPLES_PER_SECTOR as u16 - samples_abs;
-		(sectors, extra)
+		// Floor.
+		let div = samples_abs / SAMPLES_PER_SECTOR as u16;
+
+		// Add one if there's a remainder.
+		if 0 == samples_abs % SAMPLES_PER_SECTOR as u16 { div }
+		else { div + 1 }
 	}
 }
