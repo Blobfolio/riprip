@@ -12,6 +12,7 @@ use crate::{
 	cache_write,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
+	CD_LEADIN,
 	Disc,
 	KillSwitch,
 	NULL_SAMPLE,
@@ -391,7 +392,7 @@ impl Rip {
 		let mut total = self.state.len() as u32 / SAMPLES_PER_SECTOR;
 		let state_path = state_path(self.ar, self.idx);
 		let mut c2 = [false; SAMPLES_PER_SECTOR as usize];
-		let leadout = disc.toc().audio_leadout() as i32;
+		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
 		let offset = opts.offset();
 
 		// We won't rip the entire padded range if there's an offset…

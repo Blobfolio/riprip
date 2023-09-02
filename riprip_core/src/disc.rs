@@ -107,7 +107,7 @@ impl fmt::Display for Disc {
 		writeln!(
 			f,
 			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                    LEAD-OUT",
-			self.toc.leadout()
+			self.toc.leadout().saturating_sub(CD_LEADIN),
 		)?;
 
 		// Close it off!
