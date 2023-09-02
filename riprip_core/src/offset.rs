@@ -103,3 +103,30 @@ impl ReadOffset {
 		else { div + 1 }
 	}
 }
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+
+	#[test]
+	fn t_offset() {
+		for (raw, samples, samples_abs, sectors, sectors_abs) in [
+			("0", 0_i16, 0_u16, 0_i16, 0_u16),
+			("123", 123_i16, 123_u16, 1_i16, 1_u16),
+			("-123", -123_i16, 123_u16, -1_i16, 1_u16),
+			("588", 588_i16, 588_u16, 1_i16, 1_u16),
+			("-588", -588_i16, 588_u16, -1_i16, 1_u16),
+			("667", 667_i16, 667_u16, 2_i16, 2_u16),
+			("-667", -667_i16, 667_u16, -2_i16, 2_u16),
+		] {
+			let offset = ReadOffset::try_from(raw).expect("ReadOffset failed.");
+			assert_eq!(offset.samples(), samples);
+			assert_eq!(offset.samples_abs(), samples_abs);
+			assert_eq!(offset.sectors(), sectors);
+			assert_eq!(offset.sectors_abs(), sectors_abs);
+		}
+	}
+}
