@@ -10,17 +10,27 @@ use dactyl::traits::BytesToSigned;
 
 
 
+/// # Min Offset.
+const MIN_OFFSET: i16 = -5880;
+
+/// # Max Offset.
+const MAX_OFFSET: i16 = 5880;
+
+
+
 #[derive(Debug, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
 /// # Read Offset.
 ///
 /// This holds a read offset in samples, but can return values in various other
 /// useful formats.
+///
+/// For historical reasons, values are restricted to `-5880..=5880`.
 pub struct ReadOffset(i16);
 
 impl TryFrom<i16> for ReadOffset {
 	type Error = RipRipError;
 	fn try_from(src: i16) -> Result<Self, Self::Error> {
-		if (-5880..=5880).contains(&src) { Ok(Self(src)) }
+		if (MIN_OFFSET..=MAX_OFFSET).contains(&src) { Ok(Self(src)) }
 		else { Err(RipRipError::ReadOffset) }
 	}
 }
