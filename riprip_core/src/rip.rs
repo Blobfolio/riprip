@@ -333,13 +333,13 @@ impl Rip {
 	pub(super) fn rip(
 		&mut self,
 		disc: &Disc,
-		opt: &RipOptions,
+		opts: &RipOptions,
 		progress: &Progless,
 		killed: &KillSwitch,
 	) -> Result<Option<String>, RipRipError> {
 		// If we're resuming, we might need to "upgrade" previous iffy entries
 		// to meet a lower paranoia requirement.
-		let paranoia = opt.paranoia();
+		let paranoia = opts.paranoia();
 		for sample in &mut self.state {
 			if let RipSample::Iffy(set) = sample {
 				if paranoia <= set[0].1 {
@@ -349,7 +349,7 @@ impl Rip {
 		}
 
 		// If we're reconfirming, let's also downgrade before we begin.
-		if 1 < paranoia && opt.reconfirm() {
+		if 1 < paranoia && opts.reconfirm() {
 			let count = paranoia - 1;
 			for sample in &mut self.state {
 				if let RipSample::Good(nope) = sample {
@@ -361,13 +361,13 @@ impl Rip {
 		// The buffer needs to be different sizes depending on whether or not
 		// C2 error data is being fetched. To make lives easier, figure that
 		// out now and defer to a sub-method.
-		if opt.c2() {
+		if opts.c2() {
 			let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-			self._rip(disc, opt, &mut buf, progress, killed)
+			self._rip(disc, opts, &mut buf, progress, killed)
 		}
 		else {
 			let mut buf = [0_u8; CD_DATA_SIZE as usize];
-			self._rip(disc, opt, &mut buf, progress, killed)
+			self._rip(disc, opts, &mut buf, progress, killed)
 		}
 	}
 
@@ -379,7 +379,7 @@ impl Rip {
 	fn _rip(
 		&mut self,
 		disc: &Disc,
-		opt: &RipOptions,
+		opts: &RipOptions,
 		buf: &mut [u8],
 		progress: &Progless,
 		killed: &KillSwitch,
@@ -392,7 +392,7 @@ impl Rip {
 		let state_path = state_path(self.ar, self.idx);
 		let mut c2 = [false; SAMPLES_PER_SECTOR as usize];
 		let leadout = disc.toc().audio_leadout() as i32;
-		let offset = opt.offset();
+		let offset = opts.offset();
 
 		// We won't rip the entire padded range if there's an offset…
 		let mut min_sector: usize = 0;
@@ -452,7 +452,7 @@ impl Rip {
 						// Parse the C2 data. Each bit represents one byte of
 						// audio data, but since we're tracking at a sample
 						// level, we'll treat 4-bit groups as pass/fail.
-						if opt.c2() {
+						if opts.c2() {
 							for (k2, &v) in c2.chunks_exact_mut(2).zip(&buf[CD_DATA_SIZE as usize..]) {
 								k2[0] = 0 != v & 0b1111_0000;
 								k2[1] = 0 != v & 0b0000_1111;
@@ -478,7 +478,7 @@ impl Rip {
 					.zip(buf[..CD_DATA_SIZE as usize].chunks_exact(4))
 					.zip(c2.iter().copied()) {
 					if let Ok(new) = Sample::try_from(new) {
-						old.update(new, opt.paranoia(), sample_c2, sector_c2);
+						old.update(new, opts.paranoia(), sample_c2, sector_c2);
 					}
 				}
 
@@ -512,13 +512,13 @@ impl Rip {
 			}
 
 			// Should we stop or keep going?
-			if pass == opt.passes() || killed.killed() || self.track_good() {
+			if pass == opts.passes() || killed.killed() || self.track_good() {
 				break;
 			}
 		}
 
 		// Don't forget to save the track.
-		let dst = self.extract(opt.raw())?;
+		let dst = self.extract(opts.raw())?;
 		Ok(Some(dst))
 	}
 

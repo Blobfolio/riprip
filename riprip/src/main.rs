@@ -129,24 +129,24 @@ fn _main() -> Result<(), RipRipError> {
 
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
-	let mut opt = RipOptions::default()
+	let mut opts = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let offset = ReadOffset::try_from(v)?;
-		opt = opt.with_offset(offset);
+		opts = opts.with_offset(offset);
 	}
 
 	if let Some(v) = args.option(b"--paranoia") {
 		let paranoia = u8::btou(v).ok_or(RipRipError::Paranoia)?;
-		opt = opt.with_paranoia(paranoia);
+		opts = opts.with_paranoia(paranoia);
 	}
 
 	if let Some(v) = args.option(b"--refine") {
 		let refine = u8::btou(v).ok_or(RipRipError::Refine)?;
-		opt = opt.with_refine(refine);
+		opts = opts.with_refine(refine);
 	}
 
 	// Parsing the tracks is slightly more involved. Haha.
@@ -173,16 +173,16 @@ fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 		}
 	}
 	if ! tracks.is_empty() {
-		opt = opt.with_tracks(tracks);
+		opts = opts.with_tracks(tracks);
 	}
 
 	// Conflict checks.
-	if opt.reconfirm() && opt.paranoia() < 2 {
+	if opts.reconfirm() && opts.paranoia() < 2 {
 		return Err(RipRipError::ReconfirmParanoia);
 	}
 
 	// Done!
-	Ok(opt)
+	Ok(opts)
 }
 
 /// # Rip Summary.
