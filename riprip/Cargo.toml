@@ -98,7 +98,7 @@ duplicate = true
 
 [dependencies]
 argyle = "0.6.*"
-ctrlc = "3.4.0"
+ctrlc = "3.4.*"
 dactyl = "0.5"
 oxford_join = "0.2.*"
 trimothy = "0.1.*"
