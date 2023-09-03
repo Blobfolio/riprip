@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.1" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.2" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.1.
+Rip Rip Hooray! \- Manual page for riprip v0.0.2.
 .SH DESCRIPTION
 An incremental, second\-stage audio CD ripper for advanced data recovery.
 .SS USAGE:
@@ -9,7 +9,7 @@ riprip [FLAGS] [OPTIONS]
 .SS FLAGS:
 .TP
 \fB\-\-clean\fR
-Clear any previous riprip/state files from the current working directory before doing anything else.
+Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help information.
@@ -20,21 +20,30 @@ Disable/ignore C2 error pointer information when ripping, e.g. for drives that d
 \fB\-\-no\-rip\fR
 Just print the basic disc information to STDERR and exit.
 .TP
+\fB\-\-raw\fR
+Save ripped tracks in raw PCM format (instead of WAV).
+.TP
+\fB\-\-reconfirm\fR
+Reset the status of all previously\-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2.
+.TP
+\fB\-\-reconfirm\fR
+Reset the status of all previously\-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2.
+.TP
 \fB\-V\fR, \fB\-\-version\fR
 Print program version.
 .SS OPTIONS:
 .TP
 \fB\-d\fR, \fB\-\-dev\fR <PATH>
-The device path for the optical drive containing the CD of interest. If omitted, the default — likely /dev/cdrom — will be assumed.
+The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]
 .TP
 \fB\-o\fR, \fB\-\-offset\fR <SAMPLES>
-The AccurateRip, et al, read offset to apply when ripping. May be negative. [default: 0; range: ±5880]
+The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]
 .TP
 \fB\-\-paranoia\fR <NUM>
 When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]
 .TP
-\fB\-p\fR, \fB\-\-passes\fR <NUM>
-Iteratively rip each track <NUM> times, or until all samples have been successfully read and confirmed, whichever comes first. If zero, you will be asked after incomplete pass if you'd like another go\-around. [default: 0; range: 0..=10]
+\fB\-\-refine\fR <NUM>
+Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]
 .TP
 \fB\-t\fR, \fB\-\-track\fR <NUM>
 Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2\-3), and/or given their own \-t/\-\-track (\-t 2 \-t 3). [default: the whole disc]
