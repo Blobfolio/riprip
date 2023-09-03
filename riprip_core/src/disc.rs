@@ -7,6 +7,7 @@ use cdtoc::{
 	TocKind,
 };
 use crate::{
+	Barcode,
 	cache_path,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
@@ -38,7 +39,7 @@ use std::{
 pub struct Disc {
 	cdio: LibcdioInstance,
 	toc: Toc,
-	barcode: Option<String>,
+	barcode: Option<Barcode>,
 	isrcs: BTreeMap<u8, String>,
 }
 
@@ -55,7 +56,7 @@ impl fmt::Display for Disc {
 			("MusicBrainz:", 4, self.toc.musicbrainz_id().to_string()),
 		];
 		if let Some(barcode) = self.barcode.as_ref() {
-			kv.push(("Barcode:", 199, barcode.clone()));
+			kv.push(("Barcode:", 199, barcode.to_string()));
 		}
 
 		let col_max: usize = kv.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
@@ -164,7 +165,7 @@ impl Disc {
 		let toc = Toc::from_parts(audio, data, leadout)?;
 
 		// Pull the barcode (if any).
-		let barcode = cdio.cdtext(0, CDTextKind::Barcode).or_else(|| cdio.mcn());
+		let barcode = cdio.mcn();
 
 		// Pull the track ISRCs (if any).
 		let mut isrcs = BTreeMap::default();
@@ -187,7 +188,7 @@ impl Disc {
 
 	#[must_use]
 	/// # Barcode.
-	pub fn barcode(&self) -> Option<&str> { self.barcode.as_deref() }
+	pub const fn barcode(&self) -> Option<Barcode> { self.barcode }
 
 	#[must_use]
 	/// # ISRC.

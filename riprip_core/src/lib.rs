@@ -33,6 +33,7 @@
 )]
 
 mod abort;
+mod barcode;
 mod cache;
 mod cdio;
 mod cdtext;
@@ -43,6 +44,7 @@ mod error;
 mod rip;
 
 pub use abort::KillSwitch;
+pub use barcode::Barcode;
 pub use cache::cache_clean;
 pub(crate) use cache::{
 	cache_path,

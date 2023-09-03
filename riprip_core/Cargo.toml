@@ -16,6 +16,7 @@ cdtoc = "0.2.*"
 crc32fast = "1.3.2"
 dactyl = "0.5.*"
 hound = "3.5.0"
+trimothy = "0.1.*"
 ureq = "2.7.0"
 write_atomic = "0.4.*"
 

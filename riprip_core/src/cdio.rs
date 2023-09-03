@@ -3,6 +3,7 @@
 */
 
 use crate::{
+	Barcode,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_LEADIN,
@@ -243,15 +244,7 @@ impl LibcdioInstance {
 			)
 		};
 
-		let mut out = c_char_to_string(raw)?;
-
-		// Clean up barcodes a bit, but assume everything else is fine as is.
-		if matches!(kind, CDTextKind::Barcode) {
-			out.retain(|c| c.is_ascii_digit());
-			if out.is_empty() || out.bytes().all(|b| b == b'0') { return None; }
-		}
-
-		Some(out)
+		c_char_to_string(raw)
 	}
 
 	/*
@@ -259,7 +252,7 @@ impl LibcdioInstance {
 	/// # Track ISRC.
 	///
 	/// This method is used as a fallback when the value is not within the
-	/// CDText.
+	/// CDText, but is relatively slow.
 	pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
 		if self.supports_isrc() {
 			let raw = unsafe {
@@ -274,23 +267,36 @@ impl LibcdioInstance {
 	}
 	*/
 
-	#[allow(unsafe_code)]
 	/// # MCN.
 	///
 	/// This method is used as a fallback when the value is not within the
 	/// CDText.
-	pub(super) fn mcn(&self) -> Option<String> {
+	pub(super) fn mcn(&self) -> Option<Barcode> {
+		// It probably isn't in CDText, but we already have it, so might as
+		// well check there first.
+		self.cdtext(0, CDTextKind::Barcode)
+			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
+			// Otherwise try pulling it directly.
+			.or_else(|| self._mcn())
+	}
+
+	#[allow(unsafe_code)]
+	/// # MCN Fallback.
+	///
+	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
+	fn _mcn(&self) -> Option<Barcode> {
 		let raw = unsafe {
 			libcdio_sys::cdio_get_mcn(self.as_ptr())
 		};
-		let out = c_char_to_string(raw.cast());
-		unsafe { libcdio_sys::cdio_free(raw.cast()); }
-
-		// Give it some light sanitizing before sending back.
-		let mut out = out?;
-		out.retain(|c| c.is_ascii_digit());
-		if out.is_empty() || out.bytes().all(|b| b == b'0') { None }
-		else { Some(out) }
+		if raw.is_null() { None }
+		else {
+			let mcn = unsafe { CStr::from_ptr(raw) }
+				.to_str()
+				.ok()
+				.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
+			unsafe { libcdio_sys::cdio_free(raw.cast()); }
+			mcn
+		}
 	}
 }
 

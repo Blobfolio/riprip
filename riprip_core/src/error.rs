@@ -15,6 +15,9 @@ use std::{
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// # Errors.
 pub enum RipRipError {
+	/// # Invalid barcode.
+	Barcode,
+
 	/// # Cache directory.
 	Cache,
 
@@ -119,6 +122,7 @@ impl From<RipRipError> for Msg {
 impl fmt::Display for RipRipError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
+			Self::Barcode => f.write_str("Invalid/unsupported barcode."),
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
 			Self::CdRead(n) => write!(f, "Unable to read sector {n}."),
 			Self::CdReadBuffer => f.write_str("BUG: Insufficient CD read buffer."),
