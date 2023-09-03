@@ -11,8 +11,6 @@ use crate::{
 	RipRipError,
 };
 use libcdio_sys::{
-	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
-	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
 	discmode_t_CDIO_DISC_MODE_CD_DA,
@@ -43,27 +41,12 @@ static LIBCDIO_INIT: Once = Once::new();
 
 
 
-/// # Can Read ISRC.
-///
-/// Note: this is separate from CDText; even if unsupported the
-/// information might still be obtainable.
-const FLAG_SUPPORTS_ISRC: u8 = 0b0010;
-
-/// # Can Read MCN.
-///
-/// Note: this is separate from CDText; even if unsupported the
-/// information might still be obtainable.
-const FLAG_SUPPORTS_MCN: u8 =  0b0100;
-
-
-
 #[derive(Debug)]
 #[allow(dead_code)] // We just want to make sure dev lives as long as the ptr.
 /// # CDIO Instance.
 pub(super) struct LibcdioInstance {
 	dev: Option<CString>,
 	ptr: *mut libcdio_sys::CdIo_t,
-	flags: u8,
 	cdtext: Option<*mut libcdio_sys::cdtext_t>,
 }
 
@@ -124,13 +107,10 @@ impl LibcdioInstance {
 			let mut out = Self {
 				dev,
 				ptr,
-				flags: 0,
 				cdtext: None,
 			};
 
 			out._check_disc_mode()?;
-
-			out._init_read_cap();
 			out._init_cdtext();
 
 			Ok(out)
@@ -173,33 +153,6 @@ impl LibcdioInstance {
 		};
 		if ! ptr.is_null() { self.cdtext.replace(ptr); }
 	}
-
-	#[allow(unsafe_code)]
-	/// # Initialize Capabilities.
-	///
-	/// At the moment, this just checks to see if ISRC and/or MCN details
-	/// can be pulled independently of CDText. Probably not necessary, but
-	/// it doesn't seem to hold things up much so whatever.
-	fn _init_read_cap(&mut self) {
-		let mut i_read_cap = 0;
-		let mut i_write_cap = 0;
-		let mut i_misc_cap = 0;
-		unsafe {
-			libcdio_sys::cdio_get_drive_cap(
-				self.as_ptr(),
-				&mut i_read_cap,
-				&mut i_write_cap,
-				&mut i_misc_cap
-			);
-		}
-
-		if cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC == i_read_cap & cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC {
-			self.flags |= FLAG_SUPPORTS_ISRC;
-		}
-		if cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN == i_read_cap & cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN {
-			self.flags |= FLAG_SUPPORTS_MCN;
-		}
-	}
 }
 
 impl LibcdioInstance {
@@ -208,24 +161,6 @@ impl LibcdioInstance {
 
 	/// # As Mut Ptr.
 	pub(super) const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
-}
-
-impl LibcdioInstance {
-	/// # Can Read Track ISRCs?
-	///
-	/// Note: this is separate from CDText; even if unsupported the
-	/// information might still be obtainable.
-	pub(super) const fn supports_isrc(&self) -> bool {
-		FLAG_SUPPORTS_ISRC == self.flags & FLAG_SUPPORTS_ISRC
-	}
-
-	/// # Can Read Disc MCN (Barcode)?
-	///
-	/// Note: this is separate from CDText; even if unsupported the
-	/// information might still be obtainable.
-	pub(super) const fn supports_mcn(&self) -> bool {
-		FLAG_SUPPORTS_MCN == self.flags & FLAG_SUPPORTS_MCN
-	}
 }
 
 impl LibcdioInstance {
@@ -319,6 +254,7 @@ impl LibcdioInstance {
 		Some(out)
 	}
 
+	/*
 	#[allow(unsafe_code)]
 	/// # Track ISRC.
 	///
@@ -336,6 +272,7 @@ impl LibcdioInstance {
 		}
 		else { None }
 	}
+	*/
 
 	#[allow(unsafe_code)]
 	/// # MCN.
@@ -343,20 +280,17 @@ impl LibcdioInstance {
 	/// This method is used as a fallback when the value is not within the
 	/// CDText.
 	pub(super) fn mcn(&self) -> Option<String> {
-		if self.supports_mcn() {
-			let raw = unsafe {
-				libcdio_sys::cdio_get_mcn(self.as_ptr())
-			};
-			let out = c_char_to_string(raw.cast());
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
+		let raw = unsafe {
+			libcdio_sys::cdio_get_mcn(self.as_ptr())
+		};
+		let out = c_char_to_string(raw.cast());
+		unsafe { libcdio_sys::cdio_free(raw.cast()); }
 
-			// Give it some light sanitizing before sending back.
-			let mut out = out?;
-			out.retain(|c| c.is_ascii_digit());
-			if out.is_empty() || out.bytes().all(|b| b == b'0') { None }
-			else { Some(out) }
-		}
-		else { None }
+		// Give it some light sanitizing before sending back.
+		let mut out = out?;
+		out.retain(|c| c.is_ascii_digit());
+		if out.is_empty() || out.bytes().all(|b| b == b'0') { None }
+		else { Some(out) }
 	}
 }
 

@@ -64,7 +64,11 @@ impl fmt::Display for Disc {
 		}
 
 		// Start the table of contents.
-		f.write_str("\n\x1b[2m##   FIRST    LAST  LENGTH          ISRC\x1b[0m\n")?;
+		write!(
+			f,
+			"\n\x1b[2m##   FIRST    LAST  LENGTH          {}\x1b[0m\n",
+			if self.isrcs.is_empty() { "" } else { "ISRC" },
+		)?;
 		f.write_str(DIVIDER)?;
 
 		// Leading data track.
@@ -166,7 +170,7 @@ impl Disc {
 		let mut isrcs = BTreeMap::default();
 		for t in toc.audio_tracks() {
 			let idx = t.number();
-			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc).or_else(|| cdio.track_isrc(idx)) {
+			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc) {
 				isrcs.insert(idx, isrc);
 			}
 		}
