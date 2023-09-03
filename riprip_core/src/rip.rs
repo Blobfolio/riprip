@@ -411,9 +411,9 @@ impl Rip {
 		for pass in 0..opts.passes() {
 			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
 			progress.set_title(Some(Msg::custom(
-				format!("{}Ripping", "Re-".repeat(usize::min(5, usize::from(pass + resume)))),
+				rip_title(pass + resume),
 				199,
-				format!("Track #{}…", self.track.number())
+				&format!("Track #{}…", self.track.number())
 			)));
 
 			// Update the data, one sector at a time.
@@ -776,12 +776,6 @@ impl RipSample {
 
 
 
-#[inline]
-/// # Reset C2 Statuses.
-fn reset_c2(set: &mut SectorC2s, val: bool) {
-	for c2 in set { *c2 = val; }
-}
-
 #[allow(
 	clippy::cast_possible_truncation,
 	clippy::cast_precision_loss,
@@ -857,12 +851,32 @@ fn print_bar(
 	eprintln!();
 }
 
+#[inline]
+/// # Reset C2 Statuses.
+fn reset_c2(set: &mut SectorC2s, val: bool) {
+	for c2 in set { *c2 = val; }
+}
+
 /// # Extraction Path.
 ///
 /// Return the relative path for the ripped track.
 fn rip_path(idx: u8, raw: bool) -> String {
 	if raw { format!("{idx:02}.pcm") }
 	else   { format!("{idx:02}.wav") }
+}
+
+#[inline]
+/// # Rip Title.
+///
+/// This returns the title for the progress bar based on the pass number.
+const fn rip_title(pass: u8) -> &'static str {
+	match pass {
+		0 => "Ripping",
+		1 => "Re-Ripping",
+		2 => "Re-Re-Ripping",
+		3 => "Re-Re-Re-Ripping",
+		_ => "Re-Re-Re-Etc.-Ripping",
+	}
 }
 
 /// # State Path.
