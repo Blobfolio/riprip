@@ -42,7 +42,6 @@ pub struct Disc {
 }
 
 impl fmt::Display for Disc {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		const DIVIDER: &str = "\x1b[2m----------------------------------------\x1b[0m\n";
 
@@ -73,7 +72,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                  DATA TRACK\x1b[0m",
+				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
 				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
 			)?;
 		}
@@ -98,7 +97,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                  DATA TRACK\x1b[0m",
+				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
 				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
 			)?;
 		}
@@ -106,7 +105,7 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                    LEAD-OUT",
+			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                      LEAD-OUT",
 			self.toc.leadout().saturating_sub(CD_LEADIN),
 		)?;
 
