@@ -42,6 +42,12 @@ pub enum RipRipError {
 	/// # Unsupported Disc.
 	DiscMode,
 
+	/// # Invalid drive model.
+	DriveModel,
+
+	/// # Invalid drive vendor.
+	DriveVendor,
+
 	/// # Unable to get first track number.
 	FirstTrackNum,
 
@@ -126,6 +132,8 @@ impl fmt::Display for RipRipError {
 					f.write_str("Unable to open connection with default optical drive.")
 				},
 			Self::DiscMode => f.write_str("Missing or unsupported disc type."),
+			Self::DriveModel => f.write_str("Invalid drive model."),
+			Self::DriveVendor => f.write_str("Invalid drive vendor."),
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
 			Self::Killed => f.write_str("Operations aborted."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),

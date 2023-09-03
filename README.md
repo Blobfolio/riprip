@@ -43,21 +43,11 @@ If that's all you want, there's a `--no-rip` flag you can pass to the program.
 
 Rip-Rip-wise, it supports:
 
-* [AccurateRip](http://www.accuraterip.com/), _et al_, drive-specific read offsets
-* AccurateRip rip verification
-* [CUETools](http://cue.tools/wiki/CUETools_Database) rip verification
+* Detect/apply [AccurateRip](http://www.accuraterip.com/), _et al_, drive read offsets
+* AccurateRip and [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
 * C2 Error Pointers
-* Statefulness (you can pick up previous rips from where you left off)
-* Individual track(s) or whole-disc ripping
-* Automated or interactive pass limits
 * Sample confirmation (to workaround faulty C2 data)
 * Raw PCM and WAV output
-
-Additional items on the roadmap:
-
-* Drive offset auto-detection
-* Ability to disable EAN/UPC/ISRC lookups
-* Offline mode (disable AccurateRip/CTDB)
 
 
 

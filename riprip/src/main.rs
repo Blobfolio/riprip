@@ -44,6 +44,7 @@ use fyi_msg::{
 };
 use riprip_core::{
 	Disc,
+	DriveVendorModel,
 	KillSwitch,
 	ReadOffset,
 	RipRipError,
@@ -102,13 +103,19 @@ fn _main() -> Result<(), RipRipError> {
 	// Connect to the device and summarize the disc.
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
+	let drivevendormodel = disc.drive_vendor_model();
+	if let Some(vm) = drivevendormodel {
+		let vm = vm.to_string();
+		eprintln!("\x1b[1;36m{vm}\x1b[0m");
+		eprintln!("\x1b[2;36m{}\x1b[0m\n", "-".repeat(vm.len()));
+	}
 	eprintln!("{disc}");
 
 	// Go ahead and leave if there's no ripping to do.
 	if args.switch(b"--no-rip") { return Ok(()); }
 
 	// Set up the ripper!
-	let opts = parse_rip_options(&args)?;
+	let opts = parse_rip_options(&args, drivevendormodel)?;
 	let progress = Progless::default();
 	let killed = KillSwitch::default();
 	sigint(killed.inner(), Some(progress.clone()));
@@ -128,11 +135,16 @@ fn _main() -> Result<(), RipRipError> {
 }
 
 /// # Parse Rip Options.
-fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
+fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"));
+
+	// Detect offset?
+	if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
+		opts = opts.with_offset(v);
+	}
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let offset = ReadOffset::try_from(v)?;
@@ -281,12 +293,6 @@ FLAGS:
     -V, --version     Print version information and exit.
 
 OPTIONS:
-    -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest. If omitted, the default — likely /dev/cdrom
-                      — will be assumed.
-    -o, --offset <SAMPLES>
-                      The AccurateRip, et al, read offset to apply when
-                      ripping. May be negative. [default: 0; range: ±5880]
         --paranoia <NUM>
                       When C2 or read errors are reported for any samples in a
                       given block, treat the rest of its samples — the ones
@@ -303,6 +309,17 @@ OPTIONS:
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
+
+DRIVE OPTIONS:
+
+    These options are auto-detected and do not usually need to be explicitly
+    provided.
+
+    -d, --dev <PATH>  The device path for the optical drive containing the CD
+                      of interest, like /dev/cdrom.
+    -o, --offset <SAMPLES>
+                      The AccurateRip, et al, sample read offset to apply to
+                      data retrieved from the drive. [range: ±5880]
 "
 	));
 }

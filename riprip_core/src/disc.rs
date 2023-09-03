@@ -11,6 +11,7 @@ use crate::{
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
+	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
 	Rip,
@@ -188,6 +189,13 @@ impl Disc {
 	/// # ISRC.
 	pub fn isrc(&self, idx: u8) -> Option<&str> {
 		self.isrcs.get(&idx).map(String::as_str)
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Drive Vendor and Model.
+	pub fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		self.cdio.drive_vendor_model()
 	}
 
 	#[must_use]

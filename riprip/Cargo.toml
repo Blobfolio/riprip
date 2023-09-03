@@ -70,14 +70,14 @@ description = "Print program version."
 short = "-d"
 long = "--dev"
 label = "<PATH>"
-description = "The device path for the optical drive containing the CD of interest. If omitted, the default — likely /dev/cdrom — will be assumed."
+description = "The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]"
 path = true
 
 [[package.metadata.bashman.options]]
 short = "-o"
 long = "--offset"
 label = "<SAMPLES>"
-description = "The AccurateRip, et al, read offset to apply when ripping. May be negative. [default: 0; range: ±5880]"
+description = "The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]"
 
 [[package.metadata.bashman.options]]
 long = "--paranoia"

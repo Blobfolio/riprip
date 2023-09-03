@@ -192,8 +192,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 	// We need at least one sector leftover.
 	if data.len() < prefix + suffix + SAMPLES_PER_SECTOR as usize { return None; }
 
-	// Carve up the data. We need to keep the ends in byte form, but can
-	// precalculate the CRC for the entire middle chunk.
+	// Carve up the data. The ends need to remain in byte form since we'll be
+	// trimming bits away, but the middle is present in all configurations, so
+	// we can precalculate its CRC.
 	let mut start = Vec::with_capacity(prefix * BYTES_PER_SAMPLE as usize);
 	let mut middle = Crc::new();
 	let mut end = Vec::with_capacity(suffix * BYTES_PER_SAMPLE as usize);
@@ -204,7 +205,8 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		else { end.extend_from_slice(sample.as_slice()); }
 	}
 
-	// Check for a straight match before wiggling.
+	// Check for a straight match before wiggling. Use all of start and end
+	// except for the first/last tracks (which have ignored regions).
 	let mut confidence = 0;
 	let mut crc = Crc::new();
 	if pos.is_first() { crc.update(&start[CTDB_WIGGLE..]); }
@@ -222,11 +224,14 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 	for shift in 1..=SAMPLES_PER_SECTOR as usize * 10 {
 		let shift = shift * BYTES_PER_SAMPLE as usize;
 
-		// Negative offset.
+		// Let's try for a negative match first, shifting the data into the
+		// end of the theoretical previous track. (We'll assume that track's
+		// data is silence.)
 		let mut crc = Crc::new();
 
 		// Because the ignored region of the first track is the same as our
-		// wiggle, it always has enough data for negative shifting.
+		// wiggle, it always has enough data for negative shifting. (Data is
+		// still ignored, but now it's ignoring data we don't have, so great!)
 		if pos.is_first() { crc.update(&start[CTDB_WIGGLE - shift..]); }
 		// For other tracks, we need to supplement with silence.
 		else {
@@ -237,7 +242,8 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		// Add the middle.
 		crc.combine(&middle);
 
-		// Maybe add the end.
+		// Maybe add the end. It doesn't matter if this is the last track;
+		// ignoring the end is convenient!
 		if shift != CTDB_WIGGLE { crc.update(&end[..CTDB_WIGGLE - shift]); }
 
 		// Check it!
@@ -248,12 +254,14 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 			}
 		}
 
-		// Now positive!
+		// Now let's check for a positive offset match, bleeding into the
+		// theoretical next track. The ideas are the same, except now any
+		// assumed silence will be at the end.
 		let mut crc = Crc::new();
 
 		// Maybe add the start.
 		if shift != CTDB_WIGGLE {
-			// Ignored regions still apply.
+			// Ignored regions still apply to the first track.
 			if pos.is_first() { crc.update(&start[CTDB_WIGGLE + shift..]); }
 			else { crc.update(&start[shift..]); }
 		}
@@ -279,6 +287,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		}
 	}
 
+	// As mentioned at the start, we don't really want to accept CUETools
+	// matches unless the cumulative confidence is at least two. In other cases
+	// we'll pretend we didn't find anything.
 	Some(if confidence < 2 { 0 } else { confidence })
 }
 

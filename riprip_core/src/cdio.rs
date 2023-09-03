@@ -7,11 +7,13 @@ use crate::{
 	CD_DATA_SIZE,
 	CD_LEADIN,
 	CDTextKind,
+	DriveVendorModel,
 	RipRipError,
 };
 use libcdio_sys::{
 	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
 	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
+	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
 	discmode_t_CDIO_DISC_MODE_CD_DA,
 	discmode_t_CDIO_DISC_MODE_CD_MIXED,
@@ -353,6 +355,50 @@ impl LibcdioInstance {
 			out.retain(|c| c.is_ascii_digit());
 			if out.is_empty() || out.bytes().all(|b| b == b'0') { None }
 			else { Some(out) }
+		}
+		else { None }
+	}
+}
+
+impl LibcdioInstance {
+	#[allow(unsafe_code, clippy::cast_sign_loss)]
+	/// # Drive Vendor/Model.
+	///
+	/// Fetch the drive vendor and model, if possible.
+	pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		let mut raw = cdio_hwinfo {
+			psz_vendor: [0; 9],
+			psz_model: [0; 17],
+			psz_revision: [0; 5],
+		};
+
+		// The return code is a bool, true for good, instead of the usual
+		// 0 for good.
+		if 1 == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
+			// Rather than deal with the uncertainty of pointers, let's recast
+			// the signs since we have everything right here.
+			let vendor_u8 = raw.psz_vendor.map(|b| b as u8);
+			let model_u8 = raw.psz_model.map(|b| b as u8);
+
+			// Vendor might be empty.
+			let vendor =
+				if vendor_u8[0] == 0 { "" }
+				else {
+					CStr::from_bytes_until_nul(vendor_u8.as_slice())
+					.ok()
+					.and_then(|v| v.to_str().ok())?
+				};
+
+			// But model is required.
+			let model =
+				if model_u8[0] == 0 { None }
+				else {
+					CStr::from_bytes_until_nul(model_u8.as_slice())
+					.ok()
+					.and_then(|v| v.to_str().ok())
+				}?;
+
+			DriveVendorModel::new(vendor, model).ok()
 		}
 		else { None }
 	}

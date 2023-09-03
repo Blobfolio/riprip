@@ -38,8 +38,8 @@ mod cdio;
 mod cdtext;
 mod chk;
 mod disc;
+mod drive;
 mod error;
-mod offset;
 mod rip;
 
 pub use abort::KillSwitch;
@@ -56,8 +56,11 @@ pub(crate) use chk::{
 	chk_ctdb,
 };
 pub use disc::Disc;
+pub use drive::{
+	DriveVendorModel,
+	ReadOffset,
+};
 pub use error::RipRipError;
-pub use offset::ReadOffset;
 pub use rip::RipOptions;
 pub(crate) use rip::{
 	Rip,

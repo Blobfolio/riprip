@@ -36,6 +36,9 @@ features = [ "cdio" ]
 version = "1.0.*"
 features = [ "derive" ]
 
+[build-dependencies]
+ureq = "2.7.0"
+
 [features]
 default = []
 
