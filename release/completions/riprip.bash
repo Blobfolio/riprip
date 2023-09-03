@@ -11,6 +11,9 @@ _basher___riprip() {
 	fi
 	[[ " ${COMP_LINE} " =~ " --no-c2 " ]] || opts+=("--no-c2")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
+	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
+	[[ " ${COMP_LINE} " =~ " --reconfirm " ]] || opts+=("--reconfirm")
+	[[ " ${COMP_LINE} " =~ " --reconfirm " ]] || opts+=("--reconfirm")
 	if [[ ! " ${COMP_LINE} " =~ " -V " ]] && [[ ! " ${COMP_LINE} " =~ " --version " ]]; then
 		opts+=("-V")
 		opts+=("--version")
@@ -24,10 +27,7 @@ _basher___riprip() {
 		opts+=("--offset")
 	fi
 	[[ " ${COMP_LINE} " =~ " --paranoia " ]] || opts+=("--paranoia")
-	if [[ ! " ${COMP_LINE} " =~ " -p " ]] && [[ ! " ${COMP_LINE} " =~ " --passes " ]]; then
-		opts+=("-p")
-		opts+=("--passes")
-	fi
+	[[ " ${COMP_LINE} " =~ " --refine " ]] || opts+=("--refine")
 	opts+=("-t")
 	opts+=("--track")
 	opts=" ${opts[@]} "

@@ -44,6 +44,7 @@ use fyi_msg::{
 };
 use riprip_core::{
 	Disc,
+	DriveVendorModel,
 	KillSwitch,
 	ReadOffset,
 	RipRipError,
@@ -102,13 +103,19 @@ fn _main() -> Result<(), RipRipError> {
 	// Connect to the device and summarize the disc.
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
+	let drivevendormodel = disc.drive_vendor_model();
+	if let Some(vm) = drivevendormodel {
+		let vm = vm.to_string();
+		eprintln!("\x1b[1;36m{vm}\x1b[0m");
+		eprintln!("\x1b[2;36m{}\x1b[0m\n", "-".repeat(vm.len()));
+	}
 	eprintln!("{disc}");
 
 	// Go ahead and leave if there's no ripping to do.
 	if args.switch(b"--no-rip") { return Ok(()); }
 
 	// Set up the ripper!
-	let opts = parse_rip_options(&args)?;
+	let opts = parse_rip_options(&args, drivevendormodel)?;
 	let progress = Progless::default();
 	let killed = KillSwitch::default();
 	sigint(killed.inner(), Some(progress.clone()));
@@ -128,23 +135,30 @@ fn _main() -> Result<(), RipRipError> {
 }
 
 /// # Parse Rip Options.
-fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
-	let mut opt = RipOptions::default()
-		.with_c2(! args.switch(b"--no-c2"));
+fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<RipOptions, RipRipError> {
+	let mut opts = RipOptions::default()
+		.with_c2(! args.switch(b"--no-c2"))
+		.with_raw(args.switch(b"--raw"))
+		.with_reconfirm(args.switch(b"--reconfirm"));
+
+	// Detect offset?
+	if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
+		opts = opts.with_offset(v);
+	}
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let offset = ReadOffset::try_from(v)?;
-		opt = opt.with_offset(offset);
+		opts = opts.with_offset(offset);
 	}
 
 	if let Some(v) = args.option(b"--paranoia") {
 		let paranoia = u8::btou(v).ok_or(RipRipError::Paranoia)?;
-		opt = opt.with_paranoia(paranoia);
+		opts = opts.with_paranoia(paranoia);
 	}
 
-	if let Some(v) = args.option2(b"-p", b"--passes") {
-		let passes = u8::btou(v).ok_or(RipRipError::Passes)?;
-		opt = opt.with_passes(passes);
+	if let Some(v) = args.option(b"--refine") {
+		let refine = u8::btou(v).ok_or(RipRipError::Refine)?;
+		opts = opts.with_refine(refine);
 	}
 
 	// Parsing the tracks is slightly more involved. Haha.
@@ -171,11 +185,16 @@ fn parse_rip_options(args: &Argue) -> Result<RipOptions, RipRipError> {
 		}
 	}
 	if ! tracks.is_empty() {
-		opt = opt.with_tracks(tracks);
+		opts = opts.with_tracks(tracks);
+	}
+
+	// Conflict checks.
+	if opts.reconfirm() && opts.paranoia() < 2 {
+		return Err(RipRipError::ReconfirmParanoia);
 	}
 
 	// Done!
-	Ok(opt)
+	Ok(opts)
 }
 
 /// # Rip Summary.
@@ -189,28 +208,30 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_tracks =
 		if tracks.is_empty() { Cow::Borrowed("EVERYTHING") }
 		else { tracks.oxford_and() };
-	let nice_c2 = if opts.c2() { "Enabled" } else { "Disabled" };
-	let nice_pass = NiceU8::from(opts.passes());
+	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
+	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
+	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_paranoia = NiceU8::from(opts.paranoia());
-	let nice_offset = format!("{}", opts.offset().samples());
+	let nice_passes = NiceU8::from(opts.passes());
+	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
+
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("Offset:", Cow::Owned(nice_offset), 0 != opts.offset().samples_abs()),
-		("C2:", Cow::Borrowed(nice_c2), opts.c2()),
+		("C2:", nice_c2, opts.c2()),
+		("Format:", nice_format, true),
+		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Paranoia:", Cow::Borrowed(nice_paranoia.as_str()), 1 < opts.paranoia()),
-		(
-			"Passes:",
-			if opts.passes() == 0 { Cow::Borrowed("Interactive") } else { Cow::Borrowed(nice_pass.as_str()) },
-			1 != opts.passes()
-		),
+		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
+		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
 	];
+
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:9} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:9} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
 		}
 	}
 
@@ -239,7 +260,7 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 fn helper() {
 	println!(concat!(
 		r"
-╚⊙ ⊙╝
+ ╚⊙ ⊙╝
 ╚═(███)═╝
  ╚═(███)═╝
   ╚═(███)═╝
@@ -258,22 +279,20 @@ USAGE:
     riprip [FLAGS] [OPTIONS]
 
 FLAGS:
-        --clean       Clear any previous riprip/state files from the current
-                      working directory before doing anything else.
+        --clean       Clear the contents of $PWD/_riprip before doing anything
+                      else, to e.g. start over from scratch.
     -h, --help        Print help information and exit.
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
         --no-rip      Just print the basic disc information to STDERR and exit.
+        --raw         Save ripped tracks in raw PCM format (instead of WAV).
+        --reconfirm   Reset the status of all previously-accepted samples to
+                      require reconfirmation. This has no effect when the
+                      paranoia level is less than 2.
     -V, --version     Print version information and exit.
 
 OPTIONS:
-    -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest. If omitted, the default — likely /dev/cdrom
-                      — will be assumed.
-    -o, --offset <SAMPLES>
-                      The AccurateRip, et al, read offset to apply when
-                      ripping. May be negative. [default: 0; range: ±5880]
         --paranoia <NUM>
                       When C2 or read errors are reported for any samples in a
                       given block, treat the rest of its samples — the ones
@@ -281,17 +300,26 @@ OPTIONS:
                       been confirmed <NUM> times. Similarly, if a sample moves
                       from bad to good, require <NUM> confirmations before
                       believing it. [default: 3; range: 1..=32]
-    -p, --passes <NUM>
-                      Iteratively rip each track <NUM> times, or until all
-                      samples have been successfully read and confirmed,
-                      whichever comes first. If zero, you will be asked after
-                      incomplete pass if you'd like another go-around.
-                      [default: 0; range: 0..=10]
+        --refine <NUM>
+                      Execute up to <NUM> additional rip passes for each track
+                      while any samples remain unread/unconfirmed.
+                      [default: 0; max: 15]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
+
+DRIVE OPTIONS:
+
+    These options are auto-detected and do not usually need to be explicitly
+    provided.
+
+    -d, --dev <PATH>  The device path for the optical drive containing the CD
+                      of interest, like /dev/cdrom.
+    -o, --offset <SAMPLES>
+                      The AccurateRip, et al, sample read offset to apply to
+                      data retrieved from the drive. [range: ±5880]
 "
 	));
 }

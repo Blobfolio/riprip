@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.0.1"
+version = "0.0.2"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -34,7 +34,7 @@ credits-dir = "../"
 
 [[package.metadata.bashman.switches]]
 long = "--clean"
-description = "Clear any previous riprip/state files from the current working directory before doing anything else."
+description = "Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch."
 
 [[package.metadata.bashman.switches]]
 short = "-h"
@@ -50,6 +50,18 @@ long = "--no-rip"
 description = "Just print the basic disc information to STDERR and exit."
 
 [[package.metadata.bashman.switches]]
+long = "--raw"
+description = "Save ripped tracks in raw PCM format (instead of WAV)."
+
+[[package.metadata.bashman.switches]]
+long = "--reconfirm"
+description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
+
+[[package.metadata.bashman.switches]]
+long = "--reconfirm"
+description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
+
+[[package.metadata.bashman.switches]]
 short = "-V"
 long = "--version"
 description = "Print program version."
@@ -58,14 +70,14 @@ description = "Print program version."
 short = "-d"
 long = "--dev"
 label = "<PATH>"
-description = "The device path for the optical drive containing the CD of interest. If omitted, the default — likely /dev/cdrom — will be assumed."
+description = "The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]"
 path = true
 
 [[package.metadata.bashman.options]]
 short = "-o"
 long = "--offset"
 label = "<SAMPLES>"
-description = "The AccurateRip, et al, read offset to apply when ripping. May be negative. [default: 0; range: ±5880]"
+description = "The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]"
 
 [[package.metadata.bashman.options]]
 long = "--paranoia"
@@ -73,10 +85,9 @@ label = "<NUM>"
 description = "When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
-short = "-p"
-long = "--passes"
+long = "--refine"
 label = "<NUM>"
-description = "Iteratively rip each track <NUM> times, or until all samples have been successfully read and confirmed, whichever comes first. If zero, you will be asked after incomplete pass if you'd like another go-around. [default: 0; range: 0..=10]"
+description = "Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]"
 
 [[package.metadata.bashman.options]]
 short = "-t"
@@ -87,7 +98,7 @@ duplicate = true
 
 [dependencies]
 argyle = "0.6.*"
-ctrlc = "=3.4.0"
+ctrlc = "3.4.0"
 dactyl = "0.5"
 oxford_join = "0.2.*"
 trimothy = "0.1.*"

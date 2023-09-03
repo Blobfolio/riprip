@@ -7,10 +7,12 @@ use cdtoc::{
 	TocKind,
 };
 use crate::{
+	Barcode,
 	cache_path,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
+	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
 	Rip,
@@ -37,12 +39,11 @@ use std::{
 pub struct Disc {
 	cdio: LibcdioInstance,
 	toc: Toc,
-	barcode: Option<String>,
+	barcode: Option<Barcode>,
 	isrcs: BTreeMap<u8, String>,
 }
 
 impl fmt::Display for Disc {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		const DIVIDER: &str = "\x1b[2m----------------------------------------\x1b[0m\n";
 
@@ -55,7 +56,7 @@ impl fmt::Display for Disc {
 			("MusicBrainz:", 4, self.toc.musicbrainz_id().to_string()),
 		];
 		if let Some(barcode) = self.barcode.as_ref() {
-			kv.push(("Barcode:", 199, barcode.clone()));
+			kv.push(("Barcode:", 199, barcode.to_string()));
 		}
 
 		let col_max: usize = kv.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
@@ -64,7 +65,11 @@ impl fmt::Display for Disc {
 		}
 
 		// Start the table of contents.
-		f.write_str("\n\x1b[2m##   FIRST    LAST  LENGTH          ISRC\x1b[0m\n")?;
+		write!(
+			f,
+			"\n\x1b[2m##   FIRST    LAST  LENGTH          {}\x1b[0m\n",
+			if self.isrcs.is_empty() { "" } else { "ISRC" },
+		)?;
 		f.write_str(DIVIDER)?;
 
 		// Leading data track.
@@ -73,7 +78,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                  DATA TRACK\x1b[0m",
+				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
 				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
 			)?;
 		}
@@ -98,7 +103,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                  DATA TRACK\x1b[0m",
+				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
 				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
 			)?;
 		}
@@ -106,8 +111,8 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                    LEAD-OUT",
-			self.toc.leadout()
+			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                      LEAD-OUT",
+			self.toc.leadout().saturating_sub(CD_LEADIN),
 		)?;
 
 		// Close it off!
@@ -160,13 +165,13 @@ impl Disc {
 		let toc = Toc::from_parts(audio, data, leadout)?;
 
 		// Pull the barcode (if any).
-		let barcode = cdio.cdtext(0, CDTextKind::Barcode).or_else(|| cdio.mcn());
+		let barcode = cdio.mcn();
 
 		// Pull the track ISRCs (if any).
 		let mut isrcs = BTreeMap::default();
 		for t in toc.audio_tracks() {
 			let idx = t.number();
-			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc).or_else(|| cdio.track_isrc(idx)) {
+			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc) {
 				isrcs.insert(idx, isrc);
 			}
 		}
@@ -183,12 +188,19 @@ impl Disc {
 
 	#[must_use]
 	/// # Barcode.
-	pub fn barcode(&self) -> Option<&str> { self.barcode.as_deref() }
+	pub const fn barcode(&self) -> Option<Barcode> { self.barcode }
 
 	#[must_use]
 	/// # ISRC.
 	pub fn isrc(&self, idx: u8) -> Option<&str> {
 		self.isrcs.get(&idx).map(String::as_str)
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Drive Vendor and Model.
+	pub fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		self.cdio.drive_vendor_model()
 	}
 
 	#[must_use]

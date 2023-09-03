@@ -33,15 +33,18 @@
 )]
 
 mod abort;
+mod barcode;
 mod cache;
 mod cdio;
 mod cdtext;
+mod chk;
 mod disc;
+mod drive;
 mod error;
-mod offset;
 mod rip;
 
 pub use abort::KillSwitch;
+pub use barcode::Barcode;
 pub use cache::cache_clean;
 pub(crate) use cache::{
 	cache_path,
@@ -50,11 +53,21 @@ pub(crate) use cache::{
 };
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;
+pub(crate) use chk::{
+	chk_accuraterip,
+	chk_ctdb,
+};
 pub use disc::Disc;
+pub use drive::{
+	DriveVendorModel,
+	ReadOffset,
+};
 pub use error::RipRipError;
-pub use offset::ReadOffset;
 pub use rip::RipOptions;
-pub(crate) use rip::Rip;
+pub(crate) use rip::{
+	Rip,
+	RipSample,
+};
 
 
 

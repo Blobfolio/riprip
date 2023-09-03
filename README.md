@@ -6,77 +6,53 @@
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
 
 
-Rip Rip Hooray! is an iterative, [second-stage](#what-does-second-stage-mean) audio CD-ripper for Linux CLI, designed for advanced recovery/salvage of tracks from discs that have seen better days.
+Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
-It also provides a pretty summary of the disc details.
+It doesn't beat a drive senseless every time a read error is encountered; it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
+Between those runs — which typically only last a few minutes — you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to automatically finish.
 
-
-## What Does Second-Stage Mean?
-
-It means you should continue ripping your discs with _accurate_ CD-ripping software like [fre:ac](https://github.com/enzo1982/freac/) or [EAC](https://www.exactaudiocopy.de/) _first_, but if and when they fall short, switch over to Rip Rip Hooray to recover whatever problem tracks remain.
-
-Those programs are nice and do lots of useful things, but their error recovery features are naive, ineffective, and scale _terribly_. You shouldn't waste your time with them. Burst or bust!
-
-Rip Rip Hooray takes a gentler, iterative approach. Rather than beating a drive senseless for days on end, it simply collects what it can, as it can, progressively filling in the gaps across multiple passes.
-
-Between runs you can clean the disc, switch drives, wait for better weather, see if you've already ripped enough for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to get you across the finish line, etc.
-
-Rip Rip Hooray does data recovery faster and better, plain and simple.
-
-It will not, however, organize your media library, download album covers, convert shit between arbitrary formats, do the dishes, etc.
-
-Hence "second-stage". ;)
+Total recovery is not always possible, but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
 
 
 
 ## Features
 
-Rip Rip Hooray's disc summary will give you:
+Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, getting you access to the recovered data — regardless of "completeness" — as quickly as possible. You can re-run Rip Rip at any time, as many times as you want, with as many different optical drives as you want, to retry the outstanding regions and refine the data.
 
-* The basic table of contents in LSN format
-* The corresponding `CDTOC` (for e.g. metadata)
-* The [AccurateRip](http://www.accuraterip.com/), `CDDB`, [CUETools](http://cue.tools/wiki/CUETools_Database), and [MusicBrainz](https://musicbrainz.org/) disc IDs
-* Any UPC/EAN and ISRC data stored on the disc
+Beyond that, it supports all the good things:
 
-If that's all you want, there's a `--no-rip` flag you can pass to the program.
+* C2 error pointers
+* Drive read offset auto-detection
+* Drive read offset correction
+* [AccurateRip](http://accuraterip.com/) checksum verification
+* [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
+* Raw PCM and WAV output
+* Sample re/confirmation
 
-Rip-Rip-wise, it supports:
+Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
 
-* [AccurateRip](http://www.accuraterip.com/), _et al_, drive-specific read offsets
-* C2 Error Pointers
-* Statefulness (you can pick up previous rips from where you left off)
-* Individual track(s) or whole-disc ripping
-* Automated or interactive pass limits
-* Sample confirmation (to workaround faulty C2 data)
-* RAW PCM output
-
-Additional items on the roadmap:
-
-* Support for WAV output
-* AccurateRip verification
-* CTDB verification
-* Confirmation resets (for when you know there's a problem but don't want to start over from scratch)
-* Drive offset auto-detection
+* [AccurateRip](http://accuraterip.com/) ID
+* [CDDB](https://en.wikipedia.org/wiki/CDDB) ID
+* [CUETools](http://cue.tools/wiki/CUETools_Database) ID
+* [MusicBrainz](https://musicbrainz.org/) ID
+* Track ISRCs (if present)
+* UPC/EAN (if present)
 
 
 
-## Requirements
+## Installation
 
-Rip Rip Hooray is a command line program for x86-64 Linux systems, though it might also work for other architectures and Unix-based operating systems.
+Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page.
 
-It leverages `libcdio` for optical drive communications, so requires that system library to do its thing.
-
-Pre-built `.deb` packages are attached to each [release](https://github.com/Blobfolio/riprip/releases) for Debian and Ubuntu users.
-
-Everyone else can build it from source using `Rust`/`Cargo`:
+While specifically written for use on x86-64 Linux systems, both Rust and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unix systems using `cargo`:
 
 ```bash
 # Clone the repository:
 git clone https://github.com/Blobfolio/riprip
 
-# The libcdio development headers are linked against, so must be present
-# when building. On Debian/Ubuntu systems, this'll work:
+# The libcdio development headers are required when building from source;
+# Debian/Ubuntu users, for example, could run the following:
 sudo apt-get install libcdio-dev
 
 # Run Cargo build from the project root:

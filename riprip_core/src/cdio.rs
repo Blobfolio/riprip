@@ -3,15 +3,16 @@
 */
 
 use crate::{
+	Barcode,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_LEADIN,
 	CDTextKind,
+	DriveVendorModel,
 	RipRipError,
 };
 use libcdio_sys::{
-	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
-	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
+	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
 	discmode_t_CDIO_DISC_MODE_CD_DA,
 	discmode_t_CDIO_DISC_MODE_CD_MIXED,
@@ -41,27 +42,12 @@ static LIBCDIO_INIT: Once = Once::new();
 
 
 
-/// # Can Read ISRC.
-///
-/// Note: this is separate from CDText; even if unsupported the
-/// information might still be obtainable.
-const FLAG_SUPPORTS_ISRC: u8 = 0b0010;
-
-/// # Can Read MCN.
-///
-/// Note: this is separate from CDText; even if unsupported the
-/// information might still be obtainable.
-const FLAG_SUPPORTS_MCN: u8 =  0b0100;
-
-
-
 #[derive(Debug)]
 #[allow(dead_code)] // We just want to make sure dev lives as long as the ptr.
 /// # CDIO Instance.
 pub(super) struct LibcdioInstance {
 	dev: Option<CString>,
 	ptr: *mut libcdio_sys::CdIo_t,
-	flags: u8,
 	cdtext: Option<*mut libcdio_sys::cdtext_t>,
 }
 
@@ -122,13 +108,10 @@ impl LibcdioInstance {
 			let mut out = Self {
 				dev,
 				ptr,
-				flags: 0,
 				cdtext: None,
 			};
 
 			out._check_disc_mode()?;
-
-			out._init_read_cap();
 			out._init_cdtext();
 
 			Ok(out)
@@ -171,33 +154,6 @@ impl LibcdioInstance {
 		};
 		if ! ptr.is_null() { self.cdtext.replace(ptr); }
 	}
-
-	#[allow(unsafe_code)]
-	/// # Initialize Capabilities.
-	///
-	/// At the moment, this just checks to see if ISRC and/or MCN details
-	/// can be pulled independently of CDText. Probably not necessary, but
-	/// it doesn't seem to hold things up much so whatever.
-	fn _init_read_cap(&mut self) {
-		let mut i_read_cap = 0;
-		let mut i_write_cap = 0;
-		let mut i_misc_cap = 0;
-		unsafe {
-			libcdio_sys::cdio_get_drive_cap(
-				self.as_ptr(),
-				&mut i_read_cap,
-				&mut i_write_cap,
-				&mut i_misc_cap
-			);
-		}
-
-		if cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC == i_read_cap & cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC {
-			self.flags |= FLAG_SUPPORTS_ISRC;
-		}
-		if cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN == i_read_cap & cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN {
-			self.flags |= FLAG_SUPPORTS_MCN;
-		}
-	}
 }
 
 impl LibcdioInstance {
@@ -206,24 +162,6 @@ impl LibcdioInstance {
 
 	/// # As Mut Ptr.
 	pub(super) const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
-}
-
-impl LibcdioInstance {
-	/// # Can Read Track ISRCs?
-	///
-	/// Note: this is separate from CDText; even if unsupported the
-	/// information might still be obtainable.
-	pub(super) const fn supports_isrc(&self) -> bool {
-		FLAG_SUPPORTS_ISRC == self.flags & FLAG_SUPPORTS_ISRC
-	}
-
-	/// # Can Read Disc MCN (Barcode)?
-	///
-	/// Note: this is separate from CDText; even if unsupported the
-	/// information might still be obtainable.
-	pub(super) const fn supports_mcn(&self) -> bool {
-		FLAG_SUPPORTS_MCN == self.flags & FLAG_SUPPORTS_MCN
-	}
 }
 
 impl LibcdioInstance {
@@ -306,22 +244,15 @@ impl LibcdioInstance {
 			)
 		};
 
-		let mut out = c_char_to_string(raw)?;
-
-		// Clean up barcodes a bit, but assume everything else is fine as is.
-		if matches!(kind, CDTextKind::Barcode) {
-			out.retain(|c| c.is_ascii_digit());
-			if out.is_empty() || out.bytes().all(|b| b == b'0') { return None; }
-		}
-
-		Some(out)
+		c_char_to_string(raw)
 	}
 
+	/*
 	#[allow(unsafe_code)]
 	/// # Track ISRC.
 	///
 	/// This method is used as a fallback when the value is not within the
-	/// CDText.
+	/// CDText, but is relatively slow.
 	pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
 		if self.supports_isrc() {
 			let raw = unsafe {
@@ -334,25 +265,80 @@ impl LibcdioInstance {
 		}
 		else { None }
 	}
+	*/
 
-	#[allow(unsafe_code)]
 	/// # MCN.
 	///
 	/// This method is used as a fallback when the value is not within the
 	/// CDText.
-	pub(super) fn mcn(&self) -> Option<String> {
-		if self.supports_mcn() {
-			let raw = unsafe {
-				libcdio_sys::cdio_get_mcn(self.as_ptr())
-			};
-			let out = c_char_to_string(raw.cast());
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
+	pub(super) fn mcn(&self) -> Option<Barcode> {
+		// It probably isn't in CDText, but we already have it, so might as
+		// well check there first.
+		self.cdtext(0, CDTextKind::Barcode)
+			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
+			// Otherwise try pulling it directly.
+			.or_else(|| self._mcn())
+	}
 
-			// Give it some light sanitizing before sending back.
-			let mut out = out?;
-			out.retain(|c| c.is_ascii_digit());
-			if out.is_empty() || out.bytes().all(|b| b == b'0') { None }
-			else { Some(out) }
+	#[allow(unsafe_code)]
+	/// # MCN Fallback.
+	///
+	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
+	fn _mcn(&self) -> Option<Barcode> {
+		let raw = unsafe {
+			libcdio_sys::cdio_get_mcn(self.as_ptr())
+		};
+		if raw.is_null() { None }
+		else {
+			let mcn = unsafe { CStr::from_ptr(raw) }
+				.to_str()
+				.ok()
+				.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
+			unsafe { libcdio_sys::cdio_free(raw.cast()); }
+			mcn
+		}
+	}
+}
+
+impl LibcdioInstance {
+	#[allow(unsafe_code, clippy::cast_sign_loss)]
+	/// # Drive Vendor/Model.
+	///
+	/// Fetch the drive vendor and model, if possible.
+	pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		let mut raw = cdio_hwinfo {
+			psz_vendor: [0; 9],
+			psz_model: [0; 17],
+			psz_revision: [0; 5],
+		};
+
+		// The return code is a bool, true for good, instead of the usual
+		// 0 for good.
+		if 1 == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
+			// Rather than deal with the uncertainty of pointers, let's recast
+			// the signs since we have everything right here.
+			let vendor_u8 = raw.psz_vendor.map(|b| b as u8);
+			let model_u8 = raw.psz_model.map(|b| b as u8);
+
+			// Vendor might be empty.
+			let vendor =
+				if vendor_u8[0] == 0 { "" }
+				else {
+					CStr::from_bytes_until_nul(vendor_u8.as_slice())
+					.ok()
+					.and_then(|v| v.to_str().ok())?
+				};
+
+			// But model is required.
+			let model =
+				if model_u8[0] == 0 { None }
+				else {
+					CStr::from_bytes_until_nul(model_u8.as_slice())
+					.ok()
+					.and_then(|v| v.to_str().ok())
+				}?;
+
+			DriveVendorModel::new(vendor, model).ok()
 		}
 		else { None }
 	}
