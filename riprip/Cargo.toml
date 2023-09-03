@@ -34,7 +34,7 @@ credits-dir = "../"
 
 [[package.metadata.bashman.switches]]
 long = "--clean"
-description = "Clear any previous riprip/state files from the current working directory before doing anything else."
+description = "Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch."
 
 [[package.metadata.bashman.switches]]
 short = "-h"
@@ -98,7 +98,7 @@ duplicate = true
 
 [dependencies]
 argyle = "0.6.*"
-ctrlc = "=3.4.0"
+ctrlc = "3.4.0"
 dactyl = "0.5"
 oxford_join = "0.2.*"
 trimothy = "0.1.*"

@@ -279,8 +279,8 @@ USAGE:
     riprip [FLAGS] [OPTIONS]
 
 FLAGS:
-        --clean       Clear any previous riprip/state files from the current
-                      working directory before doing anything else.
+        --clean       Clear the contents of $PWD/_riprip before doing anything
+                      else, to e.g. start over from scratch.
     -h, --help        Print help information and exit.
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
