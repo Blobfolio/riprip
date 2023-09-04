@@ -28,6 +28,7 @@ use std::{
 		CStr,
 		CString,
 	},
+	ops::Range,
 	os::{
 		raw::c_char,
 		unix::ffi::OsStrExt,
@@ -425,6 +426,58 @@ impl LibcdioInstance {
 			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
 			_ => Err(RipRipError::CdRead(lsn)),
 		}
+	}
+
+	#[allow(unsafe_code)]
+	#[allow(clippy::cast_possible_truncation)]
+	/// # Cache Bust.
+	///
+	/// In lieu of any universal I/O command to clear the drive cache, we can
+	/// do the next best thing: fill its buffers with other stuff!
+	///
+	/// This will read 1800 sectors — preferrably outside the target track's
+	/// range — to ensure that when we ask for the target track's data, the
+	/// drive will have to _actually read it_.
+	///
+	/// That's the theory anyway.
+	///
+	/// Thankfully we're never requesting the same sector back-to-back, so only
+	/// need to do this at the start of each rip pass.
+	pub(super) fn bust_cache(
+		&self,
+		blacklist: Range<i32>,
+		leadout: i32,
+	) {
+		// Slightly more than 4MiB; should be enough for any drive.
+		let mut buf = vec![0; 1800 * CD_DATA_SIZE as usize];
+
+		// Where can we read from without getting in the way?
+		let lsn =
+			// Read from the start of the disc.
+			if 1800 < blacklist.start { 0 }
+			// Read after the current track.
+			else if blacklist.end + 1800 < leadout { blacklist.end }
+			// Read the last 1800 sectors on the disc.
+			else { leadout - 1800 };
+
+		// We should, however, read anything else!
+		let _res = unsafe {
+			libcdio_sys::mmc_read_cd(
+				self.as_ptr(),
+				buf.as_mut_ptr().cast(),
+				lsn,
+				1,      // Sector type: CDDA.
+				0,      // No random data manipulation thank you kindly.
+				0,      // No header syncing.
+				0,      // No headers.
+				1,      // YES audio block!
+				0,      // No EDC.
+				0,      // No C2.
+				0,      // No subchannel.
+				CD_DATA_SIZE as u16,
+				1800,   // Number of blocks to read.
+			)
+		};
 	}
 }
 

@@ -27,6 +27,7 @@ Beyond that, it supports all the good things:
 * Drive read offset correction
 * [AccurateRip](http://accuraterip.com/) checksum verification
 * [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
+* Cache busting
 * Raw PCM and WAV output
 * Sample re/confirmation
 
