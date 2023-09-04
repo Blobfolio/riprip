@@ -41,6 +41,7 @@ use serde::{
 use std::{
 	io::Cursor,
 	ops::Range,
+	time::Duration,
 };
 
 
@@ -71,6 +72,11 @@ const SECTOR_BUFFER: u32 = 10;
 ///
 /// Same as the sector buffer, but in samples.
 const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
+
+/// # Sleep Time.
+///
+/// Pause between repeated passes over the same track.
+const SLEEP: Duration = Duration::from_secs(5);
 
 /// # C2 Sample Set.
 ///
@@ -444,6 +450,8 @@ impl Rip {
 
 		// Onto the pass(es)!
 		for pass in 0..opts.passes() {
+			if pass != 0 { std::thread::sleep(SLEEP); }
+
 			// Update/reset the progress bar.
 			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
 			progress.set_title(Some(Msg::custom(
