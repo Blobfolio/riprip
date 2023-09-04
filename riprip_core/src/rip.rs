@@ -55,8 +55,11 @@ const FLAG_RAW: u8 =       0b0010;
 /// # FLAG: Reconfirm samples.
 const FLAG_RECONFIRM: u8 = 0b0100;
 
+/// # FLAG: Trust Good Sectors.
+const FLAG_TRUST: u8 =     0b1000;
+
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_TRUST;
 
 /// # Quality Bar.
 const QUALITY_BAR: &str = "########################################################################";
@@ -251,6 +254,25 @@ impl RipOptions {
 		self.tracks.dedup();
 		self
 	}
+
+	#[must_use]
+	/// # With Trust.
+	///
+	/// When `true`, `paranoia` confirmation is only applied to samples within
+	/// a sector containing C2 errors. When `false`, every sample is subject to
+	/// confirmation before being accepted.
+	///
+	/// The default is `true`.
+	pub fn with_trust(self, trust: bool) -> Self {
+		let flags =
+			if trust { self.flags | FLAG_TRUST }
+			else { self.flags & ! FLAG_TRUST };
+
+		Self {
+			flags,
+			..self
+		}
+	}
 }
 
 impl RipOptions {
@@ -287,6 +309,10 @@ impl RipOptions {
 	#[must_use]
 	/// # Tracks.
 	pub fn tracks(&self) -> &[u8] { &self.tracks }
+
+	#[must_use]
+	/// # Trust Good Sectors?
+	pub const fn trust(&self) -> bool { FLAG_TRUST == self.flags & FLAG_TRUST }
 }
 
 
@@ -520,7 +546,7 @@ impl Rip {
 					.zip(buf[..CD_DATA_SIZE as usize].chunks_exact(4))
 					.zip(c2.iter().copied()) {
 					if let Ok(new) = Sample::try_from(new) {
-						old.update(new, opts.paranoia(), sample_c2, sector_c2);
+						old.update(new, opts, sample_c2, sector_c2);
 					}
 				}
 
@@ -536,12 +562,14 @@ impl Rip {
 			let (ar, ctdb) =
 				if q_bad == 0 { self.verify(disc.toc()) }
 				else { (None, None) };
-			let verified =
-				ar.map_or(false, |(v1, v2)| v1 != 0 || v2 != 0) ||
-				ctdb.map_or(false, |v| 0 != v);
+			let verified = u16::max(
+				ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
+				ctdb.unwrap_or(0),
+			);
 
-			// If the track matched, we can upgrade the maybes.
-			if verified && 0 != q_maybe {
+			// Use AccurateRip/CTDB as a proxy for our own confirmation,
+			// upgrading the maybes if there are any.
+			if u16::from(opts.paranoia()) <= verified && 0 != q_maybe {
 				q_good += q_maybe;
 				q_maybe = 0;
 				let rng = self.track_range();
@@ -553,18 +581,18 @@ impl Rip {
 			}
 
 			// Okay, *now* we're summarizing!
-			if verified {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} has been accurately ripped!",
-					self.track.number(),
-				))
-			}
-			else {
+			if verified == 0 {
 				let p1 = dactyl::int_div_float(q_good, q_good + q_maybe + q_bad).unwrap_or(0.0);
 				Msg::custom("Ripped", 10, &format!(
 					"Track #{} is \x1b[2m(roughly)\x1b[0m {} complete.",
 					self.track.number(),
 					NicePercent::from(p1),
+				))
+			}
+			else {
+				Msg::custom("Ripped", 10, &format!(
+					"Track #{} has been accurately ripped!",
+					self.track.number(),
 				))
 			}
 				.with_newline(true)
@@ -792,6 +820,7 @@ impl RipSample {
 	/// TBD entries _always_ change:
 	/// * If `sample_c2`, to Bad
 	/// * If `sector_c2` and `paranoia`, to Iffy
+	/// * If no-trust, to Iffy
 	/// * Otherwise to Good
 	///
 	/// Bad samples change if not `sample_c2`:
@@ -801,7 +830,8 @@ impl RipSample {
 	/// Iffy samples change if not `sample_c2`:
 	/// * If confirmed `paranoia` times, to Good
 	/// * Otherwise still Iffy, but with updated table
-	fn update(&mut self, new: Sample, paranoia: u8, sample_c2: bool, sector_c2: bool) {
+	fn update(&mut self, new: Sample, opts: &RipOptions, sample_c2: bool, sector_c2: bool) {
+		let paranoia = opts.paranoia();
 		match self {
 			// Leave good entries alone.
 			Self::Good(_) => {},
@@ -809,7 +839,7 @@ impl RipSample {
 			// Always update a TBD.
 			Self::Tbd =>
 				if sample_c2 { *self = Self::Bad(new); }
-				else if sector_c2 && 1 < paranoia { *self = Self::Iffy(vec![(new, 1)]); }
+				else if ! opts.trust() || (sector_c2 && 1 < paranoia) { *self = Self::Iffy(vec![(new, 1)]); }
 				else { *self = Self::Good(new); },
 
 			// Bad can only move to iffy, unless there's no paranoia to apply.
@@ -1034,5 +1064,13 @@ mod test {
 	fn t_rip_options_tracks() {
 		let opts = RipOptions::default().with_tracks([1, 5, 5, 2, 3]);
 		assert_eq!(opts.tracks(), &[1, 2, 3, 5]);
+	}
+
+	#[test]
+	fn t_rip_options_trust() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_trust(v);
+			assert_eq!(opts.trust(), v);
+		}
 	}
 }

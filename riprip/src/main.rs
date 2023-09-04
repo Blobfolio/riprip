@@ -139,7 +139,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<Ri
 	let mut opts = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
-		.with_reconfirm(args.switch(b"--reconfirm"));
+		.with_reconfirm(args.switch(b"--reconfirm"))
+		.with_trust(! args.switch(b"--no-trust"));
 
 	// Detect offset?
 	if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
@@ -189,8 +190,9 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<Ri
 	}
 
 	// Conflict checks.
-	if opts.reconfirm() && opts.paranoia() < 2 {
-		return Err(RipRipError::ReconfirmParanoia);
+	if opts.paranoia() < 2 {
+		if opts.reconfirm() { return Err(RipRipError::ReconfirmParanoia); }
+		if ! opts.trust() { return Err(RipRipError::TrustParanoia); }
 	}
 
 	// Done!
@@ -211,7 +213,10 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
 	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
-	let nice_paranoia = NiceU8::from(opts.paranoia());
+	let nice_paranoia = Cow::Owned(
+		if opts.trust() { NiceU8::from(opts.paranoia()).to_string() }
+		else { format!("{}+++", opts.paranoia()) }
+	);
 	let nice_passes = NiceU8::from(opts.passes());
 	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
 
@@ -220,7 +225,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		("C2:", nice_c2, opts.c2()),
 		("Format:", nice_format, true),
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
-		("Paranoia:", Cow::Borrowed(nice_paranoia.as_str()), 1 < opts.paranoia()),
+		("Paranoia:", nice_paranoia, 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
 		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
 	];
@@ -286,20 +291,24 @@ FLAGS:
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
         --no-rip      Just print the basic disc information to STDERR and exit.
+        --no-trust    Never trust the drive when it says a sector is good;
+                      always get confirmation. Requires a paranoia level of at
+                      least 2.
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
         --reconfirm   Reset the status of all previously-accepted samples to
-                      require reconfirmation. This has no effect when the
-                      paranoia level is less than 2.
+                      require reconfirmation. Requires a paranoia level of at
+                      least 2.
     -V, --version     Print version information and exit.
 
 OPTIONS:
         --paranoia <NUM>
-                      When C2 or read errors are reported for any samples in a
-                      given block, treat the rest of its samples — the ones
-                      that were allegedly good — as suspicious until they have
-                      been confirmed <NUM> times. Similarly, if a sample moves
-                      from bad to good, require <NUM> confirmations before
-                      believing it. [default: 3; range: 1..=32]
+                      When a sample or its neighbors have a C2 or read error,
+                      treat all samples in the region as supicious until the
+                      drive returns the same value <NUM> times, or AccurateRip
+                      or CTDB matches with a confidence of <NUM> are found.
+                      When combined with --no-trust, *all* samples are subject
+                      to confirmation regardless of status.
+                      [default: 3; range: 1..=32]
         --refine <NUM>
                       Execute up to <NUM> additional rip passes for each track
                       while any samples remain unread/unconfirmed.
