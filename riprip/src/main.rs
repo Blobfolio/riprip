@@ -215,7 +215,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_paranoia = Cow::Owned(
 		if opts.trust() { NiceU8::from(opts.paranoia()).to_string() }
-		else { format!("{}+++", opts.paranoia()) }
+		else { format!("{} (No Trust Mode)", opts.paranoia()) }
 	);
 	let nice_passes = NiceU8::from(opts.passes());
 	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
