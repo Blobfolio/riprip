@@ -555,51 +555,7 @@ impl Rip {
 
 			// Summarize the approximate quality.
 			progress.finish();
-			let (mut q_good, mut q_maybe, q_bad) = self.track_quality();
-
-			// If the data is decent, see if the track matches third-party
-			// checksum databases (for added assurance).
-			let (ar, ctdb) =
-				if q_bad == 0 { self.verify(disc.toc()) }
-				else { (None, None) };
-			let verified = u16::max(
-				ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
-				ctdb.unwrap_or(0),
-			);
-
-			// Use AccurateRip/CTDB as a proxy for our own confirmation,
-			// upgrading the maybes if there are any.
-			if u16::from(opts.paranoia()) <= verified && 0 != q_maybe {
-				q_good += q_maybe;
-				q_maybe = 0;
-				let rng = self.track_range();
-				for sample in &mut self.state[rng] {
-					if let RipSample::Iffy(set) = sample {
-						*sample = RipSample::Good(set[0].0);
-					}
-				}
-			}
-
-			// Okay, *now* we're summarizing!
-			if verified == 0 {
-				let p1 = dactyl::int_div_float(q_good, q_good + q_maybe + q_bad).unwrap_or(0.0);
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} is \x1b[2m(roughly)\x1b[0m {} complete.",
-					self.track.number(),
-					NicePercent::from(p1),
-				))
-			}
-			else {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} has been accurately ripped!",
-					self.track.number(),
-				))
-			}
-				.with_newline(true)
-				.eprint();
-
-			// Inject a graphical-ish breakdown too for beauty.
-			print_bar(q_good, q_maybe, q_bad, ar, ctdb);
+			self.summarize(disc, opts);
 
 			// Save the state file.
 			if bincode::serialize(&self.state).ok()
@@ -614,6 +570,68 @@ impl Rip {
 		}
 
 		Ok(())
+	}
+
+	/// # Summarize the Rip.
+	///
+	/// This primarily prints a summary of the state of the rip after each
+	/// pass, but it will also verify probable rips against the AccurateRip and
+	/// CUETools databases, and possibly auto-confirm samples if the matches
+	/// are sufficient.
+	fn summarize(&mut self, disc: &Disc, opts: &RipOptions) {
+		let (mut q_good, mut q_maybe, q_bad) = self.track_quality();
+
+		// If the data is decent, see if the track matches third-party
+		// checksum databases (for added assurance).
+		let (ar, ctdb) =
+			if q_bad == 0 { self.verify(disc.toc()) }
+			else { (None, None) };
+		let verified = u16::max(
+			ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
+			ctdb.unwrap_or(0),
+		);
+
+		// Use AccurateRip/CTDB as a proxy for our own confirmation,
+		// upgrading the maybes if there are any.
+		if u16::from(opts.paranoia()) <= verified && 0 != q_maybe {
+			q_good += q_maybe;
+			q_maybe = 0;
+			let rng = self.track_range();
+			for sample in &mut self.state[rng] {
+				if let RipSample::Iffy(set) = sample {
+					*sample = RipSample::Good(set[0].0);
+				}
+			}
+		}
+
+		// Okay, *now* we're summarizing!
+		if verified == 0 {
+			if q_good == 0 {
+				Msg::custom("Ripped", 10, &format!(
+					"Track #{} has no confirmed samples yet.",
+					self.track.number(),
+				))
+			}
+			else {
+				let p1 = dactyl::int_div_float(q_good, q_good + q_maybe + q_bad).unwrap_or(0.0);
+				Msg::custom("Ripped", 10, &format!(
+					"Track #{} is \x1b[2m(roughly)\x1b[0m {} complete.",
+					self.track.number(),
+					NicePercent::from(p1),
+				))
+			}
+		}
+		else {
+			Msg::custom("Ripped", 10, &format!(
+				"Track #{} has been accurately ripped!",
+				self.track.number(),
+			))
+		}
+			.with_newline(true)
+			.eprint();
+
+		// Inject a graphical-ish breakdown too for beauty.
+		print_bar(q_good, q_maybe, q_bad, ar, ctdb);
 	}
 
 	#[allow(clippy::cast_possible_truncation)]
