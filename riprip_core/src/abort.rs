@@ -15,8 +15,11 @@ use std::sync::{
 #[derive(Debug)]
 /// # Kill Switch.
 ///
-/// This is used to potentially short-circuit long-running arguments across
-/// threads.
+/// This is a short-circuit for long-running operations across multiple
+/// threads. (Ripping is single-threaded, but the progress bar isn't.)
+///
+/// The main program's CTRL-C intercept sets the value, allowing Rip Rip to
+/// tidy up before dying.
 pub struct KillSwitch(Arc<AtomicBool>);
 
 impl Default for KillSwitch {

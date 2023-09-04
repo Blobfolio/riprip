@@ -74,6 +74,11 @@ pub(crate) use rip::{
 /// # 16-bit Stereo Sample (raw PCM bytes).
 type Sample = [u8; 4];
 
+/// # Cache Base.
+///
+/// The cache root is thus `CWD/CACHE_BASE`.
+pub(crate) const CACHE_BASE: &str = "_riprip";
+
 /// # Bytes Per Sample.
 pub const BYTES_PER_SAMPLE: u32 = 4;
 
@@ -87,19 +92,32 @@ pub const BYTES_PER_SECTOR: u32 = SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE;
 pub const SAMPLES_PER_SECTOR: u32 = 588;
 
 /// # Size of C2 block.
+///
+/// Note: some drives support a 296-byte variation with an extra block bit, but
+/// such drives should also support the 294-bit version, and that extra bit is
+/// redundant.
 pub const CD_C2_SIZE: u32 = 294;
 
 /// # Size of data block.
+///
+/// Data as in "audio data".
 pub const CD_DATA_SIZE: u32 = BYTES_PER_SECTOR;
 
 /// # Combined size of data/c2.
 pub const CD_DATA_C2_SIZE: u32 = CD_DATA_SIZE + CD_C2_SIZE;
 
 /// # Number of lead-in sectors.
+///
+/// All discs have a 2-second region at the start before any data. Different
+/// contexts include or exclude this amount, so it's good to keep it handy.
 pub const CD_LEADIN: u32 = 150;
 
 /// # Lead-out Label.
+///
+/// This is used solely for the table of contents printout; e.g. 01 02 03 AA.
 pub const CD_LEADOUT_LABEL: &str = "AA";
 
 /// # Null sample.
+///
+/// Audio CD silence is typically literally nothing.
 pub const NULL_SAMPLE: Sample = [0, 0, 0, 0];

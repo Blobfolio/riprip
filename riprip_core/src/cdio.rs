@@ -38,13 +38,17 @@ use std::{
 
 
 
+/// # Initialization Counter.
 static LIBCDIO_INIT: Once = Once::new();
 
 
 
 #[derive(Debug)]
-#[allow(dead_code)] // We just want to make sure dev lives as long as the ptr.
 /// # CDIO Instance.
+///
+/// Pretty much all CD-related communications run through a single `libcdio`
+/// object. Every interface is unsafe and awkward, so this struct exists to
+/// abstract away the noise and handle cleanup.
 pub(super) struct LibcdioInstance {
 	dev: Option<CString>,
 	ptr: *mut libcdio_sys::CdIo_t,
@@ -57,6 +61,9 @@ impl Drop for LibcdioInstance {
 		// Release the C memory!
 		if ! self.ptr.is_null() {
 			unsafe { libcdio_sys::cdio_destroy(self.as_mut_ptr()); }
+
+			// Use the dev field so Rust won't complain about dead code. Haha.
+			self.dev.take();
 		}
 	}
 }
@@ -111,9 +118,12 @@ impl LibcdioInstance {
 				cdtext: None,
 			};
 
+			// Make sure the disc is present and valid before leaving, and
+			// initialize the CDText to have it ready for later queries.
 			out._check_disc_mode()?;
 			out._init_cdtext();
 
+			// Done!
 			Ok(out)
 		}
 	}
@@ -147,7 +157,8 @@ impl LibcdioInstance {
 	/// on the disc, if any.
 	///
 	/// The data on the other end of this pointer gets cleaned up when the
-	/// parent instance is destroyed, so it makes sense keeping them together.
+	/// parent instance is destroyed, so it makes sense keeping the two
+	/// together.
 	fn _init_cdtext(&mut self) {
 		let ptr = unsafe {
 			libcdio_sys::cdio_get_cdtext(self.as_mut_ptr())
@@ -167,6 +178,9 @@ impl LibcdioInstance {
 impl LibcdioInstance {
 	#[allow(unsafe_code)]
 	/// # First Track Number.
+	///
+	/// Return the first track number on the disc, almost always but not
+	/// necessarily `1`.
 	pub(super) fn first_track_num(&self) -> Result<u8, RipRipError> {
 		let raw = unsafe {
 			libcdio_sys::cdio_get_first_track_num(self.as_ptr())
@@ -177,6 +191,8 @@ impl LibcdioInstance {
 	}
 
 	/// # Leadout.
+	///
+	/// Return the LBA — including the leading `150` — of the disc leadout.
 	pub(super) fn leadout_lba(&self) -> Result<u32, RipRipError> {
 		let idx = u8::try_from(cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK)
 			.unwrap_or(170);
@@ -185,6 +201,9 @@ impl LibcdioInstance {
 
 	#[allow(unsafe_code)]
 	/// # Get the Number of Tracks.
+	///
+	/// Return the total number of tracks, or the last track number, however
+	/// you want to think of it.
 	pub(super) fn num_tracks(&self) -> Result<u8, RipRipError> {
 		let raw = unsafe {
 			libcdio_sys::cdio_get_num_tracks(self.as_ptr())
@@ -215,6 +234,9 @@ impl LibcdioInstance {
 
 	#[allow(unsafe_code)]
 	/// # Track LBA Start.
+	///
+	/// Return the starting LBA — including the leading `150` — for a given
+	/// track.
 	pub(super) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
 		if idx == 0 { Err(RipRipError::TrackNumber(0)) }
 		else {
@@ -231,9 +253,8 @@ impl LibcdioInstance {
 	#[allow(unsafe_code)]
 	/// # CDText Value.
 	///
-	/// Return the value associated with the CDText field, if any.
-	///
-	/// Set the track number to zero to query album-level metadata.
+	/// Return the value associated with the CDText field, if any. If the track
+	/// number is zero, data associated with the album will be returned.
 	pub(super) fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
 		let ptr = self.cdtext?;
 		let raw = unsafe {
@@ -269,8 +290,9 @@ impl LibcdioInstance {
 
 	/// # MCN.
 	///
-	/// This method is used as a fallback when the value is not within the
-	/// CDText.
+	/// Return the disc's associated UPC/EAN, if present. This will try CDText
+	/// first since that data is already loaded, and fall back to the direct
+	/// `cdio_get_mcn` request if that doesn't work.
 	pub(super) fn mcn(&self) -> Option<Barcode> {
 		// It probably isn't in CDText, but we already have it, so might as
 		// well check there first.
@@ -304,7 +326,7 @@ impl LibcdioInstance {
 	#[allow(unsafe_code, clippy::cast_sign_loss)]
 	/// # Drive Vendor/Model.
 	///
-	/// Fetch the drive vendor and model, if possible.
+	/// Fetch the drive vendor and/or model, if possible.
 	pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		let mut raw = cdio_hwinfo {
 			psz_vendor: [0; 9],
@@ -350,7 +372,8 @@ impl LibcdioInstance {
 	/// # Read Raw.
 	///
 	/// This attempts to read a single audio sector — and maybe C2 data — to
-	/// the provided buffer.
+	/// the provided buffer. The buffer size is used to determine which mode is
+	/// being requested.
 	///
 	/// ## Errors
 	///
@@ -409,6 +432,9 @@ impl LibcdioInstance {
 
 #[allow(unsafe_code)]
 /// # Initialize `libcdio`.
+///
+/// This is only called once, but to be safe, it is also wrapped in a static to
+/// make sure it can never re-initialize.
 fn init() {
 	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
 }

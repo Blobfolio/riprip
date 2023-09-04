@@ -11,7 +11,7 @@ use trimothy::TrimSliceMatches;
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 /// # Barcode.
 ///
-/// This is a simple wrapper for UPC/EAN barcodes that ensures validity and
+/// This is a simple wrapper for UPC/EAN barcodes that enforces validity and
 /// consistent formatting.
 pub struct Barcode([u8; 13]);
 
@@ -57,12 +57,11 @@ impl TryFrom<&[u8]> for Barcode {
 			return Err(RipRipError::Barcode);
 		}
 
-		// Move the data into place, zero-padding the left as needed so that it
-		// occupies thirteen bytes.
+		// Copy the data to the end of an ASCII-zero-padded slice.
 		let mut maybe = [b'0'; 13];
 		maybe[13 - src.len()..].copy_from_slice(src);
 
-		// Make sure it validates.
+		// Return it if valid!
 		if is_ean13(&maybe) { Ok(Self(maybe)) }
 		else { Err(RipRipError::Barcode) }
 	}
@@ -80,6 +79,9 @@ impl TryFrom<&str> for Barcode {
 
 
 /// # Is EAN13?
+///
+/// The content is pre-validated by the `TryFrom` implementation; this merely
+/// performs the computations to verify the check digit matches.
 fn is_ean13(src: &[u8; 13]) -> bool {
 	let mut chk = 0;
 	let mut total = 0;
