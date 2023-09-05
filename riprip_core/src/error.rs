@@ -93,6 +93,9 @@ pub enum RipRipError {
 	/// # Invalid track number.
 	TrackNumber(u8),
 
+	/// # Trust/Paranoia conflict.
+	TrustParanoia,
+
 	/// # Writing to disk.
 	Write(String),
 
@@ -152,6 +155,7 @@ impl fmt::Display for RipRipError {
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
+			Self::TrustParanoia => f.write_str("No Trust requires a paranoia level of at least 2."),
 			Self::Write(ref s) => write!(f, "Unable to write to {s}."),
 
 			#[cfg(feature = "bin")]

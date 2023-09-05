@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.0.2
-    Generated: 2023-09-03 19:35:54 UTC
+    Version:   0.0.3
+    Generated: 2023-09-05 04:49:40 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -38,7 +38,7 @@
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.66 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [ring](https://github.com/briansmith/ring) | 0.16.20 | [Brian Smith](mailto:brian@briansmith.org) |  |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustls](https://github.com/rustls/rustls) | 0.21.7 |  | Apache-2.0, ISC, or MIT |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.100.2 |  |  |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.101.4 |  | ISC |
@@ -60,5 +60,6 @@
 | [untrusted](https://github.com/briansmith/untrusted) | 0.7.1 | [Brian Smith](mailto:brian@briansmith.org) | ISC |
 | [ureq](https://github.com/algesten/ureq) | 2.7.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |
 | [url](https://github.com/servo/rust-url) | 2.4.1 | The rust-url developers | Apache-2.0 or MIT |
+| [utc2k](https://github.com/Blobfolio/utc2k) | 0.6.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [webpki-roots](https://github.com/rustls/webpki-roots) | 0.23.1 |  | MPL-2.0 |
 | [write_atomic](https://github.com/Blobfolio/write_atomic) | 0.4.0 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |

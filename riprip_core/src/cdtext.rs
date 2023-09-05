@@ -13,6 +13,10 @@ use std::{
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 /// # CDText Field.
+///
+/// This enum simply rearranges the constants exported from `libcdio` in a
+/// friendlier format. Rip Rip doesn't currently anything with most of them,
+/// but it feels better having the list be complete.
 pub enum CDTextKind {
 	Arranger = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ARRANGER,
 	Barcode = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_UPC_EAN,
@@ -49,6 +53,9 @@ impl PartialOrd for CDTextKind {
 impl CDTextKind {
 	#[must_use]
 	/// # As Str.
+	///
+	/// Return the field as an uppercase string, similar to how it would
+	/// appear in track metadata.
 	pub const fn as_str(self) -> &'static str {
 		match self {
 			Self::Arranger => "ARRANGER",

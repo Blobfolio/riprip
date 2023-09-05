@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.0.2"
+version = "0.0.3"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -50,16 +50,16 @@ long = "--no-rip"
 description = "Just print the basic disc information to STDERR and exit."
 
 [[package.metadata.bashman.switches]]
+long = "--no-trust"
+description = "Never trust the drive when it says a sector is good; always get confirmation. Requires a paranoia level of at least 2."
+
+[[package.metadata.bashman.switches]]
 long = "--raw"
 description = "Save ripped tracks in raw PCM format (instead of WAV)."
 
 [[package.metadata.bashman.switches]]
 long = "--reconfirm"
-description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
-
-[[package.metadata.bashman.switches]]
-long = "--reconfirm"
-description = "Reset the status of all previously-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2."
+description = "Reset the status of all previously-accepted samples to require reconfirmation. Requires a paranoia level of at least 2."
 
 [[package.metadata.bashman.switches]]
 short = "-V"
@@ -82,7 +82,7 @@ description = "The AccurateRip, et al, sample read offset to apply to data retri
 [[package.metadata.bashman.options]]
 long = "--paranoia"
 label = "<NUM>"
-description = "When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]"
+description = "When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until the drive returns the same value <NUM> times, or AccurateRip or CTDB matches with a confidence of <NUM> are found. When combined with --no-trust, *all* samples are subject to confirmation regardless of status. [default: 3; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
 long = "--refine"
@@ -98,7 +98,7 @@ duplicate = true
 
 [dependencies]
 argyle = "0.6.*"
-ctrlc = "3.4.0"
+ctrlc = "3.4.*"
 dactyl = "0.5"
 oxford_join = "0.2.*"
 trimothy = "0.1.*"

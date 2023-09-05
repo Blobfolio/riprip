@@ -44,6 +44,10 @@ pub struct Disc {
 }
 
 impl fmt::Display for Disc {
+	/// # Summarize the Disc.
+	///
+	/// This prints various disc identifiers and table of contents-type
+	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		const DIVIDER: &str = "\x1b[2m----------------------------------------\x1b[0m\n";
 
@@ -235,7 +239,8 @@ impl Disc {
 				continue;
 			};
 
-			// Continue from a previous run?
+			// Rip it, and keep track of the destination file so we can print
+			// a complete list at the end.
 			let mut rip = Rip::new(self.toc.accuraterip_id(), track)?;
 			if let Some(dst) = rip.rip(self, opt, progress, killed)? {
 				saved.push(dst);

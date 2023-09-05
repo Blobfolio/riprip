@@ -67,7 +67,7 @@ pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
 		.or_else(|| {
 			let url = ar.checksum_url();
 			let chk = download(&url)?;
-			let _res = cache_write(&dst, &chk);
+			let _res = cache_write(&dst, &chk); // Cache for later.
 			Some(chk)
 		})
 		.and_then(|chk| ar.parse_checksums(&chk).ok())
@@ -110,7 +110,8 @@ pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
 		if idx > end { break; }
 	}
 
-	// Drop them to 32 bits.
+	// Sixty-four bits were only used to help with overflow; the final checksum
+	// only uses half that much.
 	let crc1 = (crc1 & 0xFFFF_FFFF) as u32;
 	let crc2 = (crc2 & 0xFFFF_FFFF) as u32;
 
@@ -133,25 +134,25 @@ pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
 /// the leading `5880` and trailing `5880..=11172` samples respectively.
 ///
 /// The end-trim's variability comes from a quirk of the parity data CUETools
-/// also tracks, which requires the disc-side data be evenly divisible by ten
-/// sectors. (That parity data isn't relevant here, but is what makes CUETools
-/// repair work, so is worth a little extra weirdness!)
+/// collects, which requires the disc-wide data be evenly divisible by ten
+/// sectors. (That parity data isn't relevant here, but is pretty cool!)
 ///
-/// Because CRC32 is used, it is computationally feasible to check for matches
-/// across different album pressings. (Pressings from the same master usually
-/// contain identical data that is merely shifted up or down some arbitrary
-/// number of samples.)
+/// Because CRC32sums can be _combined_, it is computationally feasible to
+/// search for matches at _different_ offsets (e.g. across pressings), which
+/// greatly increases the size of the potential match pool.
 ///
-/// Offset matching is most effective when the adjacent track data is
-/// available, but since there's usually a good amount of null-padding around
-/// tracks, null samples can be used as the next best thing.
+/// Most pressings will be within a thousand or so samples of one another, so
+/// there isn't much point shifting data too much. Rip Rip checks `±5880`
+/// to ensure the full ignored region at the start is testable.
 ///
-/// Since Rip Rip Hooray only looks at one track at a time, it may undercount
-/// matches, but will usually find enough for yes/no verification.
+/// Ideally shifts would incorporate the beginning/end of the adjacent track
+/// data, but since Rip Rip doesn't have that, it null-pads instead. Most
+/// track boundaries _do_ contain null samples so that works well, but may
+/// undercount the matches as a result.
 ///
 /// It is worth noting that CUETools submissions are published more or less
 /// immediately and require no second opinion, so this method will return `0`
-/// for any value less than `2`.
+/// for any value less than `2` to avoid confusion.
 pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSample]) -> Option<u16> {
 	// Fetch/cache the checksums.
 	let dst = format!("state/{ar}__chk-ctdb.bin");
@@ -160,7 +161,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		.or_else(|| {
 			let url = toc.ctdb_checksum_url();
 			let chk = download(&url)?;
-			let _res = cache_write(&dst, &chk);
+			let _res = cache_write(&dst, &chk); // Cache for later.
 			Some(chk)
 		})
 		.and_then(|chk| {
@@ -173,9 +174,11 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 			else { None }
 		})?;
 
-	// Reserve space at the beginning and end for offset-wiggling. We'll shift
-	// 10 sectors in either direction, but also need to account for the
-	// "ignored" regions at the start and end of the disc.
+	// Shifts will alter the beginning and end of the track, but not the
+	// middle. As such we need to hold the edges as raw bytes so their
+	// checksums can be computed dynamically. Space-wise, we need enough to
+	// match the maximum shift, plus the "ignored" regions if this track is the
+	// first and/or last on the disc.
 	let pos = track.position();
 	let prefix =
 		// The first 10 sectors are ignored for the first track.
@@ -189,12 +192,12 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		}
 		else { SAMPLES_PER_SECTOR as usize * 10 };
 
-	// We need at least one sector leftover.
+	// Make sure we have at least one sector's worth of data left over!
 	if data.len() < prefix + suffix + SAMPLES_PER_SECTOR as usize { return None; }
 
-	// Carve up the data. The ends need to remain in byte form since we'll be
-	// trimming bits away, but the middle is present in all configurations, so
-	// we can precalculate its CRC.
+	// Carve up the data! The start and end bytes will be stored in vectors to
+	// keep them arbitrarily sliceable, but since everything else will remain
+	// constant at any offset, we can precompute its checksum.
 	let mut start = Vec::with_capacity(prefix * BYTES_PER_SAMPLE as usize);
 	let mut middle = Crc::new();
 	let mut end = Vec::with_capacity(suffix * BYTES_PER_SAMPLE as usize);
@@ -205,8 +208,8 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		else { end.extend_from_slice(sample.as_slice()); }
 	}
 
-	// Check for a straight match before wiggling. Use all of start and end
-	// except for the first/last tracks (which have ignored regions).
+	// Before we start shifting shit around, let's see if we match at zero,
+	// i.e. start + middle + end (minus ignorable regions, if any).
 	let mut confidence = 0;
 	let mut crc = Crc::new();
 	if pos.is_first() { crc.update(&start[CTDB_WIGGLE..]); }
@@ -220,8 +223,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		}
 	}
 
-	// Shift and crunch and shift and crunch!
+	// Shift and crunch and shift and crunch and shift and crunch…
 	for shift in 1..=SAMPLES_PER_SECTOR as usize * 10 {
+		// We're stepping in samples, but working in bytes.
 		let shift = shift * BYTES_PER_SAMPLE as usize;
 
 		// Let's try for a negative match first, shifting the data into the
@@ -230,8 +234,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		let mut crc = Crc::new();
 
 		// Because the ignored region of the first track is the same as our
-		// wiggle, it always has enough data for negative shifting. (Data is
-		// still ignored, but now it's ignoring data we don't have, so great!)
+		// wiggle, it always has enough data reserved for negative shifting.
+		// (Data is still being ignored, but now it's data we don't have, which
+		// works out great!)
 		if pos.is_first() { crc.update(&start[CTDB_WIGGLE - shift..]); }
 		// For other tracks, we need to supplement with silence.
 		else {
@@ -242,8 +247,8 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		// Add the middle.
 		crc.combine(&middle);
 
-		// Maybe add the end. It doesn't matter if this is the last track;
-		// ignoring the end is convenient!
+		// Maybe add the end. The ignored regions of the last track don't
+		// require special handling in this case.
 		if shift != CTDB_WIGGLE { crc.update(&end[..CTDB_WIGGLE - shift]); }
 
 		// Check it!
@@ -261,8 +266,10 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 
 		// Maybe add the start.
 		if shift != CTDB_WIGGLE {
-			// Ignored regions still apply to the first track.
+			// The first track still requires special handling to keep the
+			// ignorable bits ignored.
 			if pos.is_first() { crc.update(&start[CTDB_WIGGLE + shift..]); }
+			// Everything else is what it is.
 			else { crc.update(&start[shift..]); }
 		}
 
@@ -270,7 +277,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		crc.combine(&middle);
 
 		// Because the ignored region of the last track is >= our wiggle, it
-		// always has enough for positive shifting.
+		// always has enough in reserve for positive shifting.
 		if pos.is_last() { crc.update(&end[..CTDB_WIGGLE + shift]); }
 		// For other tracks, we need to supplement with silence.
 		else {
@@ -287,15 +294,18 @@ pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSamp
 		}
 	}
 
-	// As mentioned at the start, we don't really want to accept CUETools
-	// matches unless the cumulative confidence is at least two. In other cases
-	// we'll pretend we didn't find anything.
+	// As mentioned at the start, we shouldn't be confident in confidences less
+	// than two, so to avoid confusion, we'll treat them as equivalent to no
+	// matches at all.
 	Some(if confidence < 2 { 0 } else { confidence })
 }
 
 
 
 /// # Connection Agent.
+///
+/// Storing the agent statically saves a little bit of overhead on reuse. Since
+/// the checksums are cached locally, this may not get called at all.
 fn agent() -> &'static Agent {
 	AGENT.get_or_init(||
 		AgentBuilder::new()
@@ -312,6 +322,8 @@ fn agent() -> &'static Agent {
 }
 
 /// # Download.
+///
+/// Download and return the data!
 fn download(url: &str) -> Option<Vec<u8>> {
 	let res = agent().get(url).call().ok()?;
 

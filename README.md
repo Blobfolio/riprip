@@ -27,8 +27,9 @@ Beyond that, it supports all the good things:
 * Drive read offset correction
 * [AccurateRip](http://accuraterip.com/) checksum verification
 * [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
-* Raw PCM and WAV output
+* Cache busting
 * Sample re/confirmation
+* Raw PCM and WAV output
 
 Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
 
@@ -38,6 +39,34 @@ Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck ab
 * [MusicBrainz](https://musicbrainz.org/) ID
 * Track ISRCs (if present)
 * UPC/EAN (if present)
+
+That summary can be produced on its own using the `--no-rip` flag.
+
+
+
+## Limitations and Workarounds
+
+Rip Rip Hooray!, like any other CD-ripping tool, ultimately depends on the optical drive to decode and deliver the requested data, or at be accurate about the inaccuracies.
+
+When the drive can't live up to its end for whatever reason, the resulting rip will be incomplete or inaccurate. It might still be _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database), though, so be sure to give that a try.
+
+Otherwise, consider:
+
+* Re-ripping the content with the `--reconfirm` flag
+* Re-ripping the content with the `--reconfirm` flag _and_ a different drive
+* Restarting the rip with a different drive
+
+If you don't have a second drive or it didn't help, physical resurfacing might restore readability. Video game stores will typically do this for a few bucks per disc, but before you start calling around, make sure there is actually wear-and-tear. If instead you see discoloration, transparency, and/or tiny white spots, those symptoms are terminal; the disc itself is dying and will need to be replaced.
+
+
+
+## Tracks, Logs, and State Data
+
+Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks themselves. To keep things tidy, it saves everything to a subfolder within the current working directory called `_riprip`.
+
+To resume a rip, just rerun the program from the same place and it will automatically pick up from where it left off.
+
+When you're completely done ripping a given disc — and have moved or converted the exported tracks — delete the `_riprip` folder to reclaim the disk space. ;)
 
 
 

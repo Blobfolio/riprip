@@ -11,8 +11,8 @@ _basher___riprip() {
 	fi
 	[[ " ${COMP_LINE} " =~ " --no-c2 " ]] || opts+=("--no-c2")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
+	[[ " ${COMP_LINE} " =~ " --no-trust " ]] || opts+=("--no-trust")
 	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
-	[[ " ${COMP_LINE} " =~ " --reconfirm " ]] || opts+=("--reconfirm")
 	[[ " ${COMP_LINE} " =~ " --reconfirm " ]] || opts+=("--reconfirm")
 	if [[ ! " ${COMP_LINE} " =~ " -V " ]] && [[ ! " ${COMP_LINE} " =~ " --version " ]]; then
 		opts+=("-V")
