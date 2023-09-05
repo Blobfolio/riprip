@@ -18,6 +18,7 @@ dactyl = "0.5.*"
 hound = "3.5.0"
 trimothy = "0.1.*"
 ureq = "2.7.0"
+utc2k = "0.6.*"
 write_atomic = "0.4.*"
 
 [dependencies.argyle]

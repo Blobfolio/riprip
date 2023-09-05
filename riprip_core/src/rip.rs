@@ -553,12 +553,15 @@ impl Rip {
 			progress.finish();
 			self.summarize(disc, opts);
 
-			// Save the state file.
+			// Save the state data and sector log.
 			if bincode::serialize(&self.state).ok()
 				.and_then(|out| cache_write(&state_path, &out).ok())
 				.is_none()
 			{
 				Msg::warning("The rip state couldn't be saved.").eprint();
+			}
+			if self.log_problem_sectors().is_err() {
+				Msg::warning("The problem sector log couldn't be saved.").eprint();
 			}
 
 			// Should we stop early?
@@ -685,6 +688,27 @@ impl Rip {
 		}
 
 		Ok(dst)
+	}
+
+	#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+	/// # Log Problem Sectors.
+	fn log_problem_sectors(&self) -> Result<(), RipRipError> {
+		let start = self.rip_lsn.start + SECTOR_BUFFER as i32;
+		let issues: Vec<String> = self.track_slice()
+			.iter()
+			.enumerate()
+			.filter_map(|(k, v)|
+				if v.is_good() { None }
+				else { Some((k as i32 + start).to_string()) }
+			)
+			.collect();
+		if issues.is_empty() { Ok(()) }
+		else {
+			let dst = log_path(self.ar, self.track.number());
+			let mut issues = issues.join("\n");
+			issues.push('\n');
+			cache_write(dst, issues.as_bytes())
+		}
 	}
 
 	/// # Verify Rip!
@@ -964,6 +988,13 @@ fn print_bar(
 	}
 
 	eprintln!();
+}
+
+/// # Log Path.
+///
+/// Return a path suitable for the problem-sector log.
+fn log_path(ar: AccurateRip, idx: u8) -> String {
+	format!("state/{ar}__{idx:02}-shitlist__{}.txt", utc2k::unixtime())
 }
 
 #[inline]

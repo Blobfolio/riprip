@@ -60,6 +60,16 @@ If you don't have a second drive or it didn't help, physical resurfacing might r
 
 
 
+## Tracks, Logs, and State Data
+
+Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks themselves. To keep things tidy, it saves everything to a subfolder within the current working directory called `_riprip`.
+
+To resume a rip, just rerun the program from the same place and it will automatically pick up from where it left off.
+
+When you're completely done ripping a given disc — and have moved or converted the exported tracks — delete the `_riprip` folder to reclaim the disk space. ;)
+
+
+
 ## Installation
 
 Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page.
