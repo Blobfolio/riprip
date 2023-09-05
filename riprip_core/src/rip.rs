@@ -470,12 +470,15 @@ impl Rip {
 
 		// Onto the pass(es)!
 		for pass in 0..opts.passes() {
-			// Try to bust the cache.
+			// Reset progress bar.
 			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
+
+			// Try to bust the cache. We can't know when this is or isn't
+			// necessary, so should run it on each pass just in case.
 			progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
 			disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
 
-			// Update/reset the progress bar.
+			// Update the progress title to reflect the track at hand.
 			progress.set_title(Some(Msg::custom(
 				rip_title(pass + resume),
 				199,
