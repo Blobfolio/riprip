@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.2" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.3" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.2.
+Rip Rip Hooray! \- Manual page for riprip v0.0.3.
 .SH DESCRIPTION
 An incremental, second\-stage audio CD ripper for advanced data recovery.
 .SS USAGE:
@@ -20,14 +20,14 @@ Disable/ignore C2 error pointer information when ripping, e.g. for drives that d
 \fB\-\-no\-rip\fR
 Just print the basic disc information to STDERR and exit.
 .TP
+\fB\-\-no\-trust\fR
+Never trust the drive when it says a sector is good; always get confirmation. Requires a paranoia level of at least 2.
+.TP
 \fB\-\-raw\fR
 Save ripped tracks in raw PCM format (instead of WAV).
 .TP
 \fB\-\-reconfirm\fR
-Reset the status of all previously\-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2.
-.TP
-\fB\-\-reconfirm\fR
-Reset the status of all previously\-accepted samples to require reconfirmation. This has no effect when the paranoia level is less than 2.
+Reset the status of all previously\-accepted samples to require reconfirmation. Requires a paranoia level of at least 2.
 .TP
 \fB\-V\fR, \fB\-\-version\fR
 Print program version.
@@ -40,7 +40,7 @@ The device path for the optical drive containing the CD of interest, like /dev/c
 The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]
 .TP
 \fB\-\-paranoia\fR <NUM>
-When C2 or read errors are reported for any samples in a given block, treat the rest of its samples — the ones that were allegedly good — as suspicious until they have been confirmed <NUM> times. Similarly, if a sample moves from bad to good, require <NUM> confirmations before believing it. [default: 3; range: 1..=32]
+When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until the drive returns the same value <NUM> times, or AccurateRip or CTDB matches with a confidence of <NUM> are found. When combined with \-\-no\-trust, *all* samples are subject to confirmation regardless of status. [default: 3; range: 1..=32]
 .TP
 \fB\-\-refine\fR <NUM>
 Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]
