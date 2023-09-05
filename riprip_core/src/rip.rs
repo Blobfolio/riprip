@@ -475,8 +475,10 @@ impl Rip {
 
 			// Try to bust the cache. We can't know when this is or isn't
 			// necessary, so should run it on each pass just in case.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
-			disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
+			if ! killed.killed() && ! self.track_good() {
+				progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
+				disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
+			}
 
 			// Update the progress title to reflect the track at hand.
 			progress.set_title(Some(Msg::custom(
