@@ -24,7 +24,6 @@ use fyi_msg::{
 	Progless,
 };
 use std::{
-	borrow::Cow,
 	collections::BTreeMap,
 	fmt,
 	path::Path,
@@ -221,17 +220,11 @@ impl Disc {
 	/// ## Errors
 	///
 	/// This will bubble up any IO/rip/etc. errors encountered along the way.
-	pub fn rip(&self, opt: &RipOptions, progress: &Progless, killed: &KillSwitch)
+	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
-		// Are we ripping specific tracks or everything?
-		let mut tracks = Cow::Borrowed(opt.tracks());
-		if tracks.is_empty() {
-			tracks = Cow::Owned(self.toc.audio_tracks().map(|t| t.number()).collect());
-		}
-
 		// Loop the loop!
 		let mut saved = Vec::new();
-		for &t in &*tracks {
+		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
 			let Some(track) = self.toc.audio_track(usize::from(t)) else {
@@ -242,7 +235,7 @@ impl Disc {
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
 			let mut rip = Rip::new(self.toc.accuraterip_id(), track)?;
-			if let Some(dst) = rip.rip(self, opt, progress, killed)? {
+			if let Some(dst) = rip.rip(self, opts, progress, killed)? {
 				saved.push(dst);
 			}
 		}
