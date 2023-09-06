@@ -46,27 +46,87 @@ That summary can be produced on its own using the `--no-rip` flag.
 
 ## Limitations and Workarounds
 
-Rip Rip Hooray!, like any other CD-ripping tool, ultimately depends on the optical drive to decode and deliver the requested data, or at be accurate about the inaccuracies.
+Rip Rip Hooray!, like any other CD-ripping tool, ultimately depends on the optical drive to correctly decode and deliver the requested data, or at least be accurate about the inaccuracies.
 
-When the drive can't live up to its end for whatever reason, the resulting rip will be incomplete or inaccurate. It might still be _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database), though, so be sure to give that a try.
+When a drive can't do that for whatever reason, the resulting rip will be incomplete or inaccurate.
 
-Otherwise, consider:
-
-* Re-ripping the content with the `--reconfirm` flag
-* Re-ripping the content with the `--reconfirm` flag _and_ a different drive
-* Restarting the rip with a different drive
-
-If you don't have a second drive or it didn't help, physical resurfacing might restore readability. Video game stores will typically do this for a few bucks per disc, but before you start calling around, make sure there is actually wear-and-tear. If instead you see discoloration, transparency, and/or tiny white spots, those symptoms are terminal; the disc itself is dying and will need to be replaced.
+The performance of Rip Rip Hooray! is similarly bound to that of the drive. It will always be magnitudes faster than `EAC`, _et al_, under the same conditions, but if the drive is struggling to make heads or tails of the disc, it might take a while to complete the rip.
 
 
 
-## Tracks, Logs, and State Data
+## Usage
 
-Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks themselves. To keep things tidy, it saves everything to a subfolder within the current working directory called `_riprip`.
+Rip Rip Hooray! is run from the command line, like:
 
-To resume a rip, just rerun the program from the same place and it will automatically pick up from where it left off.
+```bash
+riprip [FLAGS/OPTIONS]
+```
 
-When you're completely done ripping a given disc — and have moved or converted the exported tracks — delete the `_riprip` folder to reclaim the disk space. ;)
+### Ripping.
+
+```text
+    --clean       Clear the contents of $PWD/_riprip before doing anything
+                  else, to e.g. start over from scratch.
+    --no-c2       Disable/ignore C2 error pointer information when ripping,
+                  e.g. for drives that do not support the feature. (This
+                  flag is otherwise not recommended.)
+    --no-trust    Never trust the drive when it says a sector is good;
+                  always get confirmation. Requires a paranoia level of at
+                  least 2.
+    --paranoia <NUM>
+                  When a sample or its neighbors have a C2 or read error,
+                  treat all samples in the region as supicious until the
+                  drive returns the same value <NUM> times, or AccurateRip
+                  or CTDB matches with a confidence of <NUM> are found.
+                  When combined with --no-trust, *all* samples are subject
+                  to confirmation regardless of status.
+                  [default: 3; range: 1..=32]
+    --raw         Save ripped tracks in raw PCM format (instead of WAV).
+    --reconfirm   Reset the status of all previously-accepted samples to
+                  require reconfirmation. Requires a paranoia level of at
+                  least 2.
+    --refine <NUM>
+                  Execute up to <NUM> additional rip passes for each track
+                  while any samples remain unread/unconfirmed.
+                  [default: 0; max: 15]
+-t, --track <NUM(s),RNG>
+                  Rip one or more specific tracks (rather than the whole
+                  disc). Multiple tracks can be separated by commas (2,3),
+                  specified as an inclusive range (2-3), and/or given their
+                  own -t/--track (-t 2 -t 3). [default: the whole disc]
+```
+
+### Drive Settings.
+
+These options are auto-detected and do not usually need to be explicitly provided.
+
+```text
+-d, --dev <PATH>  The device path for the optical drive containing the CD
+                  of interest, like /dev/cdrom.
+-o, --offset <SAMPLES>
+                  The AccurateRip, et al, sample read offset to apply to
+                  data retrieved from the drive. [range: ±5880]
+```
+
+### Miscellaneous.
+
+```text
+-h, --help        Print help information and exit.
+-V, --version     Print version information and exit.
+    --no-rip      Just print the basic disc information to STDERR and exit.
+```
+
+### Early Exit.
+
+If you don't have time to let a rip finish naturally, press `CTRL+C` to stop it early. Your progress will still be saved, there just won't be as much of it. Haha.
+
+### Tracks, Logs, and State Data
+
+Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks themselves. To keep things tidy, it saves everything to its own subfolder within the current working directory called `_riprip`.
+
+To resume a rip, just rerun the program from the same place, with the same disc, and it will automatically pick up from where it left off.
+
+When you're completely done working on a disc — and have moved or converted the exported tracks! — go ahead and delete the `_riprip` folder to reclaim the disk space. ;)
 
 
 

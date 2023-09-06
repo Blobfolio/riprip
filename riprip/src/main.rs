@@ -283,26 +283,17 @@ fn helper() {
      ╚═(█)═╝
 
 USAGE:
-    riprip [FLAGS] [OPTIONS]
+    riprip [FLAGS/OPTIONS]
 
-FLAGS:
+RIPPING:
         --clean       Clear the contents of $PWD/_riprip before doing anything
                       else, to e.g. start over from scratch.
-    -h, --help        Print help information and exit.
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
-        --no-rip      Just print the basic disc information to STDERR and exit.
         --no-trust    Never trust the drive when it says a sector is good;
                       always get confirmation. Requires a paranoia level of at
                       least 2.
-        --raw         Save ripped tracks in raw PCM format (instead of WAV).
-        --reconfirm   Reset the status of all previously-accepted samples to
-                      require reconfirmation. Requires a paranoia level of at
-                      least 2.
-    -V, --version     Print version information and exit.
-
-OPTIONS:
         --paranoia <NUM>
                       When a sample or its neighbors have a C2 or read error,
                       treat all samples in the region as supicious until the
@@ -311,6 +302,10 @@ OPTIONS:
                       When combined with --no-trust, *all* samples are subject
                       to confirmation regardless of status.
                       [default: 3; range: 1..=32]
+        --raw         Save ripped tracks in raw PCM format (instead of WAV).
+        --reconfirm   Reset the status of all previously-accepted samples to
+                      require reconfirmation. Requires a paranoia level of at
+                      least 2.
         --refine <NUM>
                       Execute up to <NUM> additional rip passes for each track
                       while any samples remain unread/unconfirmed.
@@ -321,7 +316,7 @@ OPTIONS:
                       specified as an inclusive range (2-3), and/or given their
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
 
-DRIVE OPTIONS:
+DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly
     provided.
 
@@ -331,10 +326,15 @@ DRIVE OPTIONS:
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive. [range: ±5880]
 
+MISCELLANEOUS:
+    -h, --help        Print help information and exit.
+    -V, --version     Print version information and exit.
+        --no-rip      Just print the basic disc information to STDERR and exit.
+
 EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m", r" to stop
-    it early. Your progress will be still be saved, there just won't be as much
-    of it. ;)
+    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    it early. Your progress will still be saved, there just won't be as much of
+    it. Haha.
 "
 	));
 }
