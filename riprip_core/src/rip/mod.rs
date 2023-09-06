@@ -343,12 +343,12 @@ impl Rip {
 	/// CUETools databases, and possibly auto-confirm samples if the matches
 	/// are sufficient.
 	fn summarize(&mut self, disc: &Disc, opts: &RipOptions) {
-		let (mut q_good, mut q_maybe, q_bad) = self.track_quality();
+		let (mut q_good, mut q_maybe, mut q_bad) = self.track_quality();
 
 		// If the data is decent, see if the track matches third-party
 		// checksum databases (for added assurance).
 		let (ar, ctdb) =
-			if q_bad == 0 { self.verify(disc.toc()) }
+			if q_bad < 100 { self.verify(disc.toc()) }
 			else { (None, None) };
 		let verified = u16::max(
 			ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
@@ -357,13 +357,14 @@ impl Rip {
 
 		// Use AccurateRip/CTDB as a proxy for our own confirmation,
 		// upgrading the maybes if there are any.
-		if u16::from(opts.paranoia()) <= verified && 0 != q_maybe {
-			q_good += q_maybe;
+		if u16::from(opts.paranoia()) <= verified {
+			q_good += q_maybe + q_bad;
 			q_maybe = 0;
+			q_bad = 0;
 			let rng = self.track_range();
 			for sample in &mut self.state[rng] {
-				if let RipSample::Iffy(set) = sample {
-					*sample = RipSample::Good(set[0].0);
+				if ! sample.is_good() {
+					*sample = RipSample::Good(sample.as_array());
 				}
 			}
 		}
