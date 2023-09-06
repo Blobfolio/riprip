@@ -63,11 +63,11 @@ pub use drive::{
 	ReadOffset,
 };
 pub use error::RipRipError;
-pub use rip::RipOptions;
 pub(crate) use rip::{
 	Rip,
 	RipSample,
 };
+pub use rip::opts::RipOptions;
 
 
 

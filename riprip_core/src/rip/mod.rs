@@ -2,6 +2,8 @@
 # Rip Rip Hooray: Ripping
 */
 
+pub(super) mod opts;
+
 use cdtoc::{
 	AccurateRip,
 	Toc,
@@ -21,6 +23,7 @@ use crate::{
 	NULL_SAMPLE,
 	ReadOffset,
 	RipRipError,
+	RipOptions,
 	Sample,
 	SAMPLES_PER_SECTOR,
 };
@@ -45,21 +48,6 @@ use std::{
 
 
 
-/// # FLAG: C2 Support.
-const FLAG_C2: u8 =        0b0001;
-
-/// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =       0b0010;
-
-/// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 = 0b0100;
-
-/// # FLAG: Trust Good Sectors.
-const FLAG_TRUST: u8 =     0b1000;
-
-/// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_TRUST;
-
 /// # Quality Bar.
 const QUALITY_BAR: &str = "########################################################################";
 
@@ -80,234 +68,6 @@ const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
 /// This contains a `bool` for each sample in a sector indicating whether or
 /// not it contains an error.
 type SectorC2s = [bool; SAMPLES_PER_SECTOR as usize];
-
-
-
-#[derive(Debug, Clone)]
-/// # Rip Options.
-///
-/// This struct holds the rip-related options like read offset, paranoia level,
-/// which tracks to focus on, etc.
-///
-/// Options are set using builder-style methods, like:
-///
-/// ```
-/// use riprip_core::RipOptions;
-///
-/// let opts = RipOptions::default()
-///     .with_refine(3)
-///     .with_tracks([1, 2, 3]);
-///
-/// assert_eq!(opts.refine(), 3);
-/// assert_eq!(opts.tracks(), &[1, 2, 3]);
-/// ```
-pub struct RipOptions {
-	offset: ReadOffset,
-	paranoia: u8,
-	refine: u8,
-	flags: u8,
-	tracks: Vec<u8>,
-}
-
-impl Default for RipOptions {
-	fn default() -> Self {
-		Self {
-			offset: ReadOffset::default(),
-			paranoia: 3,
-			refine: 0,
-			flags: FLAG_DEFAULT,
-			tracks: Vec::new(),
-		}
-	}
-}
-
-impl RipOptions {
-	#[must_use]
-	/// # With Offset.
-	///
-	/// Set the AccurateRip, _et al_, drive read offset to apply when copying
-	/// data from the disc. See [here](http://www.accuraterip.com/driveoffsets.htm) for more information.
-	///
-	/// It is critical the correct offset be applied, otherwise the contents of
-	/// the rip may not be independently verifiable. This is doubly so when two
-	/// or more drives are used for a single rip; without appropriate offsets
-	/// the communal data could be corrupted.
-	///
-	/// The default is zero.
-	pub fn with_offset(self, offset: ReadOffset) -> Self {
-		Self {
-			offset,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With C2 Error Pointers.
-	///
-	/// Enable or disable the use of C2 error pointer information.
-	///
-	/// This feature is critical for ensuring any degree of transfer accuracy,
-	/// but if a drive doesn't support it, it should be disabled.
-	///
-	/// The default is enabled.
-	pub fn with_c2(self, c2: bool) -> Self {
-		let flags =
-			if c2 { self.flags | FLAG_C2 }
-			else { self.flags & ! FLAG_C2 };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Paranoia Level.
-	///
-	/// Whenever a drive reports _any_ C2 or read errors for a block, consider
-	/// _all_ samples in that block — namely the allegedly good ones — as
-	/// suspicious until the same values have been returned this many times.
-	///
-	/// The default is three.
-	///
-	/// Custom values are automatically capped at `1..=32`.
-	pub fn with_paranoia(self, mut paranoia: u8) -> Self {
-		if paranoia == 0 { paranoia = 1; }
-		else if paranoia > 32 { paranoia = 32; }
-		Self {
-			paranoia,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Raw PCM Output.
-	///
-	/// When `true`, tracks will be exported in raw PCM format. When `false`,
-	/// they'll be saved as WAV files instead.
-	///
-	/// The default is `false`.
-	pub fn with_raw(self, raw: bool) -> Self {
-		let flags =
-			if raw { self.flags | FLAG_RAW }
-			else { self.flags & ! FLAG_RAW };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Reconfirmation.
-	///
-	/// If true, previously-accepted samples will be "downgraded" to
-	/// "suspicious", requring reconfirmation from subsequent reads.
-	///
-	/// The default is disabled.
-	pub fn with_reconfirm(self, reconfirm: bool) -> Self {
-		let flags =
-			if reconfirm { self.flags | FLAG_RECONFIRM }
-			else { self.flags & ! FLAG_RECONFIRM };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Refine Passes.
-	///
-	/// Execute this many additional rip passes so long as any samples remain
-	/// unread or unconfirmed. This is equivalent to re-running the entire
-	/// program X number of times, but saves you the trouble of having to do
-	/// that.
-	///
-	/// The default is zero; the max is `15`, just to give the drive a break.
-	pub fn with_refine(self, mut refine: u8) -> Self {
-		if refine > 15 { refine = 15; }
-		Self {
-			refine,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Tracks.
-	///
-	/// Set the tracks-of-interest by their indexes. If empty, all audio tracks
-	/// on the disc will be ripped.
-	///
-	/// The default is all tracks.
-	pub fn with_tracks<I>(mut self, iter: I) -> Self
-	where I: IntoIterator<Item=u8> {
-		self.tracks.truncate(0);
-		self.tracks.extend(iter);
-		self.tracks.sort_unstable();
-		self.tracks.dedup();
-		self
-	}
-
-	#[must_use]
-	/// # With Trust.
-	///
-	/// When `true`, `paranoia` confirmation is only applied to samples within
-	/// a sector containing C2 errors. When `false`, every sample is subject to
-	/// confirmation before being accepted.
-	///
-	/// The default is `true`.
-	pub fn with_trust(self, trust: bool) -> Self {
-		let flags =
-			if trust { self.flags | FLAG_TRUST }
-			else { self.flags & ! FLAG_TRUST };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-}
-
-impl RipOptions {
-	#[must_use]
-	/// # Offset.
-	pub const fn offset(&self) -> ReadOffset { self.offset }
-
-	#[must_use]
-	/// # Use C2 Error Pointers?
-	pub const fn c2(&self) -> bool { FLAG_C2 == self.flags & FLAG_C2 }
-
-	#[must_use]
-	/// # Paranoia Level.
-	pub const fn paranoia(&self) -> u8 { self.paranoia }
-
-	#[must_use]
-	/// # Number of Passes.
-	///
-	/// Return the total number of passes, e.g. `1 + refine`.
-	pub const fn passes(&self) -> u8 { self.refine() + 1 }
-
-	#[must_use]
-	/// # Save as Raw PCM?
-	pub const fn raw(&self) -> bool { FLAG_RAW == self.flags & FLAG_RAW }
-
-	#[must_use]
-	/// # Require Reconfirmation?
-	pub const fn reconfirm(&self) -> bool { FLAG_RECONFIRM == self.flags & FLAG_RECONFIRM }
-
-	#[must_use]
-	/// # Number of Refine Passes.
-	pub const fn refine(&self) -> u8 { self.refine }
-
-	#[must_use]
-	/// # Tracks.
-	pub fn tracks(&self) -> &[u8] { &self.tracks }
-
-	#[must_use]
-	/// # Trust Good Sectors?
-	pub const fn trust(&self) -> bool { FLAG_TRUST == self.flags & FLAG_TRUST }
-}
 
 
 
@@ -470,12 +230,17 @@ impl Rip {
 
 		// Onto the pass(es)!
 		for pass in 0..opts.passes() {
-			// Try to bust the cache.
+			// Reset progress bar.
 			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
-			disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
 
-			// Update/reset the progress bar.
+			// Try to bust the cache. We can't know when this is or isn't
+			// necessary, so should run it on each pass just in case.
+			if ! killed.killed() && ! self.track_good() {
+				progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
+				disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
+			}
+
+			// Update the progress title to reflect the track at hand.
 			progress.set_title(Some(Msg::custom(
 				rip_title(pass + resume),
 				199,
@@ -578,12 +343,12 @@ impl Rip {
 	/// CUETools databases, and possibly auto-confirm samples if the matches
 	/// are sufficient.
 	fn summarize(&mut self, disc: &Disc, opts: &RipOptions) {
-		let (mut q_good, mut q_maybe, q_bad) = self.track_quality();
+		let (mut q_good, mut q_maybe, mut q_bad) = self.track_quality();
 
 		// If the data is decent, see if the track matches third-party
 		// checksum databases (for added assurance).
 		let (ar, ctdb) =
-			if q_bad == 0 { self.verify(disc.toc()) }
+			if q_bad < 100 { self.verify(disc.toc()) }
 			else { (None, None) };
 		let verified = u16::max(
 			ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
@@ -592,13 +357,14 @@ impl Rip {
 
 		// Use AccurateRip/CTDB as a proxy for our own confirmation,
 		// upgrading the maybes if there are any.
-		if u16::from(opts.paranoia()) <= verified && 0 != q_maybe {
-			q_good += q_maybe;
+		if u16::from(opts.paranoia()) <= verified {
+			q_good += q_maybe + q_bad;
 			q_maybe = 0;
+			q_bad = 0;
 			let rng = self.track_range();
 			for sample in &mut self.state[rng] {
-				if let RipSample::Iffy(set) = sample {
-					*sample = RipSample::Good(set[0].0);
+				if ! sample.is_good() {
+					*sample = RipSample::Good(sample.as_array());
 				}
 			}
 		}
@@ -1033,89 +799,4 @@ const fn rip_title(pass: u8) -> &'static str {
 /// Return the relative path to use for the track's state file.
 fn state_path(ar: AccurateRip, idx: u8) -> String {
 	format!("state/{ar}__{idx:02}.state")
-}
-
-
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn t_rip_options_c2() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_c2(v);
-			assert_eq!(opts.c2(), v);
-		}
-	}
-
-	#[test]
-	fn t_rip_options_offset() {
-		let offset5 = ReadOffset::try_from(b"5".as_slice()).expect("Read offset 5 failed.");
-		let offset667 = ReadOffset::try_from(b"-667".as_slice()).expect("Read offset -667 failed.");
-		for v in [offset5, offset667] {
-			let opts = RipOptions::default().with_offset(v);
-			assert_eq!(opts.offset(), v);
-		}
-	}
-
-	#[test]
-	fn t_rip_options_paranoia() {
-		for v in [1, 2, 3] {
-			let opts = RipOptions::default().with_paranoia(v);
-			assert_eq!(opts.paranoia(), v);
-		}
-
-		// Min.
-		let opts = RipOptions::default().with_paranoia(0);
-		assert_eq!(opts.paranoia(), 1);
-
-		// Max.
-		let opts = RipOptions::default().with_paranoia(64);
-		assert_eq!(opts.paranoia(), 32);
-	}
-
-	#[test]
-	fn t_rip_options_raw() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_raw(v);
-			assert_eq!(opts.raw(), v);
-		}
-	}
-
-	#[test]
-	fn t_rip_options_reconfirm() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_reconfirm(v);
-			assert_eq!(opts.reconfirm(), v);
-		}
-	}
-
-	#[test]
-	fn t_rip_options_refine() {
-		for v in [0, 1, 2, 3] {
-			let opts = RipOptions::default().with_refine(v);
-			assert_eq!(opts.refine(), v);
-			assert_eq!(opts.passes(), v + 1);
-		}
-
-		// Max.
-		let opts = RipOptions::default().with_refine(64);
-		assert_eq!(opts.refine(), 15);
-		assert_eq!(opts.passes(), 16);
-	}
-
-	#[test]
-	fn t_rip_options_tracks() {
-		let opts = RipOptions::default().with_tracks([1, 5, 5, 2, 3]);
-		assert_eq!(opts.tracks(), &[1, 2, 3, 5]);
-	}
-
-	#[test]
-	fn t_rip_options_trust() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_trust(v);
-			assert_eq!(opts.trust(), v);
-		}
-	}
 }

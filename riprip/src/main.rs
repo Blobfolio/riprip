@@ -115,7 +115,7 @@ fn _main() -> Result<(), RipRipError> {
 	if args.switch(b"--no-rip") { return Ok(()); }
 
 	// Set up the ripper!
-	let opts = parse_rip_options(&args, drivevendormodel)?;
+	let opts = parse_rip_options(&args, drivevendormodel, &disc)?;
 	let progress = Progless::default();
 	let killed = KillSwitch::default();
 	sigint(killed.inner(), Some(progress.clone()));
@@ -135,7 +135,7 @@ fn _main() -> Result<(), RipRipError> {
 }
 
 /// # Parse Rip Options.
-fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<RipOptions, RipRipError> {
+fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
@@ -163,30 +163,37 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<Ri
 	}
 
 	// Parsing the tracks is slightly more involved. Haha.
-	let mut tracks = Vec::new();
 	for v in args.option2_values(b"-t", b"--track", Some(b',')) {
 		let v = v.trim();
 		if v.is_empty() { continue; }
 
+		// It might be a range.
 		if let Some(pos) = v.iter().position(|b| b'-'.eq(b)) {
+			// Split.
 			let a = v[..pos].trim();
 			let b = v[pos + 1..].trim();
-			if a.is_empty() || b.is_empty() {
-				return Err(RipRipError::RipTracks);
-			}
+			if a.is_empty() || b.is_empty() { return Err(RipRipError::RipTracks); }
 
+			// Decode.
 			let a = u8::btou(a).ok_or(RipRipError::RipTracks)?;
 			let b = u8::btou(b).ok_or(RipRipError::RipTracks)?;
-			if a <= b { tracks.extend(a..=b); }
-			else { tracks.extend(b..=a); }
+
+			// Add them all!
+			if a <= b {
+				for idx in a..=b { opts = opts.with_track(idx); }
+			}
+			else { return Err(RipRipError::RipTracks); }
 		}
+		// Otherwise it should be a single index.
 		else {
 			let v = u8::btou(v).ok_or(RipRipError::RipTracks)?;
-			tracks.push(v);
+			opts = opts.with_track(v);
 		}
 	}
-	if ! tracks.is_empty() {
-		opts = opts.with_tracks(tracks);
+
+	// If we didn't parse any tracks, add each track on the disc.
+	if ! opts.has_tracks() {
+		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
 	// Conflict checks.
@@ -203,13 +210,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>) -> Result<Ri
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
-	let tracks = opts.tracks()
-		.iter()
-		.map(|&t| NiceU8::from(t))
-		.collect::<Vec<NiceU8>>();
-	let nice_tracks =
-		if tracks.is_empty() { Cow::Borrowed("EVERYTHING") }
-		else { tracks.oxford_and() };
+	let tracks = opts.tracks().map(NiceU8::from).collect::<Vec<NiceU8>>();
+	let nice_tracks = tracks.oxford_and();
 	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
 	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
