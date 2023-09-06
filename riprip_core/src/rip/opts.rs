@@ -7,19 +7,22 @@ use crate::ReadOffset;
 
 
 /// # FLAG: C2 Support.
-const FLAG_C2: u8 =        0b0001;
+const FLAG_C2: u8 =         0b000_0001;
+
+/// # FLAG: Cache Bust.
+const FLAG_CACHE_BUST: u8 = 0b000_0010;
 
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =       0b0010;
+const FLAG_RAW: u8 =        0b000_0100;
 
 /// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 = 0b0100;
+const FLAG_RECONFIRM: u8 =  0b000_1000;
 
 /// # FLAG: Trust Good Sectors.
-const FLAG_TRUST: u8 =     0b1000;
+const FLAG_TRUST: u8 =      0b001_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_TRUST;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_TRUST;
 
 
 
@@ -96,6 +99,28 @@ impl RipOptions {
 		let flags =
 			if c2 { self.flags | FLAG_C2 }
 			else { self.flags & ! FLAG_C2 };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # With Cache Bust.
+	///
+	/// Enable or disable cache busting. (Rip Rip will try to circumvent the
+	/// drive cache by having it first read random data from somewhere else.)
+	///
+	/// Unlike with other CD-rippers, Rip Rip only needs to cache bust once per
+	/// track per pass, not after every single read. Its impact on performance
+	/// and on the drive should almost always be negligible.
+	///
+	/// The default is enabled.
+	pub const fn with_cache_bust(self, cache_bust: bool) -> Self {
+		let flags =
+			if cache_bust { self.flags | FLAG_CACHE_BUST }
+			else { self.flags & ! FLAG_CACHE_BUST };
 
 		Self {
 			flags,
@@ -217,6 +242,10 @@ impl RipOptions {
 	pub const fn c2(&self) -> bool { FLAG_C2 == self.flags & FLAG_C2 }
 
 	#[must_use]
+	/// # Bust Cache?
+	pub const fn cache_bust(&self) -> bool { FLAG_CACHE_BUST == self.flags & FLAG_CACHE_BUST }
+
+	#[must_use]
 	/// # Has Tracks?
 	pub const fn has_tracks(&self) -> bool { self.tracks != 0 }
 
@@ -315,10 +344,33 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn t_rip_flags() {
+		// Make sure our flags are unique.
+		let mut all = vec![
+			FLAG_C2,
+			FLAG_CACHE_BUST,
+			FLAG_RAW,
+			FLAG_RECONFIRM,
+			FLAG_TRUST,
+		];
+		all.sort_unstable();
+		all.dedup();
+		assert_eq!(all.len(), 5);
+	}
+
+	#[test]
 	fn t_rip_options_c2() {
 		for v in [false, true] {
 			let opts = RipOptions::default().with_c2(v);
 			assert_eq!(opts.c2(), v);
+		}
+	}
+
+	#[test]
+	fn t_rip_options_cache_bust() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_cache_bust(v);
+			assert_eq!(opts.cache_bust(), v);
 		}
 	}
 

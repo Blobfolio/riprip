@@ -235,7 +235,7 @@ impl Rip {
 
 			// Try to bust the cache. We can't know when this is or isn't
 			// necessary, so should run it on each pass just in case.
-			if ! killed.killed() && ! self.track_good() {
+			if opts.cache_bust() && ! (killed.killed() || self.track_good()) {
 				progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
 				disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
 			}

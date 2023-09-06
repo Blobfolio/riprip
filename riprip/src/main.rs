@@ -138,6 +138,7 @@ fn _main() -> Result<(), RipRipError> {
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_c2(! args.switch(b"--no-c2"))
+		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"))
 		.with_trust(! args.switch(b"--no-trust"));
@@ -207,12 +208,19 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 }
 
 /// # Rip Summary.
+///
+/// Summarize and confirm the chosen settings before proceeding.
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
-	let tracks = opts.tracks().map(NiceU8::from).collect::<Vec<NiceU8>>();
-	let nice_tracks = tracks.oxford_and();
-	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
+	let nice_tracks = Cow::Owned(
+		opts.tracks()
+			.map(NiceU8::from)
+			.collect::<Vec<NiceU8>>()
+			.oxford_and()
+			.replace(',', "\x1b[2m,\x1b[0;1m")
+			.replace(" and ", "\x1b[2m and \x1b[0;1m")
+	);
 	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_paranoia = Cow::Owned(
@@ -220,25 +228,26 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		else { format!("{} (No Trust Mode)", opts.paranoia()) }
 	);
 	let nice_passes = NiceU8::from(opts.passes());
-	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
 
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("C2:", nice_c2, opts.c2()),
+		("C2:", yesno(opts.c2()), opts.c2()),
+		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
 		("Format:", nice_format, true),
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Paranoia:", nice_paranoia, 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
-		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
+		("Reconfirm:", yesno(opts.reconfirm()), opts.reconfirm()),
 	];
+	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:max_label$} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:max_label$} {v}\x1b[0m");
 		}
 	}
 
@@ -260,6 +269,13 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 			if let Some(p) = &progress { p.sigint(); }
 		}
 	);
+}
+
+#[inline]
+/// # Bool to Yes/No Cow.
+const fn yesno(v: bool) -> Cow<'static, str> {
+	if v { Cow::Borrowed("Yes") }
+	else { Cow::Borrowed("No") }
 }
 
 #[cold]
@@ -291,6 +307,9 @@ RIPPING:
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
+        --no-cache-bust
+                      Do not attempt to reset the optical drive cache between
+                      each rip pass.
         --no-trust    Never trust the drive when it says a sector is good;
                       always get confirmation. Requires a paranoia level of at
                       least 2.

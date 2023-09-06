@@ -46,6 +46,10 @@ long = "--no-c2"
 description = "Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)"
 
 [[package.metadata.bashman.switches]]
+long = "--no-cache-bust"
+description = "Do not attempt to reset the optical drive cache between each rip pass."
+
+[[package.metadata.bashman.switches]]
 long = "--no-rip"
 description = "Just print the basic disc information to STDERR and exit."
 

@@ -70,6 +70,9 @@ riprip [FLAGS/OPTIONS]
     --no-c2       Disable/ignore C2 error pointer information when ripping,
                   e.g. for drives that do not support the feature. (This
                   flag is otherwise not recommended.)
+    --no-cache-bust
+                  Do not attempt to reset the optical drive cache between
+                  each rip pass.
     --no-trust    Never trust the drive when it says a sector is good;
                   always get confirmation. Requires a paranoia level of at
                   least 2.
