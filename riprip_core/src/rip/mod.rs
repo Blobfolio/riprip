@@ -244,11 +244,15 @@ impl Rip {
 			progress.set_title(Some(Msg::custom(
 				rip_title(pass + resume),
 				199,
-				&format!("Track #{}…", self.track.number())
+				&format!(
+					"Track #{}{}…",
+					self.track.number(),
+					if opts.backwards() { " (backwards)" } else { "" },
+				)
 			)));
 
 			// Update the data, one sector at a time.
-			for k in min_sector..max_sector {
+			for k in ReadIter::new(min_sector, max_sector, opts.backwards()) {
 				// Cut out the offset-adjusted portion of the state
 				// corresponding to the sector being read. (We'll likely write
 				// data a little earlier or later than we read it.)
@@ -680,6 +684,59 @@ impl RipSample {
 
 
 
+/// # Read Iterator.
+///
+/// We need to be able to conditionally reverse the sector read order when
+/// ripping. The types change when chaining `.rev()`, so we need to use an
+/// enum.
+///
+/// As both iterators otherwise work exactly the same, we can simply
+/// passthrough the relevant iter-ness.
+///
+/// Tedious, but not terrible.
+enum ReadIter {
+	Forward(Range<usize>),
+	Backward(std::iter::Rev<Range<usize>>)
+}
+
+impl ReadIter {
+	/// # New Instance.
+	///
+	/// Generate the right kind of iterator based on the value of `backwards`.
+	fn new(min_sector: usize, max_sector: usize, backwards: bool) -> Self {
+		if backwards { Self::Backward((min_sector..max_sector).rev()) }
+		else { Self::Forward(min_sector..max_sector) }
+	}
+}
+
+impl Iterator for ReadIter {
+	type Item = usize;
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			Self::Forward(i) => i.next(),
+			Self::Backward(i) => i.next(),
+		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self {
+			Self::Forward(i) => i.size_hint(),
+			Self::Backward(i) => i.size_hint(),
+		}
+	}
+}
+
+impl ExactSizeIterator for ReadIter {
+	fn len(&self) -> usize {
+		match self {
+			Self::Forward(i) => i.len(),
+			Self::Backward(i) => i.len(),
+		}
+	}
+}
+
+
+
 #[allow(
 	clippy::cast_possible_truncation,
 	clippy::cast_precision_loss,
@@ -799,4 +856,21 @@ const fn rip_title(pass: u8) -> &'static str {
 /// Return the relative path to use for the track's state file.
 fn state_path(ar: AccurateRip, idx: u8) -> String {
 	format!("state/{ar}__{idx:02}.state")
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_read_iter() {
+		let a: Vec<usize> = ReadIter::new(5, 100, false).collect();
+		let mut b: Vec<usize> = ReadIter::new(5, 100, true).collect();
+		assert_ne!(a, b, "Sets should be in the opposite order!");
+		assert!(! a.contains(&100), "The range is supposed to be exclusive.");
+		b.reverse();
+		assert_eq!(a, b, "Sets should match after reversing one of them!");
+	}
 }

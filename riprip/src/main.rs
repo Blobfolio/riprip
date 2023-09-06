@@ -137,6 +137,7 @@ fn _main() -> Result<(), RipRipError> {
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
+		.with_backwards(args.switch(b"--backwards"))
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
@@ -231,6 +232,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 
 	let set = [
 		("Tracks:", nice_tracks, true),
+		("Backwards:", yesno(opts.backwards()), opts.backwards()),
 		("C2:", yesno(opts.c2()), opts.c2()),
 		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
 		("Format:", nice_format, true),
@@ -302,6 +304,8 @@ USAGE:
     riprip [FLAGS/OPTIONS]
 
 RIPPING:
+        --backwards   Rip sectors in reverse order. (Data will still be saved
+                      in the *correct* order. Haha.)
         --clean       Clear the contents of $PWD/_riprip before doing anything
                       else, to e.g. start over from scratch.
         --no-c2       Disable/ignore C2 error pointer information when ripping,

@@ -33,6 +33,10 @@ man-dir = "../release/man"
 credits-dir = "../"
 
 [[package.metadata.bashman.switches]]
+long = "--backwards"
+description = "Rip sectors in reverse order. (Data will still be saved in the *correct* order. Haha.)"
+
+[[package.metadata.bashman.switches]]
 long = "--clean"
 description = "Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch."
 

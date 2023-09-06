@@ -29,6 +29,7 @@ Beyond that, it supports all the good things:
 * [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
 * Cache busting
 * Sample re/confirmation
+* Backwards ripping
 * Raw PCM and WAV output
 
 Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
@@ -65,6 +66,8 @@ riprip [FLAGS/OPTIONS]
 ### Ripping.
 
 ```text
+    --backwards   Rip sectors in reverse order. (Data will still be saved
+                  in the *correct* order. Haha.)
     --clean       Clear the contents of $PWD/_riprip before doing anything
                   else, to e.g. start over from scratch.
     --no-c2       Disable/ignore C2 error pointer information when ripping,

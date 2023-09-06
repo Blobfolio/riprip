@@ -6,20 +6,23 @@ use crate::ReadOffset;
 
 
 
+/// # FLAG: Rip Backwards.
+const FLAG_BACKWARDS: u8 =  0b000_0001;
+
 /// # FLAG: C2 Support.
-const FLAG_C2: u8 =         0b000_0001;
+const FLAG_C2: u8 =         0b000_0010;
 
 /// # FLAG: Cache Bust.
-const FLAG_CACHE_BUST: u8 = 0b000_0010;
+const FLAG_CACHE_BUST: u8 = 0b000_0100;
 
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =        0b000_0100;
+const FLAG_RAW: u8 =        0b000_1000;
 
 /// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 =  0b000_1000;
+const FLAG_RECONFIRM: u8 =  0b001_0000;
 
 /// # FLAG: Trust Good Sectors.
-const FLAG_TRUST: u8 =      0b001_0000;
+const FLAG_TRUST: u8 =      0b010_0000;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_TRUST;
@@ -82,6 +85,27 @@ impl RipOptions {
 	pub const fn with_offset(self, offset: ReadOffset) -> Self {
 		Self {
 			offset,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # With Reverse Ripping.
+	///
+	/// If `true`, data will be read in the reverse order — last sector to
+	/// first sector; if `false`, it will be read the usual way.
+	///
+	/// Note: this only affects the read order. Tracks will not sound any more
+	/// or less demonic than usual.
+	///
+	/// The default is `false`.
+	pub const fn with_backwards(self, backwards: bool) -> Self {
+		let flags =
+			if backwards { self.flags | FLAG_BACKWARDS }
+			else { self.flags & ! FLAG_BACKWARDS };
+
+		Self {
+			flags,
 			..self
 		}
 	}
@@ -238,6 +262,10 @@ impl RipOptions {
 	pub const fn offset(&self) -> ReadOffset { self.offset }
 
 	#[must_use]
+	/// # Rip Backwards?
+	pub const fn backwards(&self) -> bool { FLAG_BACKWARDS == self.flags & FLAG_BACKWARDS }
+
+	#[must_use]
 	/// # Use C2 Error Pointers?
 	pub const fn c2(&self) -> bool { FLAG_C2 == self.flags & FLAG_C2 }
 
@@ -347,6 +375,7 @@ mod test {
 	fn t_rip_flags() {
 		// Make sure our flags are unique.
 		let mut all = vec![
+			FLAG_BACKWARDS,
 			FLAG_C2,
 			FLAG_CACHE_BUST,
 			FLAG_RAW,
@@ -355,7 +384,15 @@ mod test {
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 5);
+		assert_eq!(all.len(), 6);
+	}
+
+	#[test]
+	fn t_rip_options_backwards() {
+		for v in [false, true] {
+			let opts = RipOptions::default().with_backwards(v);
+			assert_eq!(opts.backwards(), v);
+		}
 	}
 
 	#[test]
