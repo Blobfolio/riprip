@@ -22,28 +22,6 @@ use std::{
 /// This will ultimately hold `CWD/CACHE_BASE`.
 static CACHE_ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-/// # Clean Cache.
-///
-/// Remove all files in the cache directory, if any.
-///
-/// ## Errors
-///
-/// This will return an error if the cache cannot be established, or any files
-/// prove unreadable.
-pub fn cache_clean() -> Result<(), RipRipError> {
-	let root = cache_root()?;
-	for e in std::fs::read_dir(root).map_err(|_| RipRipError::Cache)?.flatten() {
-		if let Ok(path) = std::fs::canonicalize(e.path()) {
-			if path.starts_with(root) {
-				if path.is_dir() { std::fs::remove_dir_all(&path) }
-				else { std::fs::remove_file(&path) }
-					.map_err(|_| RipRipError::Delete(path.to_string_lossy().into_owned()))?;
-			}
-		}
-	}
-	Ok(())
-}
-
 /// # Cache Path.
 ///
 /// Glue `src` onto the cache path and return it.

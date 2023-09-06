@@ -66,8 +66,6 @@ riprip [FLAGS/OPTIONS]
 ### Ripping.
 
 ```text
-    --clean       Clear the contents of $PWD/_riprip before doing anything
-                  else, to e.g. start over from scratch.
     --no-c2       Disable/ignore C2 error pointer information when ripping,
                   e.g. for drives that do not support the feature. (This
                   flag is otherwise not recommended.)
@@ -99,6 +97,7 @@ riprip [FLAGS/OPTIONS]
 ```text
     --backwards   Rip sectors in reverse order. (Data will still be saved
                   in the *correct* order. Haha.)
+    --no-resume   Ignore any previous rip states; start over from scratch.
     --no-trust    Never trust the drive when it says a sector is good;
                   always get confirmation. Requires a paranoia level of at
                   least 2.

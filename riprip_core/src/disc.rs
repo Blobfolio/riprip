@@ -234,7 +234,7 @@ impl Disc {
 
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
-			let mut rip = Rip::new(self.toc.accuraterip_id(), track)?;
+			let mut rip = Rip::new(self.toc.accuraterip_id(), track, opts)?;
 			if let Some(dst) = rip.rip(self, opts, progress, killed)? {
 				saved.push(dst);
 			}

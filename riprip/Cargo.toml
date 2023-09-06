@@ -37,10 +37,6 @@ long = "--backwards"
 description = "Rip sectors in reverse order. (Data will still be saved in the *correct* order. Haha.)"
 
 [[package.metadata.bashman.switches]]
-long = "--clean"
-description = "Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch."
-
-[[package.metadata.bashman.switches]]
 short = "-h"
 long = "--help"
 description = "Print help information."
@@ -52,6 +48,10 @@ description = "Disable/ignore C2 error pointer information when ripping, e.g. fo
 [[package.metadata.bashman.switches]]
 long = "--no-cache-bust"
 description = "Do not attempt to reset the optical drive cache between each rip pass."
+
+[[package.metadata.bashman.switches]]
+long = "--no-resume"
+description = "Ignore any previous rip states; start over from scratch."
 
 [[package.metadata.bashman.switches]]
 long = "--no-rip"

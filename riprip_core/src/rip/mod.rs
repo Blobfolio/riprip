@@ -110,7 +110,7 @@ impl Rip {
 	/// This will return errors if the numbers can't be converted between the
 	/// necessary types, cache errors are encountered, or the data cannot be
 	/// initialized.
-	pub(super) fn new(ar: AccurateRip, track: Track) -> Result<Self, RipRipError> {
+	pub(super) fn new(ar: AccurateRip, track: Track, opts: &RipOptions) -> Result<Self, RipRipError> {
 		let idx = track.number();
 		let rng = track.sector_range_normalized();
 
@@ -137,19 +137,21 @@ impl Rip {
 
 		// Do we have an existing copy to resume?
 		let mut state = Vec::new();
-		if let Some(old) = cache_read(state_path(ar, idx))? {
-			// Make sure it makes sense.
-			let old = bincode::deserialize::<Vec<RipSample>>(&old);
-			if old.as_ref().map_or(true, |o| o.len() != expected_len) {
-				Msg::warning(format!("The state data for track #{idx} is corrupt.")).eprint();
-				if ! fyi_msg::confirm!(yes: "Do you want to start over?") {
-					return Err(RipRipError::Killed);
+		if opts.resume() {
+			if let Some(old) = cache_read(state_path(ar, idx))? {
+				// Make sure it makes sense.
+				let old = bincode::deserialize::<Vec<RipSample>>(&old);
+				if old.as_ref().map_or(true, |o| o.len() != expected_len) {
+					Msg::warning(format!("The state data for track #{idx} is corrupt.")).eprint();
+					if ! fyi_msg::confirm!(yes: "Do you want to start over?") {
+						return Err(RipRipError::Killed);
+					}
 				}
-			}
 
-			// Use it if it's good!
-			if let Ok(old) = old {
-				if old.len() == expected_len { state = old; }
+				// Use it if it's good!
+				if let Ok(old) = old {
+					if old.len() == expected_len { state = old; }
+				}
 			}
 		}
 

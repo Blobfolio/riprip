@@ -102,12 +102,6 @@ fn _main() -> Result<(), RipRipError> {
 	// Load CLI arguments, if any.
 	let args = Argue::new(FLAG_HELP | FLAG_VERSION)?;
 
-	// Clean cache first.
-	if args.switch(b"--clean") {
-		riprip_core::cache_clean()?;
-		Msg::info("Cleaned the cache!").eprint();
-	}
-
 	// Connect to the device and summarize the disc.
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
@@ -168,6 +162,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"))
+		.with_resume(! args.switch(b"--no-resume"))
 		.with_trust(! args.switch(b"--no-trust"));
 
 	// Detect offset?
@@ -266,6 +261,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		("Paranoia:", nice_paranoia, 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
 		("Reconfirm:", yesno(opts.reconfirm()), opts.reconfirm()),
+		("Resume:", yesno(opts.resume()), opts.resume()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
@@ -330,8 +326,6 @@ USAGE:
     riprip [FLAGS/OPTIONS]
 
 RIPPING:
-        --clean       Clear the contents of $PWD/_riprip before doing anything
-                      else, to e.g. start over from scratch.
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
@@ -360,6 +354,7 @@ RIPPING:
 WHEN ALL ELSE FAILS:
         --backwards   Rip sectors in reverse order. (Data will still be saved
                       in the *correct* order. Haha.)
+        --no-resume   Ignore any previous rip states; start over from scratch.
         --no-trust    Never trust the drive when it says a sector is good;
                       always get confirmation. Requires a paranoia level of at
                       least 2.
