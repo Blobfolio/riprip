@@ -400,7 +400,8 @@ impl Rip {
 			.eprint();
 
 		// Inject a graphical-ish breakdown too for beauty.
-		print_bar(q_good, q_maybe, q_bad, ar, ctdb);
+		let (s_good, s_maybe) = self.track_sector_quality();
+		print_bar(q_good, q_maybe, q_bad, s_good, s_maybe, ar, ctdb);
 	}
 
 	#[allow(clippy::cast_possible_truncation)]
@@ -549,6 +550,20 @@ impl Rip {
 		}
 
 		(good, maybe, bad)
+	}
+
+	/// # Track Quality by Sector.
+	///
+	/// Return the number of good and refineable sectors.
+	fn track_sector_quality(&self) -> (usize, usize) {
+		let mut good = 0;
+		let mut maybe = 0;
+		for v in self.track_slice().chunks_exact(SAMPLES_PER_SECTOR as usize) {
+			if v.iter().all(RipSample::is_good) { good += 1; }
+			else { maybe += 1; }
+		}
+
+		(good, maybe)
 	}
 
 	/// # Track Range.
@@ -750,9 +765,12 @@ fn print_bar(
 	good: usize,
 	maybe: usize,
 	bad: usize,
+	s_good: usize,
+	s_maybe: usize,
 	ar: Option<(u8, u8)>,
 	ctdb: Option<u16>,
 ) {
+	// Carve up a fixed-length bar into colored divisions.
 	let all = good + maybe + bad;
 	let b_total = QUALITY_BAR.len() as f64;
 	let b_maybe =
@@ -773,14 +791,33 @@ fn print_bar(
 		&QUALITY_BAR[..b_good],
 	);
 
+	// Now come up with some colored labels for that bar.
 	let mut breakdown = Vec::with_capacity(3);
 	if 0 != bad { breakdown.push(format!("\x1b[91m{bad}\x1b[0m")); }
 	if 0 != maybe { breakdown.push(format!("\x1b[93m{maybe}\x1b[0m")); }
 	if 0 != good { breakdown.push(format!("\x1b[92m{good}\x1b[0m")); }
 	if ! breakdown.is_empty() {
-		eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join(" \x1b[2m+\x1b[0m "));
+		// Just print the samples.
+		if 0 == s_maybe || 0 == s_good {
+			eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join(" \x1b[2m+\x1b[0m "));
+		}
+		// Samples and sectors both.
+		else {
+			// Since the sector view combines bad and iffy, we might want to
+			// make it red, yellow, or orange.
+			let color =
+				if 0 == bad { "93" }
+				else if 0 == maybe { "91" }
+				else { "38;5;208" };
+
+			eprintln!(
+				"        {} \x1b[2msamples  /  \x1b[0;{color}m{s_maybe} \x1b[0;2m+\x1b[0;92m {s_good}\x1b[0;2m sectors\x1b[0m",
+				breakdown.join(" \x1b[2m+\x1b[0m "),
+			);
+		}
 	}
 
+	// If we matched AccurateRip and/or CTDB, add those results too.
 	if ar.is_some() || ctdb.is_some() {
 		eprintln!("        \x1b[38;5;4m-----\x1b[0m");
 
@@ -810,6 +847,7 @@ fn print_bar(
 		}
 	}
 
+	// An extra line break for visual clarity.
 	eprintln!();
 }
 
