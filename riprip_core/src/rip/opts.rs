@@ -303,7 +303,7 @@ impl Iterator for RipOptionsTracks {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		while self.pos < 100 {
+		while self.pos < 99 {
 			self.pos += 1;
 			if 0 != self.set & track_idx_to_bits(self.pos) {
 				return Some(self.pos);
