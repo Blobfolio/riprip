@@ -6,20 +6,40 @@ use crate::ReadOffset;
 
 
 
+/// # FLAG: Rip Backwards.
+const FLAG_BACKWARDS: u8 =  0b0000_0001;
+
 /// # FLAG: C2 Support.
-const FLAG_C2: u8 =        0b0001;
+const FLAG_C2: u8 =         0b0000_0010;
+
+/// # FLAG: Cache Bust.
+const FLAG_CACHE_BUST: u8 = 0b0000_0100;
 
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =       0b0010;
+const FLAG_RAW: u8 =        0b0000_1000;
+
+/// # FLAG: Resume previous rip (when applicable).
+const FLAG_RESUME: u8 =     0b0001_0000;
 
 /// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 = 0b0100;
+const FLAG_RECONFIRM: u8 =  0b0010_0000;
 
 /// # FLAG: Trust Good Sectors.
-const FLAG_TRUST: u8 =     0b1000;
+const FLAG_TRUST: u8 =      0b0100_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_TRUST;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME | FLAG_TRUST;
+
+
+
+/// # Helper: Flag-Based Boolean Getters.
+macro_rules! get_flag {
+	($title:literal, $fn:ident, $flag:ident) => (
+		#[must_use]
+		#[doc = concat!("/// # ", $title)]
+		pub const fn $fn(&self) -> bool { $flag == self.flags & $flag }
+	);
+}
 
 
 
@@ -84,6 +104,27 @@ impl RipOptions {
 	}
 
 	#[must_use]
+	/// # With Reverse Ripping.
+	///
+	/// If `true`, data will be read in the reverse order — last sector to
+	/// first sector; if `false`, it will be read the usual way.
+	///
+	/// Note: this only affects the read order. Tracks will not sound any more
+	/// or less demonic than usual.
+	///
+	/// The default is `false`.
+	pub const fn with_backwards(self, v: bool) -> Self {
+		let flags =
+			if v { self.flags | FLAG_BACKWARDS }
+			else { self.flags & ! FLAG_BACKWARDS };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
 	/// # With C2 Error Pointers.
 	///
 	/// Enable or disable the use of C2 error pointer information.
@@ -92,10 +133,32 @@ impl RipOptions {
 	/// but if a drive doesn't support it, it should be disabled.
 	///
 	/// The default is enabled.
-	pub const fn with_c2(self, c2: bool) -> Self {
+	pub const fn with_c2(self, v: bool) -> Self {
 		let flags =
-			if c2 { self.flags | FLAG_C2 }
+			if v { self.flags | FLAG_C2 }
 			else { self.flags & ! FLAG_C2 };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # With Cache Bust.
+	///
+	/// Enable or disable cache busting. (Rip Rip will try to circumvent the
+	/// drive cache by having it first read random data from somewhere else.)
+	///
+	/// Unlike with other CD-rippers, Rip Rip only needs to cache bust once per
+	/// track per pass, not after every single read. Its impact on performance
+	/// and on the drive should almost always be negligible.
+	///
+	/// The default is enabled.
+	pub const fn with_cache_bust(self, v: bool) -> Self {
+		let flags =
+			if v { self.flags | FLAG_CACHE_BUST }
+			else { self.flags & ! FLAG_CACHE_BUST };
 
 		Self {
 			flags,
@@ -129,9 +192,9 @@ impl RipOptions {
 	/// they'll be saved as WAV files instead.
 	///
 	/// The default is `false`.
-	pub const fn with_raw(self, raw: bool) -> Self {
+	pub const fn with_raw(self, v: bool) -> Self {
 		let flags =
-			if raw { self.flags | FLAG_RAW }
+			if v { self.flags | FLAG_RAW }
 			else { self.flags & ! FLAG_RAW };
 
 		Self {
@@ -147,9 +210,9 @@ impl RipOptions {
 	/// "suspicious", requring reconfirmation from subsequent reads.
 	///
 	/// The default is disabled.
-	pub const fn with_reconfirm(self, reconfirm: bool) -> Self {
+	pub const fn with_reconfirm(self, v: bool) -> Self {
 		let flags =
-			if reconfirm { self.flags | FLAG_RECONFIRM }
+			if v { self.flags | FLAG_RECONFIRM }
 			else { self.flags & ! FLAG_RECONFIRM };
 
 		Self {
@@ -176,6 +239,24 @@ impl RipOptions {
 	}
 
 	#[must_use]
+	/// # With Resume.
+	///
+	/// If `true`, rips will pick up from where they left off (if any previous
+	/// state exists). If `false`, they'll start over from scratch.
+	///
+	/// Default `true`.
+	pub const fn with_resume(self, v: bool) -> Self {
+		let flags =
+			if v { self.flags | FLAG_RESUME }
+			else { self.flags & ! FLAG_RESUME };
+
+		Self {
+			flags,
+			..self
+		}
+	}
+
+	#[must_use]
 	/// # With Track.
 	///
 	/// Add a track to the rip list.
@@ -195,9 +276,9 @@ impl RipOptions {
 	/// confirmation before being accepted.
 	///
 	/// The default is `true`.
-	pub const fn with_trust(self, trust: bool) -> Self {
+	pub const fn with_trust(self, v: bool) -> Self {
 		let flags =
-			if trust { self.flags | FLAG_TRUST }
+			if v { self.flags | FLAG_TRUST }
 			else { self.flags & ! FLAG_TRUST };
 
 		Self {
@@ -212,9 +293,13 @@ impl RipOptions {
 	/// # Offset.
 	pub const fn offset(&self) -> ReadOffset { self.offset }
 
-	#[must_use]
-	/// # Use C2 Error Pointers?
-	pub const fn c2(&self) -> bool { FLAG_C2 == self.flags & FLAG_C2 }
+	get_flag!("Rip Backwards?", backwards, FLAG_BACKWARDS);
+	get_flag!("Use C2 Error Pointers?", c2, FLAG_C2);
+	get_flag!("Bust Cache?", cache_bust, FLAG_CACHE_BUST);
+	get_flag!("Save as Raw PCM?", raw, FLAG_RAW);
+	get_flag!("Require Reconfirmation?", reconfirm, FLAG_RECONFIRM);
+	get_flag!("Resume Previous Rips (if applicable)?", resume, FLAG_RESUME);
+	get_flag!("Trust Good Sectors?", trust, FLAG_TRUST);
 
 	#[must_use]
 	/// # Has Tracks?
@@ -231,14 +316,6 @@ impl RipOptions {
 	pub const fn passes(&self) -> u8 { self.refine() + 1 }
 
 	#[must_use]
-	/// # Save as Raw PCM?
-	pub const fn raw(&self) -> bool { FLAG_RAW == self.flags & FLAG_RAW }
-
-	#[must_use]
-	/// # Require Reconfirmation?
-	pub const fn reconfirm(&self) -> bool { FLAG_RECONFIRM == self.flags & FLAG_RECONFIRM }
-
-	#[must_use]
 	/// # Number of Refine Passes.
 	pub const fn refine(&self) -> u8 { self.refine }
 
@@ -252,10 +329,6 @@ impl RipOptions {
 			pos: 0,
 		}
 	}
-
-	#[must_use]
-	/// # Trust Good Sectors?
-	pub const fn trust(&self) -> bool { FLAG_TRUST == self.flags & FLAG_TRUST }
 }
 
 
@@ -274,7 +347,7 @@ impl Iterator for RipOptionsTracks {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		while self.pos < 100 {
+		while self.pos < 99 {
 			self.pos += 1;
 			if 0 != self.set & track_idx_to_bits(self.pos) {
 				return Some(self.pos);
@@ -315,11 +388,46 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn t_rip_options_c2() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_c2(v);
-			assert_eq!(opts.c2(), v);
+	fn t_rip_flags() {
+		// Make sure our flags are unique.
+		let mut all = vec![
+			FLAG_BACKWARDS,
+			FLAG_C2,
+			FLAG_CACHE_BUST,
+			FLAG_RAW,
+			FLAG_RECONFIRM,
+			FLAG_RESUME,
+			FLAG_TRUST,
+		];
+		all.sort_unstable();
+		all.dedup();
+		assert_eq!(all.len(), 7);
+	}
+
+	#[test]
+	fn t_rip_options_flags() {
+		macro_rules! t_flags {
+			($name:literal, $set:ident, $get:ident) => (
+				let mut opts = RipOptions::default();
+				for v in [false, true, false, true] {
+					opts = opts.$set(v);
+					assert_eq!(
+						opts.$get(),
+						v,
+						concat!("Setting ", $name, " to {} failed."),
+						v
+					);
+				}
+			);
 		}
+
+		t_flags!("backwards", with_backwards, backwards);
+		t_flags!("c2", with_c2, c2);
+		t_flags!("cache bust", with_cache_bust, cache_bust);
+		t_flags!("raw", with_raw, raw);
+		t_flags!("reconfirm", with_reconfirm, reconfirm);
+		t_flags!("resume", with_resume, resume);
+		t_flags!("trust", with_trust, trust);
 	}
 
 	#[test]
@@ -346,22 +454,6 @@ mod test {
 		// Max.
 		let opts = RipOptions::default().with_paranoia(64);
 		assert_eq!(opts.paranoia(), 32);
-	}
-
-	#[test]
-	fn t_rip_options_raw() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_raw(v);
-			assert_eq!(opts.raw(), v);
-		}
-	}
-
-	#[test]
-	fn t_rip_options_reconfirm() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_reconfirm(v);
-			assert_eq!(opts.reconfirm(), v);
-		}
 	}
 
 	#[test]
@@ -394,14 +486,6 @@ mod test {
 		// Make sure everything is where we expect it to be.
 		for (real, expected) in tracks.into_iter().zip(1..=99_u8) {
 			assert_eq!(real, expected, "Options track mismatch: {real} instead of {expected}.");
-		}
-	}
-
-	#[test]
-	fn t_rip_options_trust() {
-		for v in [false, true] {
-			let opts = RipOptions::default().with_trust(v);
-			assert_eq!(opts.trust(), v);
 		}
 	}
 }

@@ -45,7 +45,6 @@ mod rip;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
-pub use cache::cache_clean;
 pub(crate) use cache::{
 	cache_path,
 	cache_read,

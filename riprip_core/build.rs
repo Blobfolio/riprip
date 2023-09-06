@@ -186,7 +186,14 @@ fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 				for (b, v) in vendormodel.iter_mut().skip(MAX_VENDOR_LEN).zip(model.bytes()) {
 					*b = v.to_ascii_uppercase();
 				}
-				parsed.insert(vendormodel, offset);
+				if let Some(offset1) = parsed.insert(vendormodel, offset) {
+					if offset1 != offset {
+						println!("cargo:warning=Multiple offsets: [no vendor] / {model} ({offset1}, {offset}).");
+					}
+				}
+			}
+			else {
+				println!("cargo:warning=Invalid: [no vendor] / {model}.");
 			}
 		}
 		// Otherwise it will look like "VENDOR - MODEL".
@@ -207,7 +214,14 @@ fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 				}
 
 				// Add it!
-				parsed.insert(vendormodel, offset);
+				if let Some(offset1) = parsed.insert(vendormodel, offset) {
+					if offset1 != offset {
+						println!("cargo:warning=Multiple offsets: {vendor} / {model} ({offset1}, {offset}).");
+					}
+				}
+			}
+			else {
+				println!("cargo:warning=Invalid: {vendor} / {model}.");
 			}
 		}
 	}

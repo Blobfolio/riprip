@@ -32,11 +32,18 @@ include!(concat!(env!("OUT_DIR"), "/drive-offsets.rs"));
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 /// # Drive Vendor/Model.
 ///
-/// Their sizes are capped at 8 and 16 respectively, so we can store them in
-/// a single fixed buffer more efficiently than separate strings, while also
-/// making it `Copy` and compare-friendly.
+/// Hardware vendor and model identifiers have hard limits of 8 and 16 bytes
+/// respectively. By storing them together in a fixed 24-byte array, we can
+/// make their values `Copy` while also improving the search efficiency for
+/// vendor/model _pairs_ (offsets are keyed by pair).
 ///
-/// The vendor may be unspecified, but the model is always present.
+/// While probably not strictly necessary, values are stored UPPERCASE to force
+/// case insensitivity.
+///
+/// It would be great to normalize whitespace too since that is coded
+/// inconsistently, but it appears some aftermarket drives purposefully add
+/// or remove spaces to differentiate themselves from otherwise identical
+/// hardware. So whatever…
 pub struct DriveVendorModel([u8; 24]);
 
 impl fmt::Display for DriveVendorModel {
@@ -53,7 +60,8 @@ impl fmt::Display for DriveVendorModel {
 impl DriveVendorModel {
 	/// # New!
 	///
-	/// Convert two strings to our compact model.
+	/// Validate and parse separate vendor and model strings into our special
+	/// model.
 	///
 	/// ## Errors
 	///
@@ -62,6 +70,7 @@ impl DriveVendorModel {
 	pub(crate) fn new(mut vendor: &str, mut model: &str) -> Result<Self, RipRipError> {
 		vendor = vendor.trim();
 		model = model.trim();
+
 		if vendor.len() > DRIVE_VENDOR_LEN { Err(RipRipError::DriveVendor) }
 		else if ! (1..=DRIVE_MODEL_LEN).contains(&model.len()) {
 			Err(RipRipError::DriveModel)

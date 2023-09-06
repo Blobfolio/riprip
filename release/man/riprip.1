@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.4" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.5" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.4.
+Rip Rip Hooray! \- Manual page for riprip v0.0.5.
 .SH DESCRIPTION
 An incremental, second\-stage audio CD ripper for advanced data recovery.
 .SS USAGE:
@@ -8,14 +8,20 @@ An incremental, second\-stage audio CD ripper for advanced data recovery.
 riprip [FLAGS] [OPTIONS]
 .SS FLAGS:
 .TP
-\fB\-\-clean\fR
-Clear the contents of $PWD/_riprip before doing anything else, to e.g. start over from scratch.
+\fB\-\-backwards\fR
+Rip sectors in reverse order. (Data will still be saved in the *correct* order. Haha.)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help information.
 .TP
 \fB\-\-no\-c2\fR
 Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)
+.TP
+\fB\-\-no\-cache\-bust\fR
+Do not attempt to reset the optical drive cache between each rip pass.
+.TP
+\fB\-\-no\-resume\fR
+Ignore any previous rip states; start over from scratch.
 .TP
 \fB\-\-no\-rip\fR
 Just print the basic disc information to STDERR and exit.

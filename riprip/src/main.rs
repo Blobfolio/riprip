@@ -67,6 +67,14 @@ use trimothy::TrimSlice;
 
 
 
+/// # A Divider Line.
+///
+/// This is used to encase the drive vendor/model during summary. We'll slice
+/// it to match the length rather than `"-".repeat()` or whatever.
+const DIVIDER: &str = "------------------------";
+
+
+
 /// # Main.
 ///
 /// This lets us bubble up startup errors so they can be pretty-printed.
@@ -94,20 +102,32 @@ fn _main() -> Result<(), RipRipError> {
 	// Load CLI arguments, if any.
 	let args = Argue::new(FLAG_HELP | FLAG_VERSION)?;
 
-	// Clean cache first.
-	if args.switch(b"--clean") {
-		riprip_core::cache_clean()?;
-		Msg::info("Cleaned the cache!").eprint();
-	}
-
 	// Connect to the device and summarize the disc.
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if let Some(vm) = drivevendormodel {
-		let vm = vm.to_string();
+		// Normalize the whitespace in the vendor/model name. That space
+		// matters for matching, but not for display.
+		let mut ws = false;
+		let vm: String = vm.to_string()
+			.chars()
+			.filter_map(|c|
+				if c.is_whitespace() {
+					if ws { None }
+					else {
+						ws = true;
+						Some(' ')
+					}
+				}
+				else {
+					ws = false;
+					Some(c)
+				}
+			)
+			.collect();
 		eprintln!("\x1b[1;36m{vm}\x1b[0m");
-		eprintln!("\x1b[2;36m{}\x1b[0m\n", "-".repeat(vm.len()));
+		eprintln!("\x1b[2;36m{}\x1b[0m\n", &DIVIDER[..vm.len()]);
 	}
 	eprintln!("{disc}");
 
@@ -137,9 +157,12 @@ fn _main() -> Result<(), RipRipError> {
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
+		.with_backwards(args.switch(b"--backwards"))
 		.with_c2(! args.switch(b"--no-c2"))
+		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reconfirm(args.switch(b"--reconfirm"))
+		.with_resume(! args.switch(b"--no-resume"))
 		.with_trust(! args.switch(b"--no-trust"));
 
 	// Detect offset?
@@ -207,12 +230,19 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 }
 
 /// # Rip Summary.
+///
+/// Summarize and confirm the chosen settings before proceeding.
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
-	let tracks = opts.tracks().map(NiceU8::from).collect::<Vec<NiceU8>>();
-	let nice_tracks = tracks.oxford_and();
-	let nice_c2 = Cow::Borrowed(if opts.c2() { "Yes" } else { "No" });
+	let nice_tracks = Cow::Owned(
+		opts.tracks()
+			.map(NiceU8::from)
+			.collect::<Vec<NiceU8>>()
+			.oxford_and()
+			.replace(',', "\x1b[2m,\x1b[0;1m")
+			.replace(" and ", "\x1b[2m and \x1b[0;1m")
+	);
 	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_paranoia = Cow::Owned(
@@ -220,25 +250,28 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		else { format!("{} (No Trust Mode)", opts.paranoia()) }
 	);
 	let nice_passes = NiceU8::from(opts.passes());
-	let nice_reconfirm = Cow::Borrowed(if opts.reconfirm() { "Yes" } else { "No" });
 
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("C2:", nice_c2, opts.c2()),
+		("Backwards:", yesno(opts.backwards()), opts.backwards()),
+		("C2:", yesno(opts.c2()), opts.c2()),
+		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
 		("Format:", nice_format, true),
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Paranoia:", nice_paranoia, 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
-		("Reconfirm:", nice_reconfirm, opts.reconfirm()),
+		("Reconfirm:", yesno(opts.reconfirm()), opts.reconfirm()),
+		("Resume:", yesno(opts.resume()), opts.resume()),
 	];
+	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:10} \x1b[1m{v}\x1b[0m");
+			eprintln!("  {k:max_label$} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:10} {v}\x1b[0m");
+			eprintln!("  \x1b[2m{k:max_label$} {v}\x1b[0m");
 		}
 	}
 
@@ -262,12 +295,19 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 	);
 }
 
+#[inline]
+/// # Bool to Yes/No Cow.
+const fn yesno(v: bool) -> Cow<'static, str> {
+	if v { Cow::Borrowed("Yes") }
+	else { Cow::Borrowed("No") }
+}
+
 #[cold]
 /// # Print Help.
 fn helper() {
 	println!(concat!(
 		r"
- ╚⊙ ⊙╝
+  ╚⊙ ⊙╝
 ╚═(███)═╝
  ╚═(███)═╝
   ╚═(███)═╝
@@ -283,26 +323,15 @@ fn helper() {
      ╚═(█)═╝
 
 USAGE:
-    riprip [FLAGS] [OPTIONS]
+    riprip [FLAGS/OPTIONS]
 
-FLAGS:
-        --clean       Clear the contents of $PWD/_riprip before doing anything
-                      else, to e.g. start over from scratch.
-    -h, --help        Print help information and exit.
+RIPPING:
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
-        --no-rip      Just print the basic disc information to STDERR and exit.
-        --no-trust    Never trust the drive when it says a sector is good;
-                      always get confirmation. Requires a paranoia level of at
-                      least 2.
-        --raw         Save ripped tracks in raw PCM format (instead of WAV).
-        --reconfirm   Reset the status of all previously-accepted samples to
-                      require reconfirmation. Requires a paranoia level of at
-                      least 2.
-    -V, --version     Print version information and exit.
-
-OPTIONS:
+        --no-cache-bust
+                      Do not attempt to reset the optical drive cache between
+                      each rip pass.
         --paranoia <NUM>
                       When a sample or its neighbors have a C2 or read error,
                       treat all samples in the region as supicious until the
@@ -311,6 +340,7 @@ OPTIONS:
                       When combined with --no-trust, *all* samples are subject
                       to confirmation regardless of status.
                       [default: 3; range: 1..=32]
+        --raw         Save ripped tracks in raw PCM format (instead of WAV).
         --refine <NUM>
                       Execute up to <NUM> additional rip passes for each track
                       while any samples remain unread/unconfirmed.
@@ -321,8 +351,18 @@ OPTIONS:
                       specified as an inclusive range (2-3), and/or given their
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
 
-DRIVE OPTIONS:
+WHEN ALL ELSE FAILS:
+        --backwards   Rip sectors in reverse order. (Data will still be saved
+                      in the *correct* order. Haha.)
+        --no-resume   Ignore any previous rip states; start over from scratch.
+        --no-trust    Never trust the drive when it says a sector is good;
+                      always get confirmation. Requires a paranoia level of at
+                      least 2.
+        --reconfirm   Reset the status of all previously-accepted samples to
+                      require reconfirmation. Requires a paranoia level of at
+                      least 2.
 
+DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly
     provided.
 
@@ -331,6 +371,16 @@ DRIVE OPTIONS:
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive. [range: ±5880]
+
+MISCELLANEOUS:
+    -h, --help        Print help information and exit.
+    -V, --version     Print version information and exit.
+        --no-rip      Just print the basic disc information to STDERR and exit.
+
+EARLY EXIT:
+    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    it early. Your progress will still be saved, there just won't be as much of
+    it. Haha.
 "
 	));
 }

@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.0.4
-    Generated: 2023-09-06 01:49:08 UTC
+    Version:   0.0.5
+    Generated: 2023-09-06 21:53:10 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -19,7 +19,7 @@
 | [ctrlc](https://github.com/Detegr/rust-ctrlc.git) | 3.4.1 | [Antti Keränen](mailto:detegr@gmail.com) | Apache-2.0 or MIT |
 | [dactyl](https://github.com/Blobfolio/dactyl) | 0.5.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [digest](https://github.com/RustCrypto/traits) | 0.10.7 | RustCrypto Developers | Apache-2.0 or MIT |
-| [faster-hex](https://github.com/NervosFoundation/faster-hex) | 0.8.0 | [zhangsoledad](mailto:787953403@qq.com) | MIT |
+| [faster-hex](https://github.com/NervosFoundation/faster-hex) | 0.8.1 | [zhangsoledad](mailto:787953403@qq.com) | MIT |
 | [fastrand](https://github.com/smol-rs/fastrand) | 2.0.0 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 or MIT |
 | [flate2](https://github.com/rust-lang/flate2-rs) | 1.0.27 | [Alex Crichton](mailto:alex@alexcrichton.com) and [Josh Triplett](mailto:josh@joshtriplett.org) | Apache-2.0 or MIT |
 | [form_urlencoded](https://github.com/servo/rust-url) | 1.2.0 | The rust-url developers | Apache-2.0 or MIT |
@@ -38,7 +38,7 @@
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.66 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [ring](https://github.com/briansmith/ring) | 0.16.20 | [Brian Smith](mailto:brian@briansmith.org) |  |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.4 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.5 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustls](https://github.com/rustls/rustls) | 0.21.7 |  | Apache-2.0, ISC, or MIT |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.100.2 |  |  |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.101.4 |  | ISC |

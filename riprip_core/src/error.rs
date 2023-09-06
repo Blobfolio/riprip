@@ -33,9 +33,6 @@ pub enum RipRipError {
 	/// # CD read operation terminal failure.
 	CdReadUnsupported,
 
-	/// # File delete.
-	Delete(String),
-
 	/// # Invalid device.
 	Device(String),
 
@@ -131,7 +128,6 @@ impl fmt::Display for RipRipError {
 			Self::CdReadBuffer => f.write_str("BUG: Insufficient CD read buffer."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
-			Self::Delete(ref s) => write!(f, "Unable to delete {s}."),
 			Self::Device(ref s) => write!(f, "Invalid device path {s}."),
 			Self::DeviceOpen(ref s) =>
 				if let Some(s) = s { write!(f, "Unable to open connection with {s}.") }
