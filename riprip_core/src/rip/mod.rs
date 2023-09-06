@@ -356,7 +356,7 @@ impl Rip {
 		);
 
 		// Use AccurateRip/CTDB as a proxy for our own confirmation,
-		// upgrading the maybes if there are any.
+		// upgrading not-good to good if the matches are high enough.
 		if u16::from(opts.paranoia()) <= verified {
 			q_good += q_maybe + q_bad;
 			q_maybe = 0;
