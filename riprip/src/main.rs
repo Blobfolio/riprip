@@ -67,6 +67,14 @@ use trimothy::TrimSlice;
 
 
 
+/// # A Divider Line.
+///
+/// This is used to encase the drive vendor/model during summary. We'll slice
+/// it to match the length rather than `"-".repeat()` or whatever.
+const DIVIDER: &str = "------------------------";
+
+
+
 /// # Main.
 ///
 /// This lets us bubble up startup errors so they can be pretty-printed.
@@ -105,9 +113,27 @@ fn _main() -> Result<(), RipRipError> {
 	let disc = Disc::new(dev)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if let Some(vm) = drivevendormodel {
-		let vm = vm.to_string();
+		// Normalize the whitespace in the vendor/model name. That space
+		// matters for matching, but not for display.
+		let mut ws = false;
+		let vm: String = vm.to_string()
+			.chars()
+			.filter_map(|c|
+				if c.is_whitespace() {
+					if ws { None }
+					else {
+						ws = true;
+						Some(' ')
+					}
+				}
+				else {
+					ws = false;
+					Some(c)
+				}
+			)
+			.collect();
 		eprintln!("\x1b[1;36m{vm}\x1b[0m");
-		eprintln!("\x1b[2;36m{}\x1b[0m\n", "-".repeat(vm.len()));
+		eprintln!("\x1b[2;36m{}\x1b[0m\n", &DIVIDER[..vm.len()]);
 	}
 	eprintln!("{disc}");
 
