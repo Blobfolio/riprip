@@ -267,7 +267,7 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 fn helper() {
 	println!(concat!(
 		r"
- ╚⊙ ⊙╝
+  ╚⊙ ⊙╝
 ╚═(███)═╝
  ╚═(███)═╝
   ╚═(███)═╝
@@ -322,7 +322,6 @@ OPTIONS:
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
 
 DRIVE OPTIONS:
-
     These options are auto-detected and do not usually need to be explicitly
     provided.
 
@@ -331,6 +330,11 @@ DRIVE OPTIONS:
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive. [range: ±5880]
+
+EARLY EXIT:
+    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m", r" to stop
+    it early. Your progress will be still be saved, there just won't be as much
+    of it. ;)
 "
 	));
 }

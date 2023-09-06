@@ -348,7 +348,7 @@ impl Rip {
 		// If the data is decent, see if the track matches third-party
 		// checksum databases (for added assurance).
 		let (ar, ctdb) =
-			if q_bad < 100 { self.verify(disc.toc()) }
+			if q_bad < SAMPLES_PER_SECTOR as usize { self.verify(disc.toc()) }
 			else { (None, None) };
 		let verified = u16::max(
 			ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
@@ -388,7 +388,7 @@ impl Rip {
 		}
 		else {
 			Msg::custom("Ripped", 10, &format!(
-				"Track #{} has been accurately ripped!",
+				"Track #{} has been \x1b[1maccurately\x1b[0m ripped!",
 				self.track.number(),
 			))
 		}
