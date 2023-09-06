@@ -4,12 +4,14 @@ _basher___riprip() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-	[[ " ${COMP_LINE} " =~ " --clean " ]] || opts+=("--clean")
+	[[ " ${COMP_LINE} " =~ " --backwards " ]] || opts+=("--backwards")
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
 	fi
 	[[ " ${COMP_LINE} " =~ " --no-c2 " ]] || opts+=("--no-c2")
+	[[ " ${COMP_LINE} " =~ " --no-cache-bust " ]] || opts+=("--no-cache-bust")
+	[[ " ${COMP_LINE} " =~ " --no-resume " ]] || opts+=("--no-resume")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-trust " ]] || opts+=("--no-trust")
 	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
