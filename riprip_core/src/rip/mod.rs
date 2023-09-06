@@ -11,6 +11,7 @@ use cdtoc::{
 };
 use crate::{
 	BYTES_PER_SAMPLE,
+	BYTES_PER_SECTOR,
 	cache_read,
 	cache_write,
 	CD_DATA_C2_SIZE,
@@ -86,6 +87,7 @@ pub(super) struct Rip {
 
 impl Rip {
 	#[allow(clippy::cast_possible_wrap)] // These are known constants; they fit.
+	#[allow(clippy::cast_sign_loss)] // Same.
 	/// # New.
 	///
 	/// Prepare — but do not execte — a new rip for the track. The AccurateRip
@@ -124,6 +126,11 @@ impl Rip {
 		let expected_len = (rip_lsn.end - rip_lsn.start).checked_mul(SAMPLES_PER_SECTOR as i32)
 			.and_then(|v| u32::try_from(v).ok())
 			.and_then(|v| usize::try_from(v).ok())
+			.ok_or(RipRipError::RipOverflow(idx))?;
+
+		// Also make sure the equivalent file size of the track can be
+		// represented with usize.
+		((track_lsn.end - track_lsn.start) as usize).checked_mul(BYTES_PER_SECTOR as usize)
 			.ok_or(RipRipError::RipOverflow(idx))?;
 
 		// Do we have an existing copy to resume?
@@ -223,7 +230,7 @@ impl Rip {
 		// Lots of variables!
 		let offset = opts.offset();
 		let resume = u8::from(self.state.iter().any(RipSample::is_good));
-		let (min_sector, max_sector) = self.rip_distance(offset);
+		let (rng_start, rng_end) = self.rip_distance(offset);
 		let state_path = state_path(self.ar, self.track.number());
 		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
 		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
@@ -231,7 +238,7 @@ impl Rip {
 		// Onto the pass(es)!
 		for pass in 0..opts.passes() {
 			// Reset progress bar.
-			let _res = progress.reset((max_sector - min_sector) as u32); // This won't fail.
+			let _res = progress.reset((rng_end - rng_start) as u32); // This won't fail.
 
 			// Try to bust the cache. We can't know when this is or isn't
 			// necessary, so should run it on each pass just in case.
@@ -252,7 +259,7 @@ impl Rip {
 			)));
 
 			// Update the data, one sector at a time.
-			for k in ReadIter::new(min_sector, max_sector, opts.backwards()) {
+			for k in ReadIter::new(rng_start, rng_end, opts.backwards()) {
 				// Cut out the offset-adjusted portion of the state
 				// corresponding to the sector being read. (We'll likely write
 				// data a little earlier or later than we read it.)
@@ -507,23 +514,23 @@ impl Rip {
 	/// sector padding we're keeping ensures we never throw away read data, but
 	/// we can't necessarily fill them all the way to the edges either.
 	///
-	/// This returns the minimum and maximum sector distance from `rip_lsn.0`
-	/// that can be both read and written, given the offset.
+	/// This returns the range we can stray from `rip_lsn.0` while being able
+	/// to both read _and_ write, given the offset.
 	///
 	/// Regardless of how much is skipped, the complete track data in the
 	/// middle will always get covered.
 	fn rip_distance(&self, offset: ReadOffset) -> (usize, usize) {
-		let mut min_sector: usize = 0;
-		let mut max_sector: usize = self.state.len() / SAMPLES_PER_SECTOR as usize;
+		let mut rng_start: usize = 0;
+		let mut rng_end: usize = self.state.len() / SAMPLES_PER_SECTOR as usize;
 		let sectors_abs = offset.sectors_abs() as usize;
 
 		// Negative offsets require the data be pushed forward to "start"
 		// at the right place.
-		if offset.is_negative() { max_sector -= sectors_abs; }
+		if offset.is_negative() { rng_end -= sectors_abs; }
 		// Positive offsets require the data be pulled backward instead.
-		else { min_sector += sectors_abs; }
+		else { rng_start += sectors_abs; }
 
-		(min_sector, max_sector)
+		(rng_start, rng_end)
 	}
 
 	/// # Track All Good?
@@ -538,32 +545,27 @@ impl Rip {
 	/// Return the number of good, maybe, and bad samples within the track
 	/// range.
 	fn track_quality(&self) -> (usize, usize, usize) {
-		let mut good = 0;
-		let mut maybe = 0;
-		let mut bad = 0;
-		for v in self.track_slice() {
-			match v {
-				RipSample::Good(_) => { good += 1; },
-				RipSample::Iffy(_) => { maybe += 1; },
-				_ => { bad += 1; },
-			}
-		}
-
-		(good, maybe, bad)
+		self.track_slice()
+			.iter()
+			.fold((0, 0, 0), |acc, v|
+				match v {
+					RipSample::Good(_) => (acc.0 + 1, acc.1, acc.2),
+					RipSample::Iffy(_) => (acc.0, acc.1 + 1, acc.2),
+					_ => (acc.0, acc.1, acc.2 + 1),
+				}
+			)
 	}
 
 	/// # Track Quality by Sector.
 	///
 	/// Return the number of good and refineable sectors.
 	fn track_sector_quality(&self) -> (usize, usize) {
-		let mut good = 0;
-		let mut maybe = 0;
-		for v in self.track_slice().chunks_exact(SAMPLES_PER_SECTOR as usize) {
-			if v.iter().all(RipSample::is_good) { good += 1; }
-			else { maybe += 1; }
-		}
-
-		(good, maybe)
+		self.track_slice()
+			.chunks_exact(SAMPLES_PER_SECTOR as usize)
+			.fold((0, 0), |acc, v|
+				if v.iter().all(RipSample::is_good) { (acc.0 + 1, acc.1) }
+				else { (acc.0, acc.1 + 1) }
+			)
 	}
 
 	/// # Track Range.
@@ -718,9 +720,9 @@ impl ReadIter {
 	/// # New Instance.
 	///
 	/// Generate the right kind of iterator based on the value of `backwards`.
-	fn new(min_sector: usize, max_sector: usize, backwards: bool) -> Self {
-		if backwards { Self::Backward((min_sector..max_sector).rev()) }
-		else { Self::Forward(min_sector..max_sector) }
+	fn new(start: usize, end: usize, backwards: bool) -> Self {
+		if backwards { Self::Backward((start..end).rev()) }
+		else { Self::Forward(start..end) }
 	}
 }
 
