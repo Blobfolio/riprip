@@ -330,8 +330,6 @@ USAGE:
     riprip [FLAGS/OPTIONS]
 
 RIPPING:
-        --backwards   Rip sectors in reverse order. (Data will still be saved
-                      in the *correct* order. Haha.)
         --clean       Clear the contents of $PWD/_riprip before doing anything
                       else, to e.g. start over from scratch.
         --no-c2       Disable/ignore C2 error pointer information when ripping,
@@ -340,9 +338,6 @@ RIPPING:
         --no-cache-bust
                       Do not attempt to reset the optical drive cache between
                       each rip pass.
-        --no-trust    Never trust the drive when it says a sector is good;
-                      always get confirmation. Requires a paranoia level of at
-                      least 2.
         --paranoia <NUM>
                       When a sample or its neighbors have a C2 or read error,
                       treat all samples in the region as supicious until the
@@ -352,9 +347,6 @@ RIPPING:
                       to confirmation regardless of status.
                       [default: 3; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
-        --reconfirm   Reset the status of all previously-accepted samples to
-                      require reconfirmation. Requires a paranoia level of at
-                      least 2.
         --refine <NUM>
                       Execute up to <NUM> additional rip passes for each track
                       while any samples remain unread/unconfirmed.
@@ -364,6 +356,16 @@ RIPPING:
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
                       own -t/--track (-t 2 -t 3). [default: the whole disc]
+
+WHEN ALL ELSE FAILS:
+        --backwards   Rip sectors in reverse order. (Data will still be saved
+                      in the *correct* order. Haha.)
+        --no-trust    Never trust the drive when it says a sector is good;
+                      always get confirmation. Requires a paranoia level of at
+                      least 2.
+        --reconfirm   Reset the status of all previously-accepted samples to
+                      require reconfirmation. Requires a paranoia level of at
+                      least 2.
 
 DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly
