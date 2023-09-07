@@ -181,11 +181,7 @@ impl Rip {
 		// to meet a lower paranoia requirement.
 		let paranoia = opts.paranoia();
 		for sample in &mut self.state {
-			if let RipSample::Iffy(set) = sample {
-				if paranoia <= set[0].1 {
-					*sample = RipSample::Good(set[0].0);
-				}
-			}
+			sample.maybe_confirm(paranoia);
 		}
 
 		// If we're reconfirming, we might need to "downgrade" previous good
@@ -722,6 +718,27 @@ impl RipSample {
 	/// # Is Good?
 	const fn is_good(&self) -> bool { matches!(self, Self::Good(_)) }
 
+	#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+	/// # Maybe Confirm.
+	///
+	/// Upgrade an iffy sample to a confirmed one if its count is at or above
+	/// the paranoia threshold, and represents two thirds (rounded up) of all
+	/// entries.
+	fn maybe_confirm(&mut self, paranoia: u8) {
+		if let Self::Iffy(set) = self {
+			if paranoia <= set[0].1 {
+				let total = set.iter().fold(0_u8, |acc, v| acc.saturating_add(v.1));
+				let majority = u8::min(
+					170,
+					(f64::from(total) * 2.0 / 3.0).ceil() as u8,
+				);
+				if majority <= set[0].1 {
+					*self = Self::Good(set[0].0);
+				}
+			}
+		}
+	}
+
 	/// # Update.
 	///
 	/// Potentially update an entry.
@@ -767,11 +784,6 @@ impl RipSample {
 					if new.eq(old) {
 						*count += 1;
 						found = true;
-						if *count >= paranoia {
-							*self = Self::Good(new);
-							return;
-						}
-						break;
 					}
 				}
 
@@ -780,6 +792,9 @@ impl RipSample {
 
 				// Sort by popularity, most to least.
 				set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+
+				// Maybe graduate.
+				self.maybe_confirm(paranoia);
 			},
 		}
 	}
@@ -923,4 +938,43 @@ const fn rip_title(pass: u8) -> &'static str {
 /// Return the relative path to use for the track's state file.
 fn state_path(ar: AccurateRip, idx: u8) -> String {
 	format!("state/{ar}__{idx:02}.state")
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_maybe_confirm() {
+		let mut iffy = RipSample::Iffy(vec![
+			([0, 0, 0, 1], 1)
+		]);
+
+		// Should not upgrade.
+		iffy.maybe_confirm(3);
+		assert!(matches!(iffy, RipSample::Iffy(_)));
+
+		// Should upgrade.
+		iffy.maybe_confirm(1);
+		assert!(iffy.is_good());
+
+		iffy = RipSample::Iffy(vec![
+			([0, 0, 0, 1], 1),
+			(NULL_SAMPLE, 1),
+		]);
+
+		// Should not upgrade (super majority).
+		iffy.maybe_confirm(1);
+		assert!(matches!(iffy, RipSample::Iffy(_)));
+
+		// Now it should.
+		iffy = RipSample::Iffy(vec![
+			([0, 0, 0, 1], 2),
+			(NULL_SAMPLE, 1),
+		]);
+		iffy.maybe_confirm(1);
+		assert!(iffy.is_good());
+	}
 }

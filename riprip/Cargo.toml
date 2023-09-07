@@ -90,7 +90,7 @@ description = "The AccurateRip, et al, sample read offset to apply to data retri
 [[package.metadata.bashman.options]]
 long = "--paranoia"
 label = "<NUM>"
-description = "When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until the drive returns the same value <NUM> times, or AccurateRip or CTDB matches with a confidence of <NUM> are found. When combined with --no-trust, *all* samples are subject to confirmation regardless of status. [default: 3; range: 1..=32]"
+description = "When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until either: A) the drive returns the same (allegedly good) value <NUM> times *and* that value has a super majority on any other (allegedly good) values in that same spot. B) AccurateRip or CTDB matches with a confidence of at least <NUM> are found for the track. When combined with --no-trust, *all* samples are subject to confirmation regardless of supposed status. [default: 3; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
 long = "--refine"

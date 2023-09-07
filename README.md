@@ -41,17 +41,7 @@ Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck ab
 * Track ISRCs (if present)
 * UPC/EAN (if present)
 
-That summary can be produced on its own using the `--no-rip` flag.
-
-
-
-## Limitations and Workarounds
-
-Rip Rip Hooray!, like any other CD-ripping tool, ultimately depends on the optical drive to correctly decode and deliver the requested data, or at least be accurate about the inaccuracies.
-
-When a drive can't do that for whatever reason, the resulting rip will be incomplete or inaccurate.
-
-The performance of Rip Rip Hooray! is similarly bound to that of the drive. It will always be magnitudes faster than `EAC`, _et al_, under the same conditions, but if the drive is struggling to make heads or tails of the disc, it might take a while to complete the rip.
+That summary can be produced on its own using the `--no-rip` flag, if that's all you're interested in.
 
 
 
@@ -74,11 +64,15 @@ riprip [FLAGS/OPTIONS]
                   each rip pass.
     --paranoia <NUM>
                   When a sample or its neighbors have a C2 or read error,
-                  treat all samples in the region as supicious until the
-                  drive returns the same value <NUM> times, or AccurateRip
-                  or CTDB matches with a confidence of <NUM> are found.
+                  treat all samples in the region as supicious until
+                  either:
+                    A) the drive returns the same (allegedly good) value
+                       <NUM> times *and* that value has a super majority on
+                       any other (allegedly good) values in that same spot.
+                    B) AccurateRip or CTDB matches with a confidence of at
+                       least <NUM> are found for the track.
                   When combined with --no-trust, *all* samples are subject
-                  to confirmation regardless of status.
+                  to confirmation regardless of supposed status.
                   [default: 3; range: 1..=32]
     --raw         Save ripped tracks in raw PCM format (instead of WAV).
     --refine <NUM>
