@@ -107,27 +107,14 @@ fn _main() -> Result<(), RipRipError> {
 	let disc = Disc::new(dev)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if let Some(vm) = drivevendormodel {
-		// Normalize the whitespace in the vendor/model name. That space
-		// matters for matching, but not for display.
-		let mut ws = false;
-		let vm: String = vm.to_string()
-			.chars()
-			.filter_map(|c|
-				if c.is_whitespace() {
-					if ws { None }
-					else {
-						ws = true;
-						Some(' ')
-					}
-				}
-				else {
-					ws = false;
-					Some(c)
-				}
-			)
-			.collect();
-		eprintln!("\x1b[1;36m{vm}\x1b[0m");
-		eprintln!("\x1b[2;36m{}\x1b[0m\n", &DIVIDER[..vm.len()]);
+		let vm = vm.to_string();
+		if ! vm.is_empty() {
+			eprintln!(
+				"\x1b[2;36m{}\n\x1b[0;1;36m{vm}\n\x1b[0;2;36m{}\n\x1b[0m",
+				&DIVIDER[..vm.len()],
+				&DIVIDER[..vm.len()],
+			);
+		}
 	}
 	eprintln!("{disc}");
 

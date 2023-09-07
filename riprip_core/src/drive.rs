@@ -34,26 +34,36 @@ include!(concat!(env!("OUT_DIR"), "/drive-offsets.rs"));
 ///
 /// Hardware vendor and model identifiers have hard limits of 8 and 16 bytes
 /// respectively. By storing them together in a fixed 24-byte array, we can
-/// make their values `Copy` while also improving the search efficiency for
-/// vendor/model _pairs_ (offsets are keyed by pair).
+/// make their values `Copy` while also improving search-by-pair efficiency.
 ///
 /// While probably not strictly necessary, values are stored UPPERCASE to force
-/// case insensitivity.
+/// case insensitivity. They're also required to be ASCII.
 ///
-/// It would be great to normalize whitespace too since that is coded
-/// inconsistently, but it appears some aftermarket drives purposefully add
-/// or remove spaces to differentiate themselves from otherwise identical
-/// hardware. So whatever…
+/// Whitespace cannot be normalized at the point of storage because some pairs
+/// differentiate themselves with spacing alone, but the `Display` impl cleans
+/// up that nonsense.
 pub struct DriveVendorModel([u8; 24]);
 
 impl fmt::Display for DriveVendorModel {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let vendor = self.vendor();
-		if ! vendor.is_empty() {
-			f.write_str(vendor)?;
-			f.write_str(": ")?;
+		let model = self.model();
+
+		// Model by itself.
+		if vendor.is_empty() {
+			for c in NormalizeWhitespace::new(model) { write!(f, "{c}")?; }
 		}
-		f.write_str(self.model())
+		// Vendor: Model.
+		else {
+			for c in NormalizeWhitespace::new(vendor)
+				.chain([':', ' '])
+				.chain(NormalizeWhitespace::new(model))
+			{
+				write!(f, "{c}")?;
+			}
+		}
+
+		Ok(())
 	}
 }
 
@@ -220,6 +230,49 @@ impl ReadOffset {
 
 
 
+/// # Normalize Whitespace.
+///
+/// This `char` iterator replaces all inner contiguous whitespace with a single
+/// horizontal space.
+///
+/// It is only used by [`DriveVendorModel::to_string`], but feels worth the
+/// effort as the spacing used by those pairs can be really awkward. Haha.
+struct NormalizeWhitespace<'a> {
+	iter: std::str::Chars<'a>,
+	ws: bool,
+}
+
+impl<'a> Iterator for NormalizeWhitespace<'a> {
+	type Item = char;
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let next = self.iter.next()?;
+			if next.is_whitespace() {
+				if ! self.ws {
+					self.ws = true;
+					return Some(' ');
+				}
+			}
+			else {
+				self.ws = false;
+				return Some(next);
+			}
+		}
+	}
+}
+
+impl<'a> NormalizeWhitespace<'a> {
+	/// # New.
+	fn new(src: &'a str) -> Self {
+		Self {
+			iter: src.trim().chars(),
+			ws: false,
+		}
+	}
+}
+
+
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -242,7 +295,7 @@ mod test {
 			.expect("Unable to create DriveVendorModel.");
 		assert_eq!(vm.vendor(), "PIONEER");
 		assert_eq!(vm.model(), "BD-RW   BDR-XD05");
-		assert_eq!(vm.to_string(), "PIONEER: BD-RW   BDR-XD05");
+		assert_eq!(vm.to_string(), "PIONEER: BD-RW BDR-XD05");
 		assert_eq!(vm.detect_offset(), Some(ReadOffset(667)));
 	}
 
@@ -262,6 +315,20 @@ mod test {
 			assert_eq!(offset.samples_abs(), samples_abs);
 			assert_eq!(offset.sectors(), sectors);
 			assert_eq!(offset.sectors_abs(), sectors_abs);
+		}
+	}
+
+	#[test]
+	fn t_normalize_whitespace() {
+		for (raw, expected) in [
+			("", ""),
+			(" ", ""),
+			(" FOO \nBAR  ", "FOO BAR"),
+		] {
+			assert_eq!(
+				NormalizeWhitespace::new(raw).collect::<String>(),
+				expected,
+			);
 		}
 	}
 }
