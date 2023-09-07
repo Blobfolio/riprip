@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.5" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.6" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.5.
+Rip Rip Hooray! \- Manual page for riprip v0.0.6.
 .SH DESCRIPTION
 An incremental, second\-stage audio CD ripper for advanced data recovery.
 .SS USAGE:
@@ -46,7 +46,7 @@ The device path for the optical drive containing the CD of interest, like /dev/c
 The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]
 .TP
 \fB\-\-paranoia\fR <NUM>
-When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until the drive returns the same value <NUM> times, or AccurateRip or CTDB matches with a confidence of <NUM> are found. When combined with \-\-no\-trust, *all* samples are subject to confirmation regardless of status. [default: 3; range: 1..=32]
+When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until either: A) the drive returns the same (allegedly good) value <NUM> times *and* that value has a super majority on any other (allegedly good) values in that same spot. B) AccurateRip or CTDB matches with a confidence of at least <NUM> are found for the track. When combined with \-\-no\-trust, *all* samples are subject to confirmation regardless of supposed status. [default: 3; range: 1..=32]
 .TP
 \fB\-\-refine\fR <NUM>
 Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]
