@@ -391,32 +391,36 @@ impl Rip {
 					self.track.number(),
 				))
 			}
-			// Without maybes, our only estimate is good/total.
-			else if q.maybe == 0 {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} is \x1b[2m(roughly)\x1b[0m {}% complete.",
-					self.track.number(),
-					NiceFloat::from(q.percent_good() * 100.0).compact_str(),
-				))
-			}
-			// Without bads, we're somewhere between good/total and 100%.
-			else if q.bad == 0 {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} is \x1b[2m(probably at least)\x1b[0m {}% complete.",
-					self.track.number(),
-					NiceFloat::from(q.percent_good() * 100.0).compact_str(),
-				))
-			}
-			// With goods and maybes, we're probably somewhere between the two.
 			else {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
-					self.track.number(),
-					NiceFloat::from(q.percent_good() * 100.0).precise_str(3),
-					NiceFloat::from(
-						dactyl::int_div_float(q.good + q.maybe, q.total()
-					).unwrap_or(0.0) * 100.0).precise_str(3),
-				))
+				let p1 = NiceFloat::from(q.percent_good() * 100.0);
+				let p2 = NiceFloat::from(dactyl::int_div_float(q.good + q.maybe, q.total())
+					.unwrap_or(0.0) * 100.0);
+
+				// Without maybes, our only estimate is good/total.
+				if q.maybe == 0 || p1.precise_str(3) == p2.precise_str(3) {
+					Msg::custom("Ripped", 10, &format!(
+						"Track #{} is \x1b[2m(roughly)\x1b[0m {}% complete.",
+						self.track.number(),
+						p1.compact_str(),
+					))
+				}
+				// Without bads, we're somewhere between good/total and 100%.
+				else if q.bad == 0 {
+					Msg::custom("Ripped", 10, &format!(
+						"Track #{} is \x1b[2m(probably at least)\x1b[0m {}% complete.",
+						self.track.number(),
+						p1.compact_str(),
+					))
+				}
+				// With goods and maybes, we're probably somewhere between the two.
+				else {
+					Msg::custom("Ripped", 10, &format!(
+						"Track #{} is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
+						self.track.number(),
+						p1.precise_str(3),
+						p2.precise_str(3),
+					))
+				}
 			}
 		}
 		// If AccurateRip and/or CTDB matched, we're good to go!
