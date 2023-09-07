@@ -106,17 +106,22 @@ fn _main() -> Result<(), RipRipError> {
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
 	let drivevendormodel = disc.drive_vendor_model();
-	if let Some(vm) = drivevendormodel {
-		let vm = vm.to_string();
-		if ! vm.is_empty() {
-			eprintln!(
-				"\x1b[2;36m{}\n\x1b[0;1;36m{vm}\n\x1b[0;2;36m{}\n\x1b[0m",
-				&DIVIDER[..vm.len()],
-				&DIVIDER[..vm.len()],
-			);
+
+	// Quiet?
+	if ! args.switch(b"--no-summary") {
+		if let Some(vm) = drivevendormodel {
+			let vm = vm.to_string();
+			if ! vm.is_empty() {
+				eprintln!(
+					"\x1b[2;36m{}\n\x1b[0;1;36m{vm}\n\x1b[0;2;36m{}\n\x1b[0m",
+					&DIVIDER[..vm.len()],
+					&DIVIDER[..vm.len()],
+				);
+			}
 		}
+
+		eprintln!("{disc}");
 	}
-	eprintln!("{disc}");
 
 	// Go ahead and leave if there's no ripping to do.
 	if args.switch(b"--no-rip") { return Ok(()); }
@@ -360,7 +365,10 @@ DRIVE SETTINGS:
 MISCELLANEOUS:
     -h, --help        Print help information and exit.
     -V, --version     Print version information and exit.
-        --no-rip      Just print the basic disc information to STDERR and exit.
+        --no-rip      Print the basic drive and disc information to STDERR and
+                      exit (without ripping anything).
+        --no-summary  Skip the drive and disc summary and jump straight to
+                      ripping.
 
 EARLY EXIT:
     If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop

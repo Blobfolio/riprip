@@ -55,7 +55,11 @@ description = "Ignore any previous rip states; start over from scratch."
 
 [[package.metadata.bashman.switches]]
 long = "--no-rip"
-description = "Just print the basic disc information to STDERR and exit."
+description = "Print the basic drive and disc information to STDERR and exit (without ripping anything)."
+
+[[package.metadata.bashman.switches]]
+long = "--no-summary"
+description = "Skip the drive and disc summary and jump straight to ripping."
 
 [[package.metadata.bashman.switches]]
 long = "--no-trust"

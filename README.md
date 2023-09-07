@@ -131,7 +131,10 @@ These options are auto-detected and do not usually need to be explicitly provide
 ```text
 -h, --help        Print help information and exit.
 -V, --version     Print version information and exit.
-    --no-rip      Just print the basic disc information to STDERR and exit.
+    --no-rip      Print the basic drive and disc information to STDERR and
+                  exit (without ripping anything).
+    --no-summary  Skip the drive and disc summary and jump straight to
+                  ripping.
 ```
 
 ### Early Exit.
