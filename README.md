@@ -10,7 +10,7 @@ Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
 It doesn't beat a drive senseless every time a read error is encountered; it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
-Between those runs — which typically only last a few minutes — you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to automatically finish.
+Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to finish up for you.
 
 Total recovery is not always possible, but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
 
@@ -18,7 +18,7 @@ Total recovery is not always possible, but Rip Rip Hooray! will rescue more data
 
 ## Features
 
-Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, getting you access to the recovered data — regardless of "completeness" — as quickly as possible. You can re-run Rip Rip at any time, as many times as you want, with as many different optical drives as you want, to retry the outstanding regions and refine the data.
+Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, getting you access to the recovered data — regardless of "completeness" — as quickly as possible. You can re-run Rip Rip at any time, as many times as you want, with as many different optical drives as you want, to retry the outstanding regions and refine the data. You can also abort a rip early without losing your progress.
 
 Beyond that, it supports all the good things:
 
@@ -51,6 +51,20 @@ Rip Rip Hooray! is run from the command line, like:
 
 ```bash
 riprip [OPTIONS]
+```
+
+It has more than a handful of options, but in most cases you'll probably only need to specify the track(s) of interest with `-t`/`--track`, e.g.
+
+```bash
+# Rip tracks 3 and 5.
+riprip -t 3,5
+```
+
+If you know it is going to take a few passes to build up a reasonably complete rip, you can automate that with `--refine` (rather than manually rerunning the program):
+
+```bash
+# Rip tracks 3 and 5, giving each up to 11 total passes.
+riprip -t 3,5 --refine 10
 ```
 
 ### Ripping.
