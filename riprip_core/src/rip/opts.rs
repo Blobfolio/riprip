@@ -85,25 +85,6 @@ impl Default for RipOptions {
 
 impl RipOptions {
 	#[must_use]
-	/// # With Offset.
-	///
-	/// Set the AccurateRip, _et al_, drive read offset to apply when copying
-	/// data from the disc. See [here](http://www.accuraterip.com/driveoffsets.htm) for more information.
-	///
-	/// It is critical the correct offset be applied, otherwise the contents of
-	/// the rip may not be independently verifiable. This is doubly so when two
-	/// or more drives are used for a single rip; without appropriate offsets
-	/// the communal data could be corrupted.
-	///
-	/// The default is zero.
-	pub const fn with_offset(self, offset: ReadOffset) -> Self {
-		Self {
-			offset,
-			..self
-		}
-	}
-
-	#[must_use]
 	/// # With Reverse Ripping.
 	///
 	/// If `true`, data will be read in the reverse order — last sector to
@@ -162,6 +143,25 @@ impl RipOptions {
 
 		Self {
 			flags,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # With Offset.
+	///
+	/// Set the AccurateRip, _et al_, drive read offset to apply when copying
+	/// data from the disc. See [here](http://www.accuraterip.com/driveoffsets.htm) for more information.
+	///
+	/// It is critical the correct offset be applied, otherwise the contents of
+	/// the rip may not be independently verifiable. This is doubly so when two
+	/// or more drives are used for a single rip; without appropriate offsets
+	/// the communal data could be corrupted.
+	///
+	/// The default is zero.
+	pub const fn with_offset(self, offset: ReadOffset) -> Self {
+		Self {
+			offset,
 			..self
 		}
 	}
@@ -289,21 +289,21 @@ impl RipOptions {
 }
 
 impl RipOptions {
-	#[must_use]
-	/// # Offset.
-	pub const fn offset(&self) -> ReadOffset { self.offset }
-
-	get_flag!("Rip Backwards?", backwards, FLAG_BACKWARDS);
-	get_flag!("Use C2 Error Pointers?", c2, FLAG_C2);
 	get_flag!("Bust Cache?", cache_bust, FLAG_CACHE_BUST);
-	get_flag!("Save as Raw PCM?", raw, FLAG_RAW);
 	get_flag!("Require Reconfirmation?", reconfirm, FLAG_RECONFIRM);
 	get_flag!("Resume Previous Rips (if applicable)?", resume, FLAG_RESUME);
+	get_flag!("Rip Backwards?", backwards, FLAG_BACKWARDS);
+	get_flag!("Save as Raw PCM?", raw, FLAG_RAW);
 	get_flag!("Trust Good Sectors?", trust, FLAG_TRUST);
+	get_flag!("Use C2 Error Pointers?", c2, FLAG_C2);
 
 	#[must_use]
 	/// # Has Tracks?
 	pub const fn has_tracks(&self) -> bool { self.tracks != 0 }
+
+	#[must_use]
+	/// # Offset.
+	pub const fn offset(&self) -> ReadOffset { self.offset }
 
 	#[must_use]
 	/// # Paranoia Level.
