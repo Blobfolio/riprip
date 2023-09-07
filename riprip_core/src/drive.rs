@@ -71,8 +71,8 @@ impl DriveVendorModel {
 		vendor = vendor.trim();
 		model = model.trim();
 
-		if vendor.len() > DRIVE_VENDOR_LEN { Err(RipRipError::DriveVendor) }
-		else if ! (1..=DRIVE_MODEL_LEN).contains(&model.len()) {
+		if DRIVE_VENDOR_LEN < vendor.len() || ! vendor.is_ascii() { Err(RipRipError::DriveVendor) }
+		else if ! (1..=DRIVE_MODEL_LEN).contains(&model.len()) || ! model.is_ascii() {
 			Err(RipRipError::DriveModel)
 		}
 		else {

@@ -183,6 +183,12 @@ fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 
 			// Model is required and must fit within its maximum length.
 			if (1..=MAX_MODEL_LEN).contains(&model.len()) {
+				// Pretty sure these have to be ASCII.
+				if ! model.is_ascii() {
+					println!("cargo:warning=Non-ASCII model {model}.");
+					continue;
+				}
+
 				for (b, v) in vendormodel.iter_mut().skip(MAX_VENDOR_LEN).zip(model.bytes()) {
 					*b = v.to_ascii_uppercase();
 				}
@@ -206,6 +212,12 @@ fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 
 			// Both are required and must fit within their maximum lengths.
 			if (1..=MAX_VENDOR_LEN).contains(&vendor.len()) && (1..=MAX_MODEL_LEN).contains(&model.len()) {
+				// Pretty sure these have to be ASCII.
+				if ! vendor.is_ascii() || ! model.is_ascii() {
+					println!("cargo:warning=Non-ASCII vendor/model {vendor} / {model}.");
+					continue;
+				}
+
 				for (b, v) in vendormodel.iter_mut().zip(vendor.bytes()) {
 					*b = v.to_ascii_uppercase();
 				}
