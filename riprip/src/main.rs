@@ -306,24 +306,18 @@ const fn yesno(v: bool) -> Cow<'static, str> {
 /// # Print Help.
 fn helper() {
 	println!(concat!(
-		r"
-  ╚⊙ ⊙╝
-╚═(███)═╝
- ╚═(███)═╝
-  ╚═(███)═╝
-   ╚═(███)═╝
-   ╚═(███)═╝
-  ╚═(███)═╝
- ╚═(███)═╝    ", "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r"
-╚═(███)═╝     Accurate, incremental
-╚═(███)═╝     raw audio CD ripping.
- ╚═(███)═╝
-  ╚═(███)═╝
-   ╚═(███)═╝
-     ╚═(█)═╝
+		r#"
+    n__n_
+   /  = =\     "#, "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r#"
+  /   ._Y_)    Accurate, incremental audio
+ /      "\     CD ripping and recovery.
+(_/  (_,  \
+  \      ( \_,--""""--.
+ ,-`.___,-` )-.______.'
+ `-,'   `-_-'
 
 USAGE:
-    riprip [FLAGS/OPTIONS]
+    riprip [OPTIONS]
 
 RIPPING:
         --no-c2       Disable/ignore C2 error pointer information when ripping,
@@ -382,7 +376,7 @@ MISCELLANEOUS:
         --no-rip      Just print the basic disc information to STDERR and exit.
 
 EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
     it early. Your progress will still be saved, there just won't be as much of
     it. Haha.
 "

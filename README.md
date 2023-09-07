@@ -50,7 +50,7 @@ That summary can be produced on its own using the `--no-rip` flag, if that's all
 Rip Rip Hooray! is run from the command line, like:
 
 ```bash
-riprip [FLAGS/OPTIONS]
+riprip [OPTIONS]
 ```
 
 ### Ripping.
