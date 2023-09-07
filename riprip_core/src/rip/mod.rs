@@ -975,6 +975,6 @@ mod test {
 			(NULL_SAMPLE, 1),
 		]);
 		iffy.maybe_confirm(1);
-		assert!(iffy.is_good());
+		assert!(matches!(iffy, RipSample::Good([0, 0, 0, 1])));
 	}
 }
