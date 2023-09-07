@@ -107,27 +107,14 @@ fn _main() -> Result<(), RipRipError> {
 	let disc = Disc::new(dev)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if let Some(vm) = drivevendormodel {
-		// Normalize the whitespace in the vendor/model name. That space
-		// matters for matching, but not for display.
-		let mut ws = false;
-		let vm: String = vm.to_string()
-			.chars()
-			.filter_map(|c|
-				if c.is_whitespace() {
-					if ws { None }
-					else {
-						ws = true;
-						Some(' ')
-					}
-				}
-				else {
-					ws = false;
-					Some(c)
-				}
-			)
-			.collect();
-		eprintln!("\x1b[1;36m{vm}\x1b[0m");
-		eprintln!("\x1b[2;36m{}\x1b[0m\n", &DIVIDER[..vm.len()]);
+		let vm = vm.to_string();
+		if ! vm.is_empty() {
+			eprintln!(
+				"\x1b[2;36m{}\n\x1b[0;1;36m{vm}\n\x1b[0;2;36m{}\n\x1b[0m",
+				&DIVIDER[..vm.len()],
+				&DIVIDER[..vm.len()],
+			);
+		}
 	}
 	eprintln!("{disc}");
 
@@ -306,24 +293,18 @@ const fn yesno(v: bool) -> Cow<'static, str> {
 /// # Print Help.
 fn helper() {
 	println!(concat!(
-		r"
-  ╚⊙ ⊙╝
-╚═(███)═╝
- ╚═(███)═╝
-  ╚═(███)═╝
-   ╚═(███)═╝
-   ╚═(███)═╝
-  ╚═(███)═╝
- ╚═(███)═╝    ", "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r"
-╚═(███)═╝     Accurate, incremental
-╚═(███)═╝     raw audio CD ripping.
- ╚═(███)═╝
-  ╚═(███)═╝
-   ╚═(███)═╝
-     ╚═(█)═╝
+		r#"
+    n__n_
+   /  = =\     "#, "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r#"
+  /   ._Y_)    Accurate, incremental audio
+ /      "\     CD ripping and recovery.
+(_/  (_,  \
+  \      ( \_,--""""--.
+ ,-`.___,-` )-.______.'
+ `-,'   `-_-'
 
 USAGE:
-    riprip [FLAGS/OPTIONS]
+    riprip [OPTIONS]
 
 RIPPING:
         --no-c2       Disable/ignore C2 error pointer information when ripping,
@@ -334,11 +315,15 @@ RIPPING:
                       each rip pass.
         --paranoia <NUM>
                       When a sample or its neighbors have a C2 or read error,
-                      treat all samples in the region as supicious until the
-                      drive returns the same value <NUM> times, or AccurateRip
-                      or CTDB matches with a confidence of <NUM> are found.
+                      treat all samples in the region as supicious until
+                      either:
+                        A) the drive returns the same (allegedly good) value
+                           <NUM> times *and* that value has a super majority on
+                           any other (allegedly good) values in that same spot.
+                        B) AccurateRip or CTDB matches with a confidence of at
+                           least <NUM> are found for the track.
                       When combined with --no-trust, *all* samples are subject
-                      to confirmation regardless of status.
+                      to confirmation regardless of supposed status.
                       [default: 3; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
         --refine <NUM>
@@ -378,7 +363,7 @@ MISCELLANEOUS:
         --no-rip      Just print the basic disc information to STDERR and exit.
 
 EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press ", "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
     it early. Your progress will still be saved, there just won't be as much of
     it. Haha.
 "

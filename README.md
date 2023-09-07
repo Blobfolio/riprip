@@ -10,7 +10,7 @@ Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
 It doesn't beat a drive senseless every time a read error is encountered; it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
-Between those runs — which typically only last a few minutes — you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to automatically finish.
+Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to finish up for you.
 
 Total recovery is not always possible, but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
 
@@ -18,7 +18,7 @@ Total recovery is not always possible, but Rip Rip Hooray! will rescue more data
 
 ## Features
 
-Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, getting you access to the recovered data — regardless of "completeness" — as quickly as possible. You can re-run Rip Rip at any time, as many times as you want, with as many different optical drives as you want, to retry the outstanding regions and refine the data.
+Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, getting you access to the recovered data — regardless of "completeness" — as quickly as possible. You can re-run Rip Rip at any time, as many times as you want, with as many different optical drives as you want, to retry the outstanding regions and refine the data. You can also abort a rip early without losing your progress.
 
 Beyond that, it supports all the good things:
 
@@ -41,17 +41,7 @@ Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck ab
 * Track ISRCs (if present)
 * UPC/EAN (if present)
 
-That summary can be produced on its own using the `--no-rip` flag.
-
-
-
-## Limitations and Workarounds
-
-Rip Rip Hooray!, like any other CD-ripping tool, ultimately depends on the optical drive to correctly decode and deliver the requested data, or at least be accurate about the inaccuracies.
-
-When a drive can't do that for whatever reason, the resulting rip will be incomplete or inaccurate.
-
-The performance of Rip Rip Hooray! is similarly bound to that of the drive. It will always be magnitudes faster than `EAC`, _et al_, under the same conditions, but if the drive is struggling to make heads or tails of the disc, it might take a while to complete the rip.
+That summary can be produced on its own using the `--no-rip` flag, if that's all you're interested in.
 
 
 
@@ -60,7 +50,21 @@ The performance of Rip Rip Hooray! is similarly bound to that of the drive. It w
 Rip Rip Hooray! is run from the command line, like:
 
 ```bash
-riprip [FLAGS/OPTIONS]
+riprip [OPTIONS]
+```
+
+It has more than a handful of options, but in most cases you'll probably only need to specify the track(s) of interest with `-t`/`--track`, e.g.
+
+```bash
+# Rip tracks 3 and 5.
+riprip -t 3,5
+```
+
+If you know it is going to take a few passes to build up a reasonably complete rip, you can automate that with `--refine` (rather than manually rerunning the program):
+
+```bash
+# Rip tracks 3 and 5, giving each up to 11 total passes.
+riprip -t 3,5 --refine 10
 ```
 
 ### Ripping.
@@ -74,11 +78,15 @@ riprip [FLAGS/OPTIONS]
                   each rip pass.
     --paranoia <NUM>
                   When a sample or its neighbors have a C2 or read error,
-                  treat all samples in the region as supicious until the
-                  drive returns the same value <NUM> times, or AccurateRip
-                  or CTDB matches with a confidence of <NUM> are found.
+                  treat all samples in the region as supicious until
+                  either:
+                    A) the drive returns the same (allegedly good) value
+                       <NUM> times *and* that value has a super majority on
+                       any other (allegedly good) values in that same spot.
+                    B) AccurateRip or CTDB matches with a confidence of at
+                       least <NUM> are found for the track.
                   When combined with --no-trust, *all* samples are subject
-                  to confirmation regardless of status.
+                  to confirmation regardless of supposed status.
                   [default: 3; range: 1..=32]
     --raw         Save ripped tracks in raw PCM format (instead of WAV).
     --refine <NUM>
