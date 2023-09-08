@@ -245,7 +245,7 @@ impl LibcdioInstance {
 				libcdio_sys::cdio_get_track_lsn(self.as_ptr(), idx)
 			};
 			if raw < 0 { Err(RipRipError::TrackLba(idx)) }
-			else { Ok(raw.abs_diff(0) + CD_LEADIN) }
+			else { Ok(raw.abs_diff(0) + u32::from(CD_LEADIN)) }
 		}
 	}
 }
@@ -391,7 +391,7 @@ impl LibcdioInstance {
 
 		// We can infer whether or not C2 is desired based on the block size,
 		// and at the same time rule out wacky sizes.
-		let c2_too = match u32::from(block_size) {
+		let c2_too = match block_size {
 			CD_DATA_C2_SIZE => 1,
 			CD_DATA_SIZE => 0,
 			_ => return Err(RipRipError::CdReadBuffer),
@@ -429,7 +429,6 @@ impl LibcdioInstance {
 	}
 
 	#[allow(unsafe_code)]
-	#[allow(clippy::cast_possible_truncation)]
 	/// # Cache Bust.
 	///
 	/// In lieu of any universal I/O command to clear the drive cache, we can
@@ -449,7 +448,7 @@ impl LibcdioInstance {
 		leadout: i32,
 	) {
 		// Slightly more than 4MiB; should be enough for any drive.
-		let mut buf = vec![0; 1800 * CD_DATA_SIZE as usize];
+		let mut buf = vec![0; 1800 * usize::from(CD_DATA_SIZE)];
 
 		// Where can we read from without getting in the way?
 		let lsn =
@@ -474,7 +473,7 @@ impl LibcdioInstance {
 				0,      // No EDC.
 				0,      // No C2.
 				0,      // No subchannel.
-				CD_DATA_SIZE as u16,
+				CD_DATA_SIZE,
 				1800,   // Number of blocks to read.
 			)
 		};

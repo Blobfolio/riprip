@@ -205,10 +205,6 @@ impl ReadOffset {
 	}
 
 	#[must_use]
-	#[allow(
-		clippy::cast_possible_truncation,
-		clippy::integer_division,
-	)]
 	/// # Sectors (Absolute).
 	///
 	/// Return the minimum containing sector amount.
@@ -220,10 +216,10 @@ impl ReadOffset {
 		let samples_abs = self.samples_abs();
 
 		// Floor.
-		let div = samples_abs / SAMPLES_PER_SECTOR as u16;
+		let div = samples_abs.wrapping_div(SAMPLES_PER_SECTOR);
 
 		// Add one if there's a remainder.
-		if 0 == samples_abs % SAMPLES_PER_SECTOR as u16 { div }
+		if 0 == samples_abs % SAMPLES_PER_SECTOR { div }
 		else { div + 1 }
 	}
 }

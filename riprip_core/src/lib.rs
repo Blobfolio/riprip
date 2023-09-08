@@ -79,37 +79,37 @@ type Sample = [u8; 4];
 pub(crate) const CACHE_BASE: &str = "_riprip";
 
 /// # Bytes Per Sample.
-pub const BYTES_PER_SAMPLE: u32 = 4;
+pub const BYTES_PER_SAMPLE: u16 = 4;
 
 /// # Bytes Per Sector.
 ///
 /// This is the number of bytes per sector of _audio_ data. Block sizes may
 /// contain additional information.
-pub const BYTES_PER_SECTOR: u32 = SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE;
+pub const BYTES_PER_SECTOR: u16 = SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE;
 
 /// # Samples per sector.
-pub const SAMPLES_PER_SECTOR: u32 = 588;
+pub const SAMPLES_PER_SECTOR: u16 = 588;
 
 /// # Size of C2 block.
 ///
 /// Note: some drives support a 296-byte variation with an extra block bit, but
 /// such drives should also support the 294-bit version, and that extra bit is
 /// redundant.
-pub const CD_C2_SIZE: u32 = 294;
+pub const CD_C2_SIZE: u16 = 294;
 
 /// # Size of data block.
 ///
 /// Data as in "audio data".
-pub const CD_DATA_SIZE: u32 = BYTES_PER_SECTOR;
+pub const CD_DATA_SIZE: u16 = BYTES_PER_SECTOR;
 
 /// # Combined size of data/c2.
-pub const CD_DATA_C2_SIZE: u32 = CD_DATA_SIZE + CD_C2_SIZE;
+pub const CD_DATA_C2_SIZE: u16 = CD_DATA_SIZE + CD_C2_SIZE;
 
 /// # Number of lead-in sectors.
 ///
 /// All discs have a 2-second region at the start before any data. Different
 /// contexts include or exclude this amount, so it's good to keep it handy.
-pub const CD_LEADIN: u32 = 150;
+pub const CD_LEADIN: u16 = 150;
 
 /// # Lead-out Label.
 ///

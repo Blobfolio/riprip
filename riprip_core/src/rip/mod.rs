@@ -59,12 +59,12 @@ const QUALITY_BAR: &str = "#####################################################
 /// To account for potential read offset variation, all tracks are under- and
 /// overread by ten sectors. (The appropriate portion is cut out when saving
 /// the track.)
-const SECTOR_BUFFER: u32 = 10;
+const SECTOR_BUFFER: u16 = 10;
 
 /// # Extra Sample Reads.
 ///
 /// Same as the sector buffer, but in samples.
-const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
+const SAMPLE_BUFFER: u16 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
 
 /// # C2 Sample Set.
 ///
@@ -88,8 +88,6 @@ pub(super) struct Rip {
 }
 
 impl Rip {
-	#[allow(clippy::cast_possible_wrap)] // These are known constants; they fit.
-	#[allow(clippy::cast_sign_loss)] // Same.
 	/// # New.
 	///
 	/// Prepare — but do not execte — a new rip for the track. The AccurateRip
@@ -121,18 +119,18 @@ impl Rip {
 
 		// Make sure we can add the buffer to each end too.
 		let rip_lsn =
-			track_lsn.start.checked_sub(SECTOR_BUFFER as i32).ok_or(RipRipError::RipOverflow(idx))?..
-			track_lsn.end.checked_add(SECTOR_BUFFER as i32).ok_or(RipRipError::RipOverflow(idx))?;
+			track_lsn.start.checked_sub(i32::from(SECTOR_BUFFER)).ok_or(RipRipError::RipOverflow(idx))?..
+			track_lsn.end.checked_add(i32::from(SECTOR_BUFFER)).ok_or(RipRipError::RipOverflow(idx))?;
 
 		// Make sure the range in samples fits i32, u32, and usize.
-		let expected_len = (rip_lsn.end - rip_lsn.start).checked_mul(SAMPLES_PER_SECTOR as i32)
+		let expected_len = (rip_lsn.end - rip_lsn.start).checked_mul(i32::from(SAMPLES_PER_SECTOR))
 			.and_then(|v| u32::try_from(v).ok())
 			.and_then(|v| usize::try_from(v).ok())
 			.ok_or(RipRipError::RipOverflow(idx))?;
 
 		// Also make sure the equivalent file size of the track can be
 		// represented with usize.
-		((track_lsn.end - track_lsn.start) as usize).checked_mul(BYTES_PER_SECTOR as usize)
+		track_lsn.len().checked_mul(usize::from(BYTES_PER_SECTOR))
 			.ok_or(RipRipError::RipOverflow(idx))?;
 
 		// Do we have an existing copy to resume?
@@ -233,7 +231,7 @@ impl Rip {
 		let (rng_start, rng_end) = self.rip_distance(offset);
 		let state_path = state_path(self.ar, self.track.number());
 		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
-		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
+		let leadout = disc.toc().audio_leadout() as i32 - i32::from(CD_LEADIN);
 
 		// Onto the pass(es)!
 		for pass in 0..opts.passes() {
@@ -493,7 +491,7 @@ impl Rip {
 	#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 	/// # Log Problem Sectors.
 	fn log_problem_sectors(&self) -> Result<(), RipRipError> {
-		let start = self.rip_lsn.start + SECTOR_BUFFER as i32;
+		let start = self.rip_lsn.start + i32::from(SECTOR_BUFFER);
 		let issues: Vec<String> = self.track_slice()
 			.iter()
 			.enumerate()
