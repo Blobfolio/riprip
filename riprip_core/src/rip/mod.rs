@@ -379,16 +379,44 @@ fn print_bar(q_bad: usize, q_maybe: usize, q_likely: usize, q_confirmed: usize) 
 			}
 		);
 	}
-	let b_confirmed = bar_slice!(q_confirmed);
-	let b_likely = bar_slice!(q_likely);
-	let b_bad = bar_slice!(q_bad);
-	let b_maybe = QUALITY_BAR.len() - b_confirmed - b_likely - b_bad;
+	let mut bars =[
+		bar_slice!(q_bad),
+		bar_slice!(q_maybe),
+		bar_slice!(q_likely),
+		bar_slice!(q_confirmed),
+	];
+
+	// Fix up rounding so we always have a full bar.
+	let b_len = bars.iter().copied().sum::<usize>();
+	let b_diff = b_len.abs_diff(QUALITY_BAR.len());
+
+	// Too big.
+	if b_len > QUALITY_BAR.len() {
+		let max = bars.iter().copied().max().unwrap();
+		for b in &mut bars {
+			if *b == max {
+				*b -= b_diff;
+				break;
+			}
+		}
+	}
+	// Too small.
+	else if 0 != b_diff {
+		let max = bars.iter().copied().max().unwrap();
+		for b in &mut bars {
+			if *b == max {
+				*b += b_diff;
+				break;
+			}
+		}
+	}
+
 	eprintln!(
 		"        \x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
-		&QUALITY_BAR[..b_bad],
-		&QUALITY_BAR[..b_maybe],
-		&QUALITY_BAR[..b_likely],
-		&QUALITY_BAR[..b_confirmed],
+		&QUALITY_BAR[..bars[0]],
+		&QUALITY_BAR[..bars[1]],
+		&QUALITY_BAR[..bars[2]],
+		&QUALITY_BAR[..bars[3]],
 	);
 
 	let mut breakdown = Vec::with_capacity(4);
