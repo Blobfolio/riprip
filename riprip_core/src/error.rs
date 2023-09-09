@@ -141,7 +141,7 @@ impl fmt::Display for RipRipError {
 			Self::DriveModel => f.write_str("Invalid drive model."),
 			Self::DriveVendor => f.write_str("Invalid drive vendor."),
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
-			Self::Killed => f.write_str("Operations aborted."),
+			Self::Killed => f.write_str("User abort."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
 			Self::NoTracks => f.write_str("No tracks were found."),
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),

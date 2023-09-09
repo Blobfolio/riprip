@@ -99,6 +99,9 @@ riprip -t 3,5 --refine 10
     --backwards   Rip sectors in reverse order. (Data will still be saved
                   in the *correct* order. Haha.)
     --no-resume   Ignore any previous rip states; start over from scratch.
+    --strict      Treat C2 errors as an all-or-nothing proposition for the
+                  sector as a whole rather than judging each individual
+                  sample on its own.
 ```
 
 ### Drive Settings.

@@ -153,7 +153,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
-		.with_resume(! args.switch(b"--no-resume"));
+		.with_resume(! args.switch(b"--no-resume"))
+		.with_strict(args.switch(b"--strict"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -231,23 +232,34 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 			.replace(',', "\x1b[2m,\x1b[0;1m")
 			.replace(" and ", "\x1b[2m and \x1b[0;1m")
 	);
-	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
-	let nice_confidence = Cow::Owned(format!("{}+ (Match Confidence)", opts.confidence()));
-	let nice_cutoff = NiceU8::from(opts.cutoff());
+	let nice_output = Cow::Owned(format!(
+		"./{}/##.{}",
+		riprip_core::CACHE_BASE,
+		if opts.raw() { "pcm" } else { "wav" },
+	));
+	let cutoff = opts.cutoff();
+	let nice_verify = Cow::Owned(format!(
+		"{}{}AccurateRip/CTDB ({})",
+		match (opts.c2(), opts.strict()) {
+			(true, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
+			(true, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
+			_ => "",
+		},
+		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
+		opts.confidence(),
+	));
 	let nice_passes = NiceU8::from(opts.passes());
 
 	let set = [
 		("Tracks:", nice_tracks, true),
-		("AR/CTDB:", nice_confidence, true),
+		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
+		("Verification:", nice_verify, true),
+		("Rip Passes:", Cow::Borrowed(nice_passes.as_str()), true),
+		("Destination:", nice_output, true),
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
-		("C2:", yesno(opts.c2()), opts.c2()),
-		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
-		("Cutoff:", Cow::Borrowed(nice_cutoff.as_str()), 1 < opts.cutoff()),
-		("Format:", nice_format, true),
-		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
-		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
-		("Resume:", yesno(opts.resume()), opts.resume()),
+		("Bust Cache:", yesno(opts.cache_bust()), opts.cache_bust()),
+		("Resumable:", yesno(opts.resume()), opts.resume()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
@@ -333,6 +345,9 @@ WHEN ALL ELSE FAILS:
         --backwards   Rip sectors in reverse order. (Data will still be saved
                       in the *correct* order. Haha.)
         --no-resume   Ignore any previous rip states; start over from scratch.
+        --strict      Treat C2 errors as an all-or-nothing proposition for the
+                      sector as a whole rather than judging each individual
+                      sample on its own.
 
 DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly

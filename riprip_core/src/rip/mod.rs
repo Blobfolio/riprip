@@ -147,7 +147,7 @@ impl<'a> Rip<'a> {
 
 			// Bust the cache.
 			if self.opts.cache_bust() && ! (killed.killed() || confirmed) {
-				progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
+				progress.set_title(Some(Msg::custom("Standby", 11, "Busting the cache…")));
 				self.disc.cdio().bust_cache(rip_rng.clone(), leadout);
 			}
 
@@ -184,17 +184,27 @@ impl<'a> Rip<'a> {
 				match self.disc.cdio().read_cd(buf, read_lsn) {
 					Ok(()) =>
 						// Parse the C2 data. Each bit represents one byte of
-						// audio data, but it's silly to zoom so far down;
-						// we'll treat sample pairs as pass/fail, quartering
-						// the effort.
+						// audio data, we'll never worry about sub-sample
+						// accuracy.
 						if self.opts.c2() {
-							for (k2, &v) in c2.chunks_exact_mut(2).zip(&buf[usize::from(CD_DATA_SIZE)..]) {
-								k2[0] = 0 != v & 0b1111_0000;
-								k2[1] = 0 != v & 0b0000_1111;
+							// Set errors at sector level.
+							if self.opts.strict() {
+								reset_c2(
+									&mut c2,
+									buf.iter()
+										.skip(usize::from(CD_DATA_SIZE))
+										.any(|&v| 0 != v)
+								);
+							}
+							// Set errors at sample level.
+							else {
+								for (k2, &v) in c2.chunks_exact_mut(2).zip(buf.iter().skip(usize::from(CD_DATA_SIZE))) {
+									k2[0] = 0 != v & 0b1111_0000;
+									k2[1] = 0 != v & 0b0000_1111;
+								}
 							}
 						}
-						// Assume C2 is fine since we aren't asking for that
-						// data.
+						// Assume C2 is fine since that data is absent.
 						else { reset_c2(&mut c2, false); },
 					// Assume total C2 failure if there's a hard read error.
 					Err(RipRipError::CdRead(_)) => { reset_c2(&mut c2, true); },

@@ -23,6 +23,11 @@ const FLAG_RAW: u8 =        0b0000_1000;
 /// # FLAG: Resume previous rip (when applicable).
 const FLAG_RESUME: u8 =     0b0001_0000;
 
+/// # FLAG: Strict Mode.
+///
+/// If a sector contains any C2 errors, treat all samples as bad.
+const FLAG_STRICT: u8 =     0b0010_0000;
+
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
 
@@ -254,6 +259,18 @@ impl RipOptions {
 		"The default is `true`.",
 	);
 
+	with_flag!(
+		with_strict,
+		FLAG_STRICT,
+		"# Strict Mode.",
+		"",
+		"When `true`, if a sector contains _any_ C2 errors, all samples in the",
+		"response are considered bad. When `false`, sample goodness is judged",
+		"individually.",
+		"",
+		"The default is `false`.",
+	);
+
 	#[must_use]
 	/// # Include Track.
 	///
@@ -284,6 +301,7 @@ impl RipOptions {
 	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
 	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
+	get_flag!(strict, FLAG_STRICT, "Strict Mode");
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
@@ -387,10 +405,11 @@ mod test {
 			FLAG_CACHE_BUST,
 			FLAG_RAW,
 			FLAG_RESUME,
+			FLAG_STRICT,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 5);
+		assert_eq!(all.len(), 6);
 	}
 
 	#[test]
@@ -447,6 +466,7 @@ mod test {
 		t_flags!("cache bust", with_cache_bust, cache_bust);
 		t_flags!("raw", with_raw, raw);
 		t_flags!("resume", with_resume, resume);
+		t_flags!("strict", with_strict, strict);
 	}
 
 	#[test]

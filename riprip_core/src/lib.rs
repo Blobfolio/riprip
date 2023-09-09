@@ -81,7 +81,7 @@ type Sample = [u8; 4];
 /// # Cache Base.
 ///
 /// The cache root is thus `CWD/CACHE_BASE`.
-pub(crate) const CACHE_BASE: &str = "_riprip";
+pub const CACHE_BASE: &str = "_riprip";
 
 /// # Cache Scratch.
 ///
