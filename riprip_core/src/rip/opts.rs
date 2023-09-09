@@ -75,7 +75,7 @@ impl Default for RipOptions {
 			offset: ReadOffset::default(),
 			confidence: 3,
 			cutoff: 2,
-			refine: 2,
+			refine: 1,
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
@@ -165,20 +165,19 @@ impl RipOptions {
 	/// # Likeliness Cutoff.
 	///
 	/// Drives may return different values for a given sample from read-to-read
-	/// due to… issues, but at a certain it becomes necessary to call good
+	/// due to… issues, but at a certain point it becomes necessary to call good
 	/// enough "Good Enough".
 	///
-	/// When a given value is returned this many times, and that value has a
-	/// super majority — 2/3 — of all other values returned for the position,
-	/// Rip Rip Hooray! won't try to re-read it any more.
+	/// When a given value is returned this many times, and twice as often as
+	/// all competing values, Rip Rip Hooray! won't try to re-read it any more.
 	///
 	/// The lower the setting, the less work there will be to do on subsequent
 	/// passes; the higher the setting, the better the rip will be able to cope
 	/// with drive wishywashiness.
 	///
-	/// This has no effect in cases where the track has been independently
-	/// confirmed via AccurateRip and/or CUETools, or when other samples in the
-	/// same sector are still shitty.
+	/// This also has no _practical_ effect unless all samples in a given
+	/// sector are likely/confirmed; if any require re-reading, the sector as a
+	/// whole will still need to be reread.
 	///
 	/// The value can be adjusted from run-to-run as needed.
 	///
@@ -231,10 +230,10 @@ impl RipOptions {
 	/// AccurateRip and/or CUETools — or all samples meet the likeliness
 	/// threshold.
 	///
-	/// The default is `2`.
+	/// The default is `1`.
 	///
-	/// To give the drive a break, the maximum value is capped at `32`. You can
-	/// manually rerun the program if you end up needing more passes. ;)
+	/// To give the drive a break, the maximum value is capped at `32`, but you
+	/// can manually rerun the program afterward as many times as needed. ;)
 	pub const fn with_refine(self, mut refine: u8) -> Self {
 		if REFINE_MAX < refine { refine = REFINE_MAX; }
 		Self {

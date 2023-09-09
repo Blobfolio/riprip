@@ -307,21 +307,22 @@ USAGE:
 
 BASIC SETTINGS:
         --confidence <NUM>
-                      Consider the rip accurate — and stop working — if
-                      AccurateRip and/or CUETools matches are found with a
+                      Consider a track accurately ripped — i.e. stop working on
+                      it — AccurateRip and/or CUETools matches are found with a
                       confidence of at least <NUM>. [default: 3; range: 3..=10]
         --cutoff <NUM>
-                      Stop re-reading allegedly-good samples once the drive has
-                      confirmed the same value at least <NUM> times (or the
-                      track as a whole is verified with AccurateRip/CTDB).
-                      Higher values are recommended when the data seems fishy.
+                      Consider allegedly-good samples \"likely\" once the same
+                      value has been read at least <NUM> times and twice as
+                      often as any competing values. Sectors containing only
+                      likely/confirmed samples are skipped during subsequent
+                      passes, so the lower the cutoff, the faster they'll go.
+                      Higher values are recommended for wishywashy drives.
                       [default: 2; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
     -r, --refine <NUM>
-                      Execute up to <NUM> additional rip passes for each track
-                      while any samples remain unread/unconfirmed. A value
-                      greater than or equal to --cutoff is recommended.
-                      [default: 2; max: 32]
+                      Automatically execute up to <NUM> additional rip passes
+                      for each track while any samples remain unread or
+                      unconfirmed. [default: 1; max: 32]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),

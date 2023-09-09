@@ -128,6 +128,8 @@ impl<'a> Rip<'a> {
 	/// fixed data buffer has a variable size depending on whether or not C2
 	/// pointers are to be included. Creating those in the previous step allows
 	/// us to avoid conflicts with Rust's type checker.
+	///
+	/// Returns `true` if the rip has been confirmed, `false` if not.
 	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
 	-> Result<bool, RipRipError> {
 		let resume = u8::from(! self.state.is_new());
@@ -250,6 +252,7 @@ impl<'a> Rip<'a> {
 			// Summarize the results.
 			self.summarize(confirmed, ar, ctdb);
 
+			// Maybe stop early?
 			if confirmed || killed.killed() { break; }
 		} // End pass.
 

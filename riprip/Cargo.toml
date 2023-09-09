@@ -73,12 +73,12 @@ description = "Print program version."
 [[package.metadata.bashman.options]]
 long = "--confidence"
 label = "<NUM>"
-description = "Consider the rip accurate — and stop working — if AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"
+description = "Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"
 
 [[package.metadata.bashman.options]]
 long = "--cutoff"
 label = "<NUM>"
-description = "Stop re-reading allegedly-good samples once the drive has confirmed the same value at least <NUM> times (or the track as a whole is verified with AccurateRip/CTDB). Higher values are recommended when the data seems fishy. [default: 2; range: 1..=32]"
+description = "Consider allegedly-good samples 'likely' once the same value has been read at least <NUM> times and twice as often as any competing values. Sectors containing only likely/confirmed samples are skipped during subsequent passes, so the lower the cutoff, the faster they'll go. Higher values are recommended for wishywashy drives. [default: 2; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
 short = "-d"
@@ -97,7 +97,7 @@ description = "The AccurateRip, et al, sample read offset to apply to data retri
 short = "-r"
 long = "--refine"
 label = "<NUM>"
-description = "Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]"
+description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 32]"
 
 [[package.metadata.bashman.options]]
 short = "-t"
