@@ -130,7 +130,7 @@ impl<'a> Rip<'a> {
 	/// us to avoid conflicts with Rust's type checker.
 	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
 	-> Result<bool, RipRipError> {
-		let resume = u8::from(self.state.is_any());
+		let resume = u8::from(! self.state.is_new());
 		let offset = self.opts.offset();
 		let rip_rng = self.state.sector_rip_range();
 		let lsn_start = rip_rng.start;

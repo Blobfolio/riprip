@@ -64,6 +64,7 @@ pub(crate) struct RipSamples {
 	track: Track,
 	rip_rng: Range<i32>,
 	data: Vec<RipSample>,
+	new: bool,
 }
 
 impl RipSamples {
@@ -152,6 +153,7 @@ impl RipSamples {
 			track,
 			rip_rng,
 			data,
+			new: true,
 		})
 	}
 
@@ -168,7 +170,7 @@ impl RipSamples {
 	/// nonsensical.
 	pub(crate) fn from_file(toc: &Toc, track: Track) -> Result<Option<Self>, RipRipError> {
 		if let Some(raw) = state_path(toc, track).and_then(cache_read)? {
-			let out = zstd_decode(&raw)
+			let mut out = zstd_decode(&raw)
 				.and_then(|raw| bincode::deserialize::<Self>(&raw).ok())
 				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
 
@@ -192,6 +194,7 @@ impl RipSamples {
 				out.rip_rng.end == rng.end &&
 				out.data.len() == rng.len()
 			{
+				out.new = false;
 				Ok(Some(out))
 			}
 			else {
