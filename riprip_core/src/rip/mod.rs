@@ -170,8 +170,8 @@ impl<'a> Rip<'a> {
 				// We can skip this block if the user aborted or there's
 				// nothing to refine.
 				if
-					killed.killed() ||
 					confirmed ||
+					killed.killed() ||
 					state.iter().all(|v| v.is_likely(self.opts.cutoff()))
 				{
 					progress.increment();
