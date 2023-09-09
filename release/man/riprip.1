@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.6" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.7" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.6.
+Rip Rip Hooray! \- Manual page for riprip v0.0.7.
 .SH DESCRIPTION
 An incremental, second\-stage audio CD ripper for advanced data recovery.
 .SS USAGE:
@@ -24,20 +24,26 @@ Do not attempt to reset the optical drive cache between each rip pass.
 Ignore any previous rip states; start over from scratch.
 .TP
 \fB\-\-no\-rip\fR
-Just print the basic disc information to STDERR and exit.
+Print the basic drive and disc information to STDERR and exit (without ripping anything).
 .TP
-\fB\-\-no\-trust\fR
-Never trust the drive when it says a sector is good; always get confirmation. Requires a paranoia level of at least 2.
+\fB\-\-no\-summary\fR
+Skip the drive and disc summary and jump straight to ripping.
 .TP
 \fB\-\-raw\fR
 Save ripped tracks in raw PCM format (instead of WAV).
 .TP
-\fB\-\-reconfirm\fR
-Reset the status of all previously\-accepted samples to require reconfirmation. Requires a paranoia level of at least 2.
+\fB\-\-strict\fR
+Treat C2 errors as an all\-or\-nothing proposition for the sector as a whole rather than judging each individual sample on its own.
 .TP
 \fB\-V\fR, \fB\-\-version\fR
 Print program version.
 .SS OPTIONS:
+.TP
+\fB\-\-confidence\fR <NUM>
+Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]
+.TP
+\fB\-\-cutoff\fR <NUM>
+Consider allegedly\-good samples 'likely' once the same value has been read at least <NUM> times and twice as often as any competing values. Sectors containing only likely/confirmed samples are skipped during subsequent passes, so the lower the cutoff, the faster they'll go. Higher values are recommended for wishywashy drives. [default: 2; range: 1..=32]
 .TP
 \fB\-d\fR, \fB\-\-dev\fR <PATH>
 The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]
@@ -45,11 +51,8 @@ The device path for the optical drive containing the CD of interest, like /dev/c
 \fB\-o\fR, \fB\-\-offset\fR <SAMPLES>
 The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]
 .TP
-\fB\-\-paranoia\fR <NUM>
-When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until either: A) the drive returns the same (allegedly good) value <NUM> times *and* that value has a super majority on any other (allegedly good) values in that same spot. B) AccurateRip or CTDB matches with a confidence of at least <NUM> are found for the track. When combined with \-\-no\-trust, *all* samples are subject to confirmation regardless of supposed status. [default: 3; range: 1..=32]
-.TP
-\fB\-\-refine\fR <NUM>
-Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]
+\fB\-r\fR, \fB\-\-refine\fR <NUM>
+Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 32]
 .TP
 \fB\-t\fR, \fB\-\-track\fR <NUM>
 Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2\-3), and/or given their own \-t/\-\-track (\-t 2 \-t 3). [default: the whole disc]
