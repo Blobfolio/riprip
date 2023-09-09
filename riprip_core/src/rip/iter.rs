@@ -9,6 +9,7 @@ use std::{
 
 
 
+#[derive(Debug, Clone)]
 /// # Read Iterator.
 ///
 /// We need to be able to conditionally reverse the sector read order when
@@ -17,22 +18,22 @@ use std::{
 ///
 /// Iteration-wise, this simply passes through the inner values.
 pub(super) enum ReadIter {
-	Forward(Range<usize>),
-	Backward(Rev<Range<usize>>)
+	Forward(Range<i32>),
+	Backward(Rev<Range<i32>>)
 }
 
 impl ReadIter {
 	/// # New Instance.
 	///
 	/// Generate the right kind of iterator based on the value of `backwards`.
-	pub(super) fn new(start: usize, end: usize, backwards: bool) -> Self {
+	pub(super) fn new(start: i32, end: i32, backwards: bool) -> Self {
 		if backwards { Self::Backward((start..end).rev()) }
 		else { Self::Forward(start..end) }
 	}
 }
 
 impl Iterator for ReadIter {
-	type Item = usize;
+	type Item = i32;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Forward(i) => i.next(),
@@ -63,8 +64,8 @@ mod test {
 
 	#[test]
 	fn t_read_iter() {
-		let a: Vec<usize> = ReadIter::new(5, 100, false).collect();
-		let mut b: Vec<usize> = ReadIter::new(5, 100, true).collect();
+		let a: Vec<i32> = ReadIter::new(5, 100, false).collect();
+		let mut b: Vec<i32> = ReadIter::new(5, 100, true).collect();
 		assert_ne!(a, b, "Sets should be in the opposite order!");
 		assert!(! a.contains(&100), "The range is supposed to be exclusive.");
 		b.reverse();

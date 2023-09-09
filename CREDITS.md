@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.0.6
-    Generated: 2023-09-07 05:37:15 UTC
+    Version:   0.0.7
+    Generated: 2023-09-09 20:14:01 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -28,6 +28,7 @@
 | [hound](https://github.com/ruuda/hound) | 3.5.0 | [Ruud van Asseldonk](mailto:dev@veniogames.com) | Apache-2.0 |
 | [idna](https://github.com/servo/rust-url/) | 0.4.0 | The rust-url developers | Apache-2.0 or MIT |
 | [itoa](https://github.com/dtolnay/itoa) | 1.0.9 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
+| [libc](https://github.com/rust-lang/libc) | 0.2.147 | The Rust Project Developers | Apache-2.0 or MIT |
 | [libcdio-sys](https://github.com/gmes78/libcdio-sys) | 0.5.0 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
 | [log](https://github.com/rust-lang/log) | 0.4.20 | The Rust Project Developers | Apache-2.0 or MIT |
 | [miniz_oxide](https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide) | 0.7.1 | [Frommi](mailto:daniil.liferenko@gmail.com) and [oyvindln](mailto:oyvindln@users.noreply.github.com) | Apache-2.0, MIT, or Zlib |
@@ -38,7 +39,7 @@
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.66 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [ring](https://github.com/briansmith/ring) | 0.16.20 | [Brian Smith](mailto:brian@briansmith.org) |  |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.6 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.7 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustls](https://github.com/rustls/rustls) | 0.21.7 |  | Apache-2.0, ISC, or MIT |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.100.2 |  |  |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.101.4 |  | ISC |
@@ -60,6 +61,8 @@
 | [untrusted](https://github.com/briansmith/untrusted) | 0.7.1 | [Brian Smith](mailto:brian@briansmith.org) | ISC |
 | [ureq](https://github.com/algesten/ureq) | 2.7.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |
 | [url](https://github.com/servo/rust-url) | 2.4.1 | The rust-url developers | Apache-2.0 or MIT |
-| [utc2k](https://github.com/Blobfolio/utc2k) | 0.6.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [webpki-roots](https://github.com/rustls/webpki-roots) | 0.23.1 |  | MPL-2.0 |
 | [write_atomic](https://github.com/Blobfolio/write_atomic) | 0.4.0 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
+| [zstd](https://github.com/gyscos/zstd-rs) | 0.12.4 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | MIT |
+| [zstd-safe](https://github.com/gyscos/zstd-rs) | 6.0.6 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |
+| [zstd-sys](https://github.com/gyscos/zstd-rs) | 2.0.8+zstd.1.5.5 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |

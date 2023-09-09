@@ -2,69 +2,60 @@
 # Rip Rip Hooray: Ripping
 */
 
-mod iter;
+pub(super) mod data;
+pub(super) mod iter;
 pub(super) mod opts;
 
-use cdtoc::{
-	AccurateRip,
-	Toc,
-	Track,
-};
+use cdtoc::Track;
 use crate::{
-	BYTES_PER_SAMPLE,
-	BYTES_PER_SECTOR,
-	cache_read,
-	cache_write,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
-	CD_LEADIN,
 	chk_accuraterip,
 	chk_ctdb,
 	Disc,
 	KillSwitch,
-	NULL_SAMPLE,
 	ReadOffset,
-	RipRipError,
 	RipOptions,
-	Sample,
+	RipRipError,
+	RipSamples,
 	SAMPLES_PER_SECTOR,
 };
-use dactyl::NiceFloat;
+use dactyl::{
+	NiceFloat,
+	traits::SaturatingFrom,
+};
 use fyi_msg::{
 	Msg,
 	Progless,
 };
-use hound::{
-	SampleFormat,
-	WavSpec,
-	WavWriter,
-};
 use iter::ReadIter;
-use serde::{
-	Serialize,
-	Deserialize,
-};
 use std::{
-	io::Cursor,
 	ops::Range,
+	path::PathBuf,
 };
 
 
+
+/// # Color: Bad.
+const COLOR_BAD: &str = "91";
+
+/// # Color: Maybe.
+const COLOR_MAYBE: &str = "38;5;208";
+
+/// # Color: Likely.
+const COLOR_LIKELY: &str = "93";
+
+/// # Color: Confirmed.
+const COLOR_CONFIRMED: &str = "92";
 
 /// # Quality Bar.
 const QUALITY_BAR: &str = "########################################################################";
 
-/// # Extra Sector Reads.
+/// # Sample Padding.
 ///
-/// To account for potential read offset variation, all tracks are under- and
-/// overread by ten sectors. (The appropriate portion is cut out when saving
-/// the track.)
-const SECTOR_BUFFER: u32 = 10;
-
-/// # Extra Sample Reads.
-///
-/// Same as the sector buffer, but in samples.
-const SAMPLE_BUFFER: u32 = SECTOR_BUFFER * SAMPLES_PER_SECTOR;
+/// Our rip ranges are padded on either end by 10 sectors to make it easier for
+/// drives with different read offsets to contribute to the same rip.
+const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
 
 /// # C2 Sample Set.
 ///
@@ -74,235 +65,146 @@ type SectorC2s = [bool; SAMPLES_PER_SECTOR as usize];
 
 
 
-#[derive(Debug)]
-/// # A Rip!
+/// # Rip Session.
 ///
-/// This struct represents a rip-in-progress. It holds the data gathered, as
-/// well as various state information. Its eponymous `Rip::rip` method handles
-/// the actual ripping.
-pub(super) struct Rip {
-	ar: AccurateRip,
-	track: Track,
-	rip_lsn: Range<i32>, // The track range with 10 extra sectors on either end.
-	state: Vec<RipSample>,
+/// This struct holds everything needed to (re-)rip a track.
+pub(crate) struct Rip<'a> {
+	disc: &'a Disc,
+	opts: &'a RipOptions,
+	distance: ReadIter,
+	state: RipSamples,
 }
 
-impl Rip {
-	#[allow(clippy::cast_possible_wrap)] // These are known constants; they fit.
-	#[allow(clippy::cast_sign_loss)] // Same.
-	/// # New.
+impl<'a> Rip<'a> {
+	/// # New!
 	///
-	/// Prepare — but do not execte — a new rip for the track. The AccurateRip
-	/// ID is used to prevent collisions with state data between different
-	/// discs (in the event multiple rips are run from the same CWD without
-	/// cleanup).
-	///
-	/// This will look for and load a previous rip state if it exists. If for
-	/// any reason the numbers don't work out, it will prompt to see if you
-	/// want to start over or abort.
-	///
-	/// Ripping requires an annoying large number of casts between arbitrary
-	/// numeric types. This method pre-tests those conversions so we know
-	/// everything will fit each type.
-	///
-	/// ## Errors
-	///
-	/// This will return errors if the numbers can't be converted between the
-	/// necessary types, cache errors are encountered, or the data cannot be
-	/// initialized.
-	pub(super) fn new(ar: AccurateRip, track: Track, opts: &RipOptions) -> Result<Self, RipRipError> {
-		let idx = track.number();
-		let rng = track.sector_range_normalized();
+	/// Initialize, but don't start, a new rip session.
+	pub(crate) fn new(disc: &'a Disc, track: Track, opts: &'a RipOptions)
+	-> Result<Self, RipRipError> {
+		let state = RipSamples::from_track(disc.toc(), track, opts.resume())?;
+		let rng = state.sector_rip_range();
+		let rng = rip_distance(
+			rng.end - rng.start,
+			opts.offset()
+		);
+		let distance = ReadIter::new(rng.start, rng.end, opts.backwards());
 
-		// Make sure the range fits i32.
-		let track_lsn =
-			i32::try_from(rng.start).map_err(|_| RipRipError::RipOverflow(idx))?..
-			i32::try_from(rng.end).map_err(|_| RipRipError::RipOverflow(idx))?;
-
-		// Make sure we can add the buffer to each end too.
-		let rip_lsn =
-			track_lsn.start.checked_sub(SECTOR_BUFFER as i32).ok_or(RipRipError::RipOverflow(idx))?..
-			track_lsn.end.checked_add(SECTOR_BUFFER as i32).ok_or(RipRipError::RipOverflow(idx))?;
-
-		// Make sure the range in samples fits i32, u32, and usize.
-		let expected_len = (rip_lsn.end - rip_lsn.start).checked_mul(SAMPLES_PER_SECTOR as i32)
-			.and_then(|v| u32::try_from(v).ok())
-			.and_then(|v| usize::try_from(v).ok())
-			.ok_or(RipRipError::RipOverflow(idx))?;
-
-		// Also make sure the equivalent file size of the track can be
-		// represented with usize.
-		((track_lsn.end - track_lsn.start) as usize).checked_mul(BYTES_PER_SECTOR as usize)
-			.ok_or(RipRipError::RipOverflow(idx))?;
-
-		// Do we have an existing copy to resume?
-		let mut state = Vec::new();
-		if opts.resume() {
-			if let Some(old) = cache_read(state_path(ar, idx))? {
-				// Make sure it makes sense.
-				let old = bincode::deserialize::<Vec<RipSample>>(&old);
-				if old.as_ref().map_or(true, |o| o.len() != expected_len) {
-					Msg::warning(format!("The state data for track #{idx} is corrupt.")).eprint();
-					if ! fyi_msg::confirm!(yes: "Do you want to start over?") {
-						return Err(RipRipError::Killed);
-					}
-				}
-
-				// Use it if it's good!
-				if let Ok(old) = old {
-					if old.len() == expected_len { state = old; }
-				}
-			}
-		}
-
-		// Fix the sizing if necessary.
-		if state.len() != expected_len {
-			state.truncate(0);
-			state.try_reserve(expected_len).map_err(|_| RipRipError::RipOverflow(idx))?;
-			state.resize(expected_len, RipSample::Tbd);
-		}
-
-		Ok(Self { ar, track, rip_lsn, state })
+		Ok(Self {
+			disc,
+			opts,
+			distance,
+			state,
+		})
 	}
-}
 
-impl Rip {
-	/// # Rip a Track!
+	/// # Rip!
 	///
-	/// Actually rip the data!
-	pub(super) fn rip(
-		&mut self,
-		disc: &Disc,
-		opts: &RipOptions,
-		progress: &Progless,
-		killed: &KillSwitch,
-	) -> Result<Option<String>, RipRipError> {
-		// If we're resuming, we might need to "upgrade" previous iffy entries
-		// to meet a lower paranoia requirement.
-		let paranoia = opts.paranoia();
-		for sample in &mut self.state {
-			sample.maybe_confirm(paranoia);
-		}
-
-		// If we're reconfirming, we might need to "downgrade" previous good
-		// entries to require their reconfirmation. In such cases, we'll start
-		// the count at one below the paranoia level.
-		if 1 < paranoia && opts.reconfirm() {
-			let count = paranoia - 1;
-			for sample in &mut self.state {
-				if let RipSample::Good(nope) = sample {
-					*sample = RipSample::Iffy(vec![(*nope, count)]);
-				}
-			}
-		}
-
+	/// Rip the track, maybe more than once!
+	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
+	-> Result<PathBuf, RipRipError> {
 		if ! killed.killed() {
 			// Same method two ways. The only difference is the buffer size;
 			// a larger buffer is required for C2 when ripping without.
-			if opts.c2() {
+			if self.opts.c2() {
 				let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-				self._rip(disc, opts, &mut buf, progress, killed)?;
+				self._rip(&mut buf, progress, killed)?
 			}
 			else {
 				let mut buf = [0_u8; CD_DATA_SIZE as usize];
-				self._rip(disc, opts, &mut buf, progress, killed)?;
-			}
+				self._rip(&mut buf, progress, killed)?
+			};
 		}
 
-		// Lastly, save the track!
-		let dst = self.extract(opts.raw())?;
-		Ok(Some(dst))
+		self.state.save_track(self.opts.raw())
 	}
 
-	#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-	/// # Actual Rip (for real this time).
+	#[allow(
+		clippy::cast_possible_truncation,
+		clippy::cast_possible_wrap,
+	)]
+	/// # Rip (For Real).
 	///
-	/// This is separated from `Rip::rip` to allow for different fixed buffer
-	/// sizes. We have to initialize those ahead of time to keep Rust happy.
-	fn _rip(
-		&mut self,
-		disc: &Disc,
-		opts: &RipOptions,
-		buf: &mut [u8],
-		progress: &Progless,
-		killed: &KillSwitch,
-	) -> Result<(), RipRipError> {
-		// Lots of variables!
-		let offset = opts.offset();
-		let resume = u8::from(self.state.iter().any(RipSample::is_good));
-		let (rng_start, rng_end) = self.rip_distance(offset);
-		let state_path = state_path(self.ar, self.track.number());
+	/// This method is separated out from the main one primarily because the
+	/// fixed data buffer has a variable size depending on whether or not C2
+	/// pointers are to be included. Creating those in the previous step allows
+	/// us to avoid conflicts with Rust's type checker.
+	///
+	/// Returns `true` if the rip has been confirmed, `false` if not.
+	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
+	-> Result<bool, RipRipError> {
+		let resume = u8::from(! self.state.is_new());
+		let offset = self.opts.offset();
+		let rip_rng = self.state.sector_rip_range();
+		let lsn_start = rip_rng.start;
+		let leadout = self.disc.toc().audio_leadout() as i32;
 		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
-		let leadout = disc.toc().audio_leadout() as i32 - CD_LEADIN as i32;
+		let mut confirmed = self.state.is_confirmed();
 
 		// Onto the pass(es)!
-		for pass in 0..opts.passes() {
+		for pass in 0..self.opts.passes() {
 			// Reset progress bar.
-			let _res = progress.reset((rng_end - rng_start) as u32); // This won't fail.
+			let _res = progress.reset((self.distance.len() as u32).saturating_add(1)); // This won't fail.
 
-			// Try to bust the cache. We can't know when this is or isn't
-			// necessary, so should run it on each pass just in case.
-			if opts.cache_bust() && ! (killed.killed() || self.track_good()) {
-				progress.set_title(Some(Msg::custom("Standby", 11, "Cache busting…")));
-				disc.cdio().bust_cache(self.rip_lsn.clone(), leadout);
+			// Bust the cache.
+			if self.opts.cache_bust() && ! (killed.killed() || confirmed) {
+				progress.set_title(Some(Msg::custom("Standby", 11, "Busting the cache…")));
+				self.disc.cdio().bust_cache(rip_rng.clone(), leadout);
 			}
 
 			// Update the progress title to reflect the track at hand.
 			progress.set_title(Some(Msg::custom(
-				rip_title(pass + resume),
+				rip_title_prefix(pass + resume),
 				199,
 				&format!(
 					"Track #{}{}…",
-					self.track.number(),
-					if opts.backwards() { " (backwards)" } else { "" },
+					self.state.track().number(),
+					if self.opts.backwards() { " (backwards)" } else { "" },
 				)
 			)));
 
-			// Update the data, one sector at a time.
-			for k in ReadIter::new(rng_start, rng_end, opts.backwards()) {
-				// Cut out the offset-adjusted portion of the state
-				// corresponding to the sector being read. (We'll likely write
-				// data a little earlier or later than we read it.)
-				let state_start =
-					if offset.is_negative() { k * SAMPLES_PER_SECTOR as usize + offset.samples_abs() as usize }
-					else { k * SAMPLES_PER_SECTOR as usize - offset.samples_abs() as usize };
-				let state = &mut self.state[state_start..=state_start + 588];
+			// Pull down the data, one sector at a time.
+			for k in self.distance.clone() {
+				// Figure out which sector we're reading from, and what offset
+				// sample that corresponds to.
+				let read_lsn = lsn_start + k;
+				let state = self.state.offset_sector_mut(read_lsn, offset)?;
 
-				// Skip the range if we're done or there's nothing to refine.
-				if killed.killed() || state.iter().all(RipSample::is_good) {
-					progress.increment();
-					continue;
-				}
-
-				// The starting LSN for this section.
-				let lsn = self.rip_lsn.start + k as i32;
-
-				// If this LSN is unreadable, we can assume the data is null
-				// and save ourselves the trouble of actually reading from the
-				// disc.
-				if lsn < 0 || lsn >= leadout {
-					for sample in &mut *state {
-						*sample = RipSample::Good(NULL_SAMPLE);
-					}
+				// We can skip this block if the user aborted or there's
+				// nothing to refine.
+				if
+					confirmed ||
+					killed.killed() ||
+					state.iter().all(|v| v.is_likely(self.opts.cutoff()))
+				{
 					progress.increment();
 					continue;
 				}
 
 				// Otherwise we have to actually talk to the drive. Ug.
-				match disc.cdio().read_cd(buf, lsn) {
+				match self.disc.cdio().read_cd(buf, read_lsn) {
 					Ok(()) =>
 						// Parse the C2 data. Each bit represents one byte of
-						// audio data, but it's silly to zoom so far down;
-						// we'll treat sample pairs as pass/fail, quartering
-						// the effort.
-						if opts.c2() {
-							for (k2, &v) in c2.chunks_exact_mut(2).zip(&buf[CD_DATA_SIZE as usize..]) {
-								k2[0] = 0 != v & 0b1111_0000;
-								k2[1] = 0 != v & 0b0000_1111;
+						// audio data, we'll never worry about sub-sample
+						// accuracy.
+						if self.opts.c2() {
+							// Set errors at sector level.
+							if self.opts.strict() {
+								reset_c2(
+									&mut c2,
+									buf.iter()
+										.skip(usize::from(CD_DATA_SIZE))
+										.any(|&v| 0 != v)
+								);
+							}
+							// Set errors at sample level.
+							else {
+								for (k2, &v) in c2.chunks_exact_mut(2).zip(buf.iter().skip(usize::from(CD_DATA_SIZE))) {
+									k2[0] = 0 != v & 0b1111_0000;
+									k2[1] = 0 != v & 0b0000_1111;
+								}
 							}
 						}
-						// Assume C2 is fine since we aren't asking for that
-						// data.
+						// Assume C2 is fine since that data is absent.
 						else { reset_c2(&mut c2, false); },
 					// Assume total C2 failure if there's a hard read error.
 					Err(RipRipError::CdRead(_)) => { reset_c2(&mut c2, true); },
@@ -310,671 +212,280 @@ impl Rip {
 					Err(e) => return Err(e),
 				}
 
-				// Any C2 issues across the whole sector?
-				let sector_c2 = c2.iter().any(|v| *v);
-
 				// Patch the data!
-				for ((old, new), sample_c2) in state.iter_mut()
-					.zip(buf[..CD_DATA_SIZE as usize].chunks_exact(4))
-					.zip(c2.iter().copied()) {
-					if let Ok(new) = Sample::try_from(new) {
-						old.update(new, opts, sample_c2, sector_c2);
-					}
+				for ((old, new), err) in state.iter_mut()
+					.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
+					.zip(c2.iter().copied())
+				{
+					old.update(new.try_into().unwrap(), err);
 				}
 
 				progress.increment();
-			}
+			} // End block.
 
-			// Summarize the approximate quality.
-			progress.finish();
-			self.summarize(disc, opts);
+			// Verification.
+			progress.set_title(Some(Msg::custom("Standby", 11, "Verifying the ripped track…")));
+			let ar = chk_accuraterip(
+				self.disc.toc(),
+				self.state.track(),
+				self.state.track_slice(),
+			);
+			let ctdb = chk_ctdb(
+				self.disc.toc(),
+				self.state.track(),
+				self.state.track_slice(),
+			);
 
-			// Save the state data and sector log.
-			if bincode::serialize(&self.state).ok()
-				.and_then(|out| cache_write(&state_path, &out).ok())
-				.is_none()
+			// If the rip was confirmed with enough confidence, mark it
+			// thusly!
+			let conf = self.opts.confidence();
+			if
+				! confirmed &&
+				(
+					ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
+					ctdb.map_or(false, |v| u16::from(conf) <= v)
+				)
 			{
-				Msg::warning("The rip state couldn't be saved.").eprint();
-			}
-			if self.log_problem_sectors().is_err() {
-				Msg::warning("The problem sector log couldn't be saved.").eprint();
+				self.state.confirm_track();
+				confirmed = true;
 			}
 
-			// Should we stop early?
-			if killed.killed() || self.track_good() { break; }
-		}
+			// Save the state.
+			progress.set_title(Some(Msg::custom("Standby", 11, "Saving the state…")));
+			let saved = self.state.save_state();
+			progress.finish();
 
-		Ok(())
+			if saved.is_err() {
+				Msg::warning("The rip state could not be saved.").eprint();
+			}
+
+			// Summarize the results.
+			self.summarize(confirmed, ar, ctdb);
+
+			// Maybe stop early?
+			if confirmed || killed.killed() { break; }
+		} // End pass.
+
+		Ok(confirmed)
 	}
 
-	/// # Summarize the Rip.
+	/// # Summarize.
 	///
-	/// This primarily prints a summary of the state of the rip after each
-	/// pass, but it will also verify probable rips against the AccurateRip and
-	/// CUETools databases, and possibly auto-confirm samples if the matches
-	/// are sufficient.
-	fn summarize(&mut self, disc: &Disc, opts: &RipOptions) {
-		let mut q = RipQuality::from_samples(self.track_slice());
+	/// Count up the different sample statuses and print a nice colored bar and
+	/// legend to demonstrate the "quality". This will also print out
+	/// AccurateRip and CTDB results, if any.
+	fn summarize(&self, confirmed: bool, ar: Option<(u8, u8)>, ctdb: Option<u16>) {
+		let track = self.state.track();
+		let (q_bad, q_maybe, q_likely, q_confirmed) =
+			if confirmed { (0, 0, 0, usize::saturating_from(track.samples())) }
+			else { self.state.track_quality(self.opts.cutoff()) };
+		let q_total = q_bad + q_maybe + q_likely + q_confirmed;
 
-		// If the data is decent, see if the track matches third-party
-		// checksum databases (for added assurance).
-		let (ar, ctdb) =
-			if q.bad < SAMPLES_PER_SECTOR as usize { self.verify(disc.toc()) }
-			else { (None, None) };
-		let verified = u16::max(
-			ar.map_or(0, |(v1, v2)| u16::from(u8::max(v1, v2))),
-			ctdb.unwrap_or(0),
-		);
-
-		// Use AccurateRip/CTDB as a proxy for our own confirmation,
-		// upgrading not-good to good if the matches are high enough.
-		if u16::from(opts.paranoia()) <= verified {
-			q.make_good();
-			let rng = self.track_range();
-			for sample in &mut self.state[rng] {
-				if ! sample.is_good() {
-					*sample = RipSample::Good(sample.as_array());
-				}
-			}
+		// All good.
+		if confirmed {
+			Msg::custom("Ripped", 14, &format!(
+				"Track #{} has been accurately ripped!",
+				track.number(),
+			))
 		}
+		// All bad.
+		else if q_bad == q_total {
+			Msg::custom("Ripped", 4, &format!(
+				"Track #{} still needs a lot of work!",
+				track.number(),
+			))
+		}
+		// Nothing likely yet.
+		else if q_likely == 0 && q_confirmed == 0 {
+			let p = NiceFloat::from(
+				dactyl::int_div_float(q_maybe * 100, q_total).unwrap_or(0.0)
+			);
+			Msg::custom("Ripped", 4, &format!(
+				"Track #{} is \x1b[2m(maybe)\x1b[0m {}% complete.",
+				track.number(),
+				p.compact_str(),
+			))
+		}
+		// A completeness range.
+		else {
+			let q_total = q_bad + q_maybe + q_likely + q_confirmed;
+			let low = NiceFloat::from(
+				dactyl::int_div_float((q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
+			);
+			let high = NiceFloat::from(
+				dactyl::int_div_float((q_maybe + q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
+			);
 
-		// Summarize non-verifiable progress.
-		if verified == 0 {
-			// Nothing worth percent-izing yet.
-			if q.no_good() {
-				Msg::custom("Ripped", 10, &format!(
-					"Track #{} has no confirmed samples yet.",
-					self.track.number(),
+			// If rounding makes the percentages the same, just print one.
+			if low.precise_str(3) == high.precise_str(3) {
+				Msg::custom("Ripped", 4, &format!(
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% complete.",
+					track.number(),
+					low.compact_str(),
 				))
 			}
+			// Otherwise show both.
 			else {
-				let p1 = NiceFloat::from(q.percent_good() * 100.0);
-				let p2 = NiceFloat::from(dactyl::int_div_float(q.good + q.maybe, q.total())
-					.unwrap_or(0.0) * 100.0);
-
-				// Without maybes, our only estimate is good/total.
-				if q.maybe == 0 || p1.precise_str(3) == p2.precise_str(3) {
-					Msg::custom("Ripped", 10, &format!(
-						"Track #{} is \x1b[2m(roughly)\x1b[0m {}% complete.",
-						self.track.number(),
-						p1.compact_str(),
-					))
-				}
-				// Without bads, we're somewhere between good/total and 100%.
-				else if q.bad == 0 {
-					Msg::custom("Ripped", 10, &format!(
-						"Track #{} is \x1b[2m(probably at least)\x1b[0m {}% complete.",
-						self.track.number(),
-						p1.compact_str(),
-					))
-				}
-				// With goods and maybes, we're probably somewhere between the two.
-				else {
-					Msg::custom("Ripped", 10, &format!(
-						"Track #{} is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
-						self.track.number(),
-						p1.precise_str(3),
-						p2.precise_str(3),
-					))
-				}
+				Msg::custom("Ripped", 4, &format!(
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% – {}% complete.",
+					track.number(),
+					low.precise_str(3),
+					high.precise_str(3),
+				))
 			}
-		}
-		// If AccurateRip and/or CTDB matched, we're good to go!
-		else {
-			Msg::custom("Ripped", 10, &format!(
-				"Track #{} has been \x1b[1maccurately\x1b[0m ripped!",
-				self.track.number(),
-			))
 		}
 			.with_newline(true)
 			.eprint();
 
-		// Inject a graphical-ish breakdown too for beauty.
-		print_bar(q, RipQuality::from_sectors(self.track_slice()), ar, ctdb);
-	}
+		// Print a color-coded bar and legend.
+		print_bar(q_bad, q_maybe, q_likely, q_confirmed);
 
-	#[allow(clippy::cast_possible_truncation)]
-	/// # Extract the Track.
-	///
-	/// This extracts and saves the offset-adjusted track — using the best data
-	/// available — to disk in either raw PCM or WAV format.
-	///
-	/// It returns the destination path used for reference.
-	///
-	/// ## Errors
-	///
-	/// This will bubble up any file I/O-type errors encountered.
-	fn extract(&self, raw: bool) -> Result<String, RipRipError> {
-		let dst = rip_path(self.track.number(), raw);
-		let rng = self.track_range();
-
-		// Raw is easy; we just need to flatten the samples.
-		if raw {
-			let mut flat: Vec<u8> = Vec::with_capacity((rng.end - rng.start) * BYTES_PER_SAMPLE as usize);
-			for v in &self.state[rng] {
-				flat.extend_from_slice(v.as_slice());
-			}
-			cache_write(&dst, &flat)?;
-		}
-		// Wav requires _headers_ and shit.
-		else {
-			let spec = WavSpec {
-				channels: 2,
-				sample_rate: 44100,
-				bits_per_sample: 16,
-				sample_format: SampleFormat::Int,
-			};
-			let mut buf = Cursor::new(Vec::with_capacity((rng.end - rng.start) * BYTES_PER_SAMPLE as usize + 44));
-			let mut wav = WavWriter::new(&mut buf, spec)
-				.map_err(|_| RipRipError::Write(dst.clone()))?;
-
-			// In CD contexts, a sample is general one L+R pair. In other
-			// contexts, like hound, L and R are each their own sample.
-			// (We need to multiple our internal count by 2 to match.)
-			{
-				let mut writer = wav.get_i16_writer((rng.end - rng.start) as u32 * 2);
-				for sample in &self.state[rng] {
-					let sample = sample.as_array();
-					writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
-					writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
-				}
-				writer.flush().map_err(|_| RipRipError::Write(dst.clone()))?;
-			}
-
-			wav.flush().ok()
-				.and_then(|_| wav.finalize().ok())
-				.and_then(|_| cache_write(&dst, &buf.into_inner()).ok())
-				.ok_or_else(|| RipRipError::Write(dst.clone()))?;
-		}
-
-		Ok(dst)
-	}
-
-	#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-	/// # Log Problem Sectors.
-	fn log_problem_sectors(&self) -> Result<(), RipRipError> {
-		let start = self.rip_lsn.start + SECTOR_BUFFER as i32;
-		let issues: Vec<String> = self.track_slice()
-			.iter()
-			.enumerate()
-			.filter_map(|(k, v)|
-				if v.is_good() { None }
-				else { Some((k as i32 + start).to_string()) }
-			)
-			.collect();
-		if issues.is_empty() { Ok(()) }
-		else {
-			let dst = log_path(self.ar, self.track.number());
-			let mut issues = issues.join("\n");
-			issues.push('\n');
-			cache_write(dst, issues.as_bytes())
-		}
-	}
-
-	/// # Verify Rip!
-	///
-	/// Check the rip against the AccurateRip and CUETools databases and return
-	/// the confidences, if any.
-	///
-	/// AccurateRip has two different algorithms for historical reasons, hence
-	/// two different confidences. They also stop counting at 99, so we don't
-	/// need anything bigger than a `u8`.
-	fn verify(&self, toc: &Toc) -> (Option<(u8, u8)>, Option<u16>) {
-		let state = self.track_slice();
-		let ar = chk_accuraterip(self.ar, self.track, state);
-		let ctdb = chk_ctdb(toc, self.ar, self.track, state);
-		(ar, ctdb)
-	}
-}
-
-impl Rip {
-	#[allow(clippy::integer_division)]
-	/// # Rippable Sectors.
-	///
-	/// "Offsets" basically mean that when we read data at, say, LSN/sample 0,
-	/// we'd need to record them as having come from, say, +667 samples. The 10
-	/// sector padding we're keeping ensures we never throw away read data, but
-	/// we can't necessarily fill them all the way to the edges either.
-	///
-	/// This returns the range we can stray from `rip_lsn.0` while being able
-	/// to both read _and_ write, given the offset.
-	///
-	/// Regardless of how much is skipped, the complete track data in the
-	/// middle will always get covered.
-	fn rip_distance(&self, offset: ReadOffset) -> (usize, usize) {
-		let mut rng_start: usize = 0;
-		let mut rng_end: usize = self.state.len() / SAMPLES_PER_SECTOR as usize;
-		let sectors_abs = offset.sectors_abs() as usize;
-
-		// Negative offsets require the data be pushed forward to "start"
-		// at the right place.
-		if offset.is_negative() { rng_end -= sectors_abs; }
-		// Positive offsets require the data be pulled backward instead.
-		else { rng_start += sectors_abs; }
-
-		(rng_start, rng_end)
-	}
-
-	/// # Track All Good?
-	///
-	/// Returns `true` if all samples within the track range are good.
-	fn track_good(&self) -> bool {
-		self.track_slice().iter().all(RipSample::is_good)
-	}
-
-	/// # Track Range.
-	///
-	/// Return the (state) index range corresponding to the actual track.
-	fn track_range(&self) -> Range<usize> {
-		SAMPLE_BUFFER as usize..self.state.len() - SAMPLE_BUFFER as usize
-	}
-
-	/// # Track Slice.
-	///
-	/// Return the slice of `self.state` comprising the track.
-	fn track_slice(&self) -> &[RipSample] {
-		let rng = self.track_range();
-		&self.state[rng]
-	}
-}
-
-
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-/// # Rip Quality.
-///
-/// Total up the good, maybe, and bad samples or sectors within a slice.
-///
-/// In sector-mode, maybe and bad are grouped together under maybe.
-struct RipQuality {
-	good: usize,
-	maybe: usize,
-	bad: usize,
-}
-
-impl RipQuality {
-	/// # From Samples.
-	fn from_samples(src: &[RipSample]) -> Self {
-		let (good, maybe, bad) = src.iter()
-			.fold((0, 0, 0), |acc, v|
-				match v {
-					RipSample::Good(_) => (acc.0 + 1, acc.1, acc.2),
-					RipSample::Iffy(_) => (acc.0, acc.1 + 1, acc.2),
-					_ => (acc.0, acc.1, acc.2 + 1),
-				}
+		// Add AccurateRip, if any.
+		let conf = self.opts.confidence();
+		macro_rules! color {
+			($v:expr, $conf:expr) => (
+				if $v == 0 { COLOR_BAD }
+				else if $v < $conf { COLOR_MAYBE }
+				else { COLOR_CONFIRMED }
 			);
-
-		Self { good, maybe, bad }
-	}
-
-	/// # From Sectors.
-	///
-	/// This groups the samples by sector, assessing the quality as a whole.
-	///
-	/// Both bad and iffy sectors are counted as "maybe".
-	fn from_sectors(src: &[RipSample]) -> Self {
-		let (good, maybe) = src.chunks_exact(SAMPLES_PER_SECTOR as usize)
-			.fold((0, 0), |acc, v|
-				if v.iter().all(RipSample::is_good) { (acc.0 + 1, acc.1) }
-				else { (acc.0, acc.1 + 1) }
+		}
+		if let Some((v1, v2)) = ar {
+			let c1 = color!(v1, conf);
+			let c2 = color!(v2, conf);
+			eprintln!(
+				"        AccurateRip: \x1b[{c1}m{:02}\x1b[0;2m+\x1b[0;{c2}m{:02}\x1b[0m",
+				u8::min(99, v1),
+				u8::min(99, v2),
 			);
-
-		Self { good, maybe, bad: 0 }
-	}
-}
-
-impl RipQuality {
-	/// # Count up Buckets.
-	///
-	/// Return the number of non-zero quality buckets in use.
-	const fn buckets(&self) -> u8 {
-		(self.good != 0) as u8 +
-		(self.maybe != 0) as u8 +
-		(self.bad != 0) as u8
-	}
-
-	/// # Make Good.
-	///
-	/// Shift all totals to the good.
-	fn make_good(&mut self) {
-		self.good += self.bad + self.maybe;
-		self.bad = 0;
-		self.maybe = 0;
-	}
-
-	/// # No Good?
-	const fn no_good(&self) -> bool { self.good == 0 }
-
-	/// # Percentage of bad.
-	fn percent_bad(&self) -> f64 {
-		dactyl::int_div_float(self.bad, self.total()).unwrap_or(0.0)
-	}
-
-	/// # Percentage of good.
-	fn percent_good(&self) -> f64 {
-		dactyl::int_div_float(self.good, self.total()).unwrap_or(0.0)
-	}
-
-	/// # Percentage of maybe.
-	fn percent_maybe(&self) -> f64 {
-		dactyl::int_div_float(self.maybe, self.total()).unwrap_or(0.0)
-	}
-
-	/// # Total.
-	const fn total(&self) -> usize { self.good + self.maybe + self.bad }
-}
-
-
-
-
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-/// # Rip Sample.
-///
-/// This is a combined sample/status structure, making it easy to know where
-/// any given sample stands at a glance.
-///
-/// This is almost but not quite `Copy` because we have to store an unknown
-/// number of samples for `Self::Iffy`. Oh well.
-pub(super) enum RipSample {
-	#[default]
-	/// # Not yet read.
-	Tbd,
-
-	/// # The drive gave us something but said it was bad.
-	Bad(Sample),
-
-	/// # Sample(s) awaiting paranoia confirmation.
-	///
-	/// Iffy samples are sorted by popularity (most to least), so the first
-	/// entry is always the "best", relatively speaking.
-	Iffy(Vec<(Sample, u8)>),
-
-	/// # It should be good!
-	Good(Sample),
-}
-
-impl RipSample {
-	/// # As Slice.
-	///
-	/// Return the most appropriate single 4-byte sample as a slice.
-	pub(super) fn as_slice(&self) -> &[u8] {
-		match self {
-			Self::Tbd => NULL_SAMPLE.as_slice(),
-			Self::Bad(s) | Self::Good(s) => s.as_slice(),
-			Self::Iffy(ref s) => s[0].0.as_slice(),
 		}
-	}
 
-	/// # As Array.
-	pub(super) fn as_array(&self) -> [u8; 4] {
-		match self {
-			Self::Tbd => NULL_SAMPLE,
-			Self::Bad(s) | Self::Good(s) => *s,
-			Self::Iffy(ref s) => s[0].0,
+		// Add CTDB, if any.
+		if let Some(v1) = ctdb {
+			let c1 = color!(v1, u16::from(conf));
+			eprintln!(
+				"        CUETools DB: \x1b[{c1}m{:03}\x1b[0m",
+				u16::min(999, v1),
+			);
 		}
-	}
 
-	/// # Is Good?
-	const fn is_good(&self) -> bool { matches!(self, Self::Good(_)) }
-
-	#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-	/// # Maybe Confirm.
-	///
-	/// Upgrade an iffy sample to a confirmed one if its count is at or above
-	/// the paranoia threshold, and represents two thirds (rounded up) of all
-	/// entries.
-	fn maybe_confirm(&mut self, paranoia: u8) {
-		if let Self::Iffy(set) = self {
-			if paranoia <= set[0].1 {
-				let total = set.iter().fold(0_u8, |acc, v| acc.saturating_add(v.1));
-				let majority = u8::min(
-					170,
-					(f64::from(total) * 2.0 / 3.0).ceil() as u8,
-				);
-				if majority <= set[0].1 {
-					*self = Self::Good(set[0].0);
-				}
-			}
-		}
-	}
-
-	/// # Update.
-	///
-	/// Potentially update an entry.
-	///
-	/// Good entries don't change.
-	///
-	/// TBD entries _always_ change:
-	/// * If `sample_c2`, to Bad
-	/// * If `sector_c2` and `paranoia`, to Iffy
-	/// * If no-trust, to Iffy
-	/// * Otherwise to Good
-	///
-	/// Bad samples change if not `sample_c2`:
-	/// * If `paranoia`, to Iffy
-	/// * Otherwise to Good
-	///
-	/// Iffy samples change if not `sample_c2`:
-	/// * If confirmed `paranoia` times, to Good
-	/// * Otherwise still Iffy, but with updated table
-	fn update(&mut self, new: Sample, opts: &RipOptions, sample_c2: bool, sector_c2: bool) {
-		let paranoia = opts.paranoia();
-		match self {
-			// Leave good entries alone.
-			Self::Good(_) => {},
-
-			// Always update a TBD.
-			Self::Tbd =>
-				if sample_c2 { *self = Self::Bad(new); }
-				else if ! opts.trust() || (sector_c2 && 1 < paranoia) { *self = Self::Iffy(vec![(new, 1)]); }
-				else { *self = Self::Good(new); },
-
-			// Bad can only move to iffy, unless there's no paranoia to apply.
-			Self::Bad(_) => if ! sample_c2 {
-				if 1 < paranoia { *self = Self::Iffy(vec![(new, 1)]); }
-				else { *self = Self::Good(new); }
-			},
-
-			// Iffy entries are a little more involved.
-			Self::Iffy(set) => if ! sample_c2 {
-				// See if the sample is in the set.
-				let mut found = false;
-				for (old, count) in &mut *set {
-					if new.eq(old) {
-						*count += 1;
-						found = true;
-					}
-				}
-
-				// It's new.
-				if ! found { set.push((new, 1)); }
-
-				// Sort by popularity, most to least.
-				set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-
-				// Maybe graduate.
-				self.maybe_confirm(paranoia);
-			},
-		}
+		// An extra new line to give some separation between this and the next
+		// operation.
+		eprintln!();
 	}
 }
 
 
 
-#[allow(
-	clippy::cast_possible_truncation,
-	clippy::cast_precision_loss,
-	clippy::cast_sign_loss,
-)]
-/// # Print Quality Bar.
-///
-/// This presents the final quality of a rip as a colored bar, with colored
-/// labels. It also appends the AccurateRip/CUETools results, if any.
-fn print_bar(q: RipQuality, qs: RipQuality, ar: Option<(u8, u8)>, ctdb: Option<u16>) {
-	// Carve up a fixed-length bar into colored divisions.
+#[allow(clippy::cast_precision_loss)]
+/// # Print Summary Bar and Legend.
+fn print_bar(q_bad: usize, q_maybe: usize, q_likely: usize, q_confirmed: usize) {
+	let q_total = q_bad + q_maybe + q_likely + q_confirmed;
 	let b_total = QUALITY_BAR.len() as f64;
-	let b_maybe =
-		if q.maybe == 0 { 0 }
-		else {
-			usize::max(1, (q.percent_maybe() * b_total).floor() as usize)
-		};
-	let b_bad =
-		if q.bad == 0 { 0 }
-		else {
-			usize::max(1, (q.percent_bad() * b_total).floor() as usize)
-		};
-	let b_good = QUALITY_BAR.len() - b_maybe - b_bad;
+	macro_rules! bar_slice {
+		($val:ident) => (
+			if $val == 0 { 0 }
+			else {
+				usize::max(1, (dactyl::int_div_float($val, q_total).unwrap_or(0.0) * b_total).floor() as usize)
+			}
+		);
+	}
+	let mut bars =[
+		bar_slice!(q_bad),
+		bar_slice!(q_maybe),
+		bar_slice!(q_likely),
+		bar_slice!(q_confirmed),
+	];
+
+	// Fix up rounding so we always have a full bar.
+	let b_len = bars.iter().copied().sum::<usize>();
+	let b_diff = b_len.abs_diff(QUALITY_BAR.len());
+
+	// Too big.
+	if b_len > QUALITY_BAR.len() {
+		let max = bars.iter().copied().max().unwrap();
+		for b in &mut bars {
+			if *b == max {
+				*b -= b_diff;
+				break;
+			}
+		}
+	}
+	// Too small.
+	else if 0 != b_diff {
+		let max = bars.iter().copied().max().unwrap();
+		for b in &mut bars {
+			if *b == max {
+				*b += b_diff;
+				break;
+			}
+		}
+	}
+
 	eprintln!(
-		"        \x1b[1;91m{}\x1b[0;1;93m{}\x1b[0;1;92m{}\x1b[0m",
-		&QUALITY_BAR[..b_bad],
-		&QUALITY_BAR[..b_maybe],
-		&QUALITY_BAR[..b_good],
+		"        \x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
+		&QUALITY_BAR[..bars[0]],
+		&QUALITY_BAR[..bars[1]],
+		&QUALITY_BAR[..bars[2]],
+		&QUALITY_BAR[..bars[3]],
 	);
 
-	// Now come up with some colored labels for that bar.
-	if 0 != q.buckets() {
-		let mut breakdown = Vec::with_capacity(3);
-		if 0 != q.bad { breakdown.push(format!("\x1b[91m{}\x1b[0m", q.bad)); }
-		if 0 != q.maybe { breakdown.push(format!("\x1b[93m{}\x1b[0m", q.maybe)); }
-		if 0 != q.good { breakdown.push(format!("\x1b[92m{}\x1b[0m", q.good)); }
+	let mut breakdown = Vec::with_capacity(4);
+	if q_bad != 0 { breakdown.push(format!("\x1b[{COLOR_BAD}m{q_bad}\x1b[0m")); }
+	if q_maybe != 0 { breakdown.push(format!("\x1b[{COLOR_MAYBE}m{q_maybe}\x1b[0m")); }
+	if q_likely != 0 { breakdown.push(format!("\x1b[{COLOR_LIKELY}m{q_likely}\x1b[0m")); }
+	if q_confirmed != 0 { breakdown.push(format!("\x1b[{COLOR_CONFIRMED}m{q_confirmed}\x1b[0m")); }
 
-		// Samples and sectors both.
-		if 2 == qs.buckets() {
-			// Since the sector view combines bad and iffy, we might want to
-			// make it red, yellow, or orange.
-			let color =
-				if 0 == q.bad { "93" }
-				else if 0 == q.maybe { "91" }
-				else { "38;5;208" };
-
-			eprintln!(
-				"        {} \x1b[2msamples  /  \x1b[0;{color}m{} \x1b[0;2m+\x1b[0;92m {}\x1b[0;2m sectors\x1b[0m",
-				breakdown.join(" \x1b[2m+\x1b[0m "),
-				qs.maybe,
-				qs.good,
-			);
-		}
-		// Just print the samples.
-		else {
-			eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join(" \x1b[2m+\x1b[0m "));
-		}
-	}
-
-	// If we matched AccurateRip and/or CTDB, add those results too.
-	if ar.is_some() || ctdb.is_some() {
-		eprintln!("        \x1b[38;5;4m-----\x1b[0m");
-
-		if let Some((v1, v2)) = ar {
-			if v1 == 0 && v2 == 0 {
-				eprintln!("        AccurateRip: \x1b[91m00+00\x1b[0m");
-			}
-			else {
-				eprintln!(
-					"        AccurateRip: \x1b[92m{:02}+{:02}\x1b[0m",
-					u8::min(99, v1),
-					u8::min(99, v2),
-				);
-			}
-		}
-
-		if let Some(v) = ctdb {
-			if v == 0 {
-				eprintln!("        CUETools: \x1b[91m000\x1b[0m");
-			}
-			else {
-				eprintln!(
-					"        CUETools: \x1b[92m{:03}\x1b[0m",
-					u16::min(999, v),
-				);
-			}
-		}
-	}
-
-	// An extra line break for visual clarity.
-	eprintln!();
-}
-
-/// # Log Path.
-///
-/// Return a path suitable for the problem-sector log.
-fn log_path(ar: AccurateRip, idx: u8) -> String {
-	format!("state/{ar}__{idx:02}-shitlist__{}.txt", utc2k::unixtime())
+	eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join("\x1b[2m + \x1b[0m"));
 }
 
 #[inline]
 /// # Reset C2 Statuses.
 ///
-/// Change all C2 status to `val`.
+/// Change all C2 statuses to `val`.
 fn reset_c2(set: &mut SectorC2s, val: bool) {
 	for c2 in set { *c2 = val; }
 }
 
-/// # Extraction Path.
+/// # Rippable Sectors.
 ///
-/// Return the relative path to use for the ripped track.
-fn rip_path(idx: u8, raw: bool) -> String {
-	if raw { format!("{idx:02}.pcm") }
-	else   { format!("{idx:02}.wav") }
+/// Read offsets mean data is written to a slightly different location than it
+/// is read from. Hence _offset_.
+///
+/// (Different drives read data slightly earlier or later for whatever dumb
+/// reason; offsets normalize the results so regardless of the drive, the rip
+/// will always be the same.)
+///
+/// Our theoretical "rip range" is padded on both ends to account for this,
+/// but since we only want to cover sectors that can be both read and written,
+/// we won't end up using all of that space.
+///
+/// This method returns the minimum and maximum distance from the start of the
+/// rip range that we can safely travel from.
+fn rip_distance(max_sectors: i32, offset: ReadOffset) -> Range<i32> {
+	let mut rng_start: i32 = 0;
+	let mut rng_end: i32 = max_sectors;
+	let sectors_abs = i32::from(offset.sectors_abs());
+
+	// Negative offsets require the data be pushed forward to "start"
+	// at the right place.
+	if offset.is_negative() { rng_end -= sectors_abs; }
+	// Positive offsets require the data be pulled backward instead.
+	else { rng_start += sectors_abs; }
+
+	rng_start..rng_end
 }
 
 #[inline]
-/// # Rip Title.
+/// # Rip Title Prefix.
 ///
-/// Return the title to use for the progress bar. This is based on the number
-/// of passes.
-const fn rip_title(pass: u8) -> &'static str {
+/// Just for fun, the prefix used for the progress bar title during ripping
+/// changes a little from pass-to-pass.
+const fn rip_title_prefix(pass: u8) -> &'static str {
 	match pass {
 		0 => "Ripping",
 		1 => "Re-Ripping",
 		2 => "Re-Re-Ripping",
 		3 => "Re-Re-Re-Ripping",
 		_ => "Re-Re-Re-Etc.-Ripping",
-	}
-}
-
-/// # State Path.
-///
-/// Return the relative path to use for the track's state file.
-fn state_path(ar: AccurateRip, idx: u8) -> String {
-	format!("state/{ar}__{idx:02}.state")
-}
-
-
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn t_maybe_confirm() {
-		let mut iffy = RipSample::Iffy(vec![
-			([0, 0, 0, 1], 1)
-		]);
-
-		// Should not upgrade.
-		iffy.maybe_confirm(3);
-		assert!(matches!(iffy, RipSample::Iffy(_)));
-
-		// Should upgrade.
-		iffy.maybe_confirm(1);
-		assert!(iffy.is_good());
-
-		iffy = RipSample::Iffy(vec![
-			([0, 0, 0, 1], 1),
-			(NULL_SAMPLE, 1),
-		]);
-
-		// Should not upgrade (super majority).
-		iffy.maybe_confirm(1);
-		assert!(matches!(iffy, RipSample::Iffy(_)));
-
-		// Now it should.
-		iffy = RipSample::Iffy(vec![
-			([0, 0, 0, 1], 2),
-			(NULL_SAMPLE, 1),
-		]);
-		iffy.maybe_confirm(1);
-		assert!(iffy.is_good());
 	}
 }

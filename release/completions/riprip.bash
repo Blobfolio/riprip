@@ -13,13 +13,15 @@ _basher___riprip() {
 	[[ " ${COMP_LINE} " =~ " --no-cache-bust " ]] || opts+=("--no-cache-bust")
 	[[ " ${COMP_LINE} " =~ " --no-resume " ]] || opts+=("--no-resume")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
-	[[ " ${COMP_LINE} " =~ " --no-trust " ]] || opts+=("--no-trust")
+	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")
 	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
-	[[ " ${COMP_LINE} " =~ " --reconfirm " ]] || opts+=("--reconfirm")
+	[[ " ${COMP_LINE} " =~ " --strict " ]] || opts+=("--strict")
 	if [[ ! " ${COMP_LINE} " =~ " -V " ]] && [[ ! " ${COMP_LINE} " =~ " --version " ]]; then
 		opts+=("-V")
 		opts+=("--version")
 	fi
+	[[ " ${COMP_LINE} " =~ " --confidence " ]] || opts+=("--confidence")
+	[[ " ${COMP_LINE} " =~ " --cutoff " ]] || opts+=("--cutoff")
 	if [[ ! " ${COMP_LINE} " =~ " -d " ]] && [[ ! " ${COMP_LINE} " =~ " --dev " ]]; then
 		opts+=("-d")
 		opts+=("--dev")
@@ -28,8 +30,10 @@ _basher___riprip() {
 		opts+=("-o")
 		opts+=("--offset")
 	fi
-	[[ " ${COMP_LINE} " =~ " --paranoia " ]] || opts+=("--paranoia")
-	[[ " ${COMP_LINE} " =~ " --refine " ]] || opts+=("--refine")
+	if [[ ! " ${COMP_LINE} " =~ " -r " ]] && [[ ! " ${COMP_LINE} " =~ " --refine " ]]; then
+		opts+=("-r")
+		opts+=("--refine")
+	fi
 	opts+=("-t")
 	opts+=("--track")
 	opts=" ${opts[@]} "

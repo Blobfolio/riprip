@@ -5,14 +5,15 @@
 use crate::{
 	BYTES_PER_SAMPLE,
 	BYTES_PER_SECTOR,
+	cache_path,
 	cache_read,
+	CACHE_SCRATCH,
 	cache_write,
 	RipSample,
 	SAMPLES_PER_SECTOR,
 };
 use crc32fast::Hasher as Crc;
 use cdtoc::{
-	AccurateRip,
 	Toc,
 	Track,
 };
@@ -58,10 +59,12 @@ const SILENCE: &[u8] = &[0; CTDB_WIGGLE];
 /// AccurateRip is pressing-specific and their database only accepts
 /// submissions from two Windows-only programs, so the match pool is limited
 /// compared to CUETools.
-pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
+pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 -> Option<(u8, u8)> {
 	// Fetch/cache the checksums.
-	let dst = format!("state/{ar}__chk-ar.bin");
+	let crc = crc32fast::hash(toc.to_string().as_bytes());
+	let ar = toc.accuraterip_id();
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ar.bin")).ok()?;
 	let chk = cache_read(&dst).ok()
 		.flatten()
 		.or_else(|| {
@@ -94,9 +97,9 @@ pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
 
 	for sample in data {
 		if start <= idx && idx <= end {
-			let slice = sample.as_array();
+			let sample = sample.as_array();
 			let v = u64::from_le_bytes([
-				slice[0], slice[1], slice[2], slice[3], 0, 0, 0, 0,
+				sample[0], sample[1], sample[2], sample[3], 0, 0, 0, 0,
 			]);
 
 			let k = idx as u64 + 1;
@@ -153,9 +156,10 @@ pub(crate) fn chk_accuraterip(ar: AccurateRip, track: Track, data: &[RipSample])
 /// It is worth noting that CUETools submissions are published more or less
 /// immediately and require no second opinion, so this method will return `0`
 /// for any value less than `2` to avoid confusion.
-pub(crate) fn chk_ctdb(toc: &Toc, ar: AccurateRip, track: Track, data: &[RipSample]) -> Option<u16> {
+pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
 	// Fetch/cache the checksums.
-	let dst = format!("state/{ar}__chk-ctdb.bin");
+	let crc = crc32fast::hash(toc.to_string().as_bytes());
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ctdb.xml")).ok()?;
 	let mut chk = cache_read(&dst).ok()
 		.flatten()
 		.or_else(|| {

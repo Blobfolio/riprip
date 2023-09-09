@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.0.6"
+version = "0.0.7"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -55,24 +55,34 @@ description = "Ignore any previous rip states; start over from scratch."
 
 [[package.metadata.bashman.switches]]
 long = "--no-rip"
-description = "Just print the basic disc information to STDERR and exit."
+description = "Print the basic drive and disc information to STDERR and exit (without ripping anything)."
 
 [[package.metadata.bashman.switches]]
-long = "--no-trust"
-description = "Never trust the drive when it says a sector is good; always get confirmation. Requires a paranoia level of at least 2."
+long = "--no-summary"
+description = "Skip the drive and disc summary and jump straight to ripping."
 
 [[package.metadata.bashman.switches]]
 long = "--raw"
 description = "Save ripped tracks in raw PCM format (instead of WAV)."
 
 [[package.metadata.bashman.switches]]
-long = "--reconfirm"
-description = "Reset the status of all previously-accepted samples to require reconfirmation. Requires a paranoia level of at least 2."
+long = "--strict"
+description = "Treat C2 errors as an all-or-nothing proposition for the sector as a whole rather than judging each individual sample on its own."
 
 [[package.metadata.bashman.switches]]
 short = "-V"
 long = "--version"
 description = "Print program version."
+
+[[package.metadata.bashman.options]]
+long = "--confidence"
+label = "<NUM>"
+description = "Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"
+
+[[package.metadata.bashman.options]]
+long = "--cutoff"
+label = "<NUM>"
+description = "Consider allegedly-good samples 'likely' once the same value has been read at least <NUM> times and twice as often as any competing values. Sectors containing only likely/confirmed samples are skipped during subsequent passes, so the lower the cutoff, the faster they'll go. Higher values are recommended for wishywashy drives. [default: 2; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
 short = "-d"
@@ -88,14 +98,10 @@ label = "<SAMPLES>"
 description = "The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]"
 
 [[package.metadata.bashman.options]]
-long = "--paranoia"
-label = "<NUM>"
-description = "When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until either: A) the drive returns the same (allegedly good) value <NUM> times *and* that value has a super majority on any other (allegedly good) values in that same spot. B) AccurateRip or CTDB matches with a confidence of at least <NUM> are found for the track. When combined with --no-trust, *all* samples are subject to confirmation regardless of supposed status. [default: 3; range: 1..=32]"
-
-[[package.metadata.bashman.options]]
+short = "-r"
 long = "--refine"
 label = "<NUM>"
-description = "Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]"
+description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 32]"
 
 [[package.metadata.bashman.options]]
 short = "-t"

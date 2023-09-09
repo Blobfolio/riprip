@@ -2,6 +2,8 @@
 # Rip Rip Hooray: Ripping Options
 */
 
+
+
 use crate::ReadOffset;
 
 
@@ -21,33 +23,33 @@ const FLAG_RAW: u8 =        0b0000_1000;
 /// # FLAG: Resume previous rip (when applicable).
 const FLAG_RESUME: u8 =     0b0001_0000;
 
-/// # FLAG: Reconfirm samples.
-const FLAG_RECONFIRM: u8 =  0b0010_0000;
-
-/// # FLAG: Trust Good Sectors.
-const FLAG_TRUST: u8 =      0b0100_0000;
+/// # FLAG: Strict Mode.
+///
+/// If a sector contains any C2 errors, treat all samples as bad.
+const FLAG_STRICT: u8 =     0b0010_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME | FLAG_TRUST;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
 
+/// # Minimum Confidence.
+const CONFIDENCE_MIN: u8 = 3;
 
+/// # Maximum Confidence.
+const CONFIDENCE_MAX: u8 = 10;
 
-/// # Helper: Flag-Based Boolean Getters.
-macro_rules! get_flag {
-	($title:literal, $fn:ident, $flag:ident) => (
-		#[must_use]
-		#[doc = concat!("/// # ", $title)]
-		pub const fn $fn(&self) -> bool { $flag == self.flags & $flag }
-	);
-}
+/// # Maximum Likely Level.
+const CUTOFF_MAX: u8 = 32;
+
+/// # Maximum Refine Passes.
+const REFINE_MAX: u8 = 32;
 
 
 
 #[derive(Debug, Clone, Copy)]
 /// # Rip Options.
 ///
-/// This struct holds the rip-related options like read offset, paranoia level,
-/// which tracks to focus on, etc.
+/// This struct holds the rip-related options like read offset, track numbers,
+/// etc.
 ///
 /// Options are set using builder-style methods, like:
 ///
@@ -65,7 +67,8 @@ macro_rules! get_flag {
 /// ```
 pub struct RipOptions {
 	offset: ReadOffset,
-	paranoia: u8,
+	confidence: u8,
+	cutoff: u8,
 	refine: u8,
 	flags: u8,
 	tracks: u128,
@@ -75,27 +78,134 @@ impl Default for RipOptions {
 	fn default() -> Self {
 		Self {
 			offset: ReadOffset::default(),
-			paranoia: 3,
-			refine: 0,
+			confidence: 3,
+			cutoff: 2,
+			refine: 1,
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
 	}
 }
 
+macro_rules! with_flag {
+	($fn:ident, $flag:ident, $($doc:literal),+ $(,)?) => (
+		#[must_use]
+		$(
+			#[doc = $doc]
+		)+
+		pub const fn $fn(self, v: bool) -> Self {
+			let flags =
+				if v { self.flags | $flag }
+				else { self.flags & ! $flag };
+
+			Self {
+				flags,
+				..self
+			}
+		}
+	)
+}
+
+/// ## Setters.
 impl RipOptions {
+	with_flag!(
+		with_backwards,
+		FLAG_BACKWARDS,
+		"# Rip Backwards.",
+		"",
+		"When `true`, read sectors in reverse order.",
+		"",
+		"The default is `false`.",
+	);
+
+	with_flag!(
+		with_c2,
+		FLAG_C2,
+		"# Leverage C2 Error Pointers.",
+		"",
+		"This should only be disabled when absolutely necessary, otherwise",
+		"the data accuracy will suffer.",
+		"",
+		"The default is `true`.",
+	);
+
+	with_flag!(
+		with_cache_bust,
+		FLAG_CACHE_BUST,
+		"# Bust Cache Between Passes.",
+		"",
+		"To ensure the drive actually _reads_ the data being requested,",
+		"Rip Rip Hooray! will attempt to flush the cache at the start of",
+		"each rip pass (*not* after every single read, as other rippers do).",
+		"",
+		"The default is `true`.",
+	);
+
 	#[must_use]
-	/// # With Offset.
+	/// # Confirmation Confidence.
 	///
-	/// Set the AccurateRip, _et al_, drive read offset to apply when copying
-	/// data from the disc. See [here](http://www.accuraterip.com/driveoffsets.htm) for more information.
+	/// To avoid unnecessary repetition, track rip checksums are checked
+	/// against the third-party AccurateRip and CUETools databases for
+	/// independent verification.
 	///
-	/// It is critical the correct offset be applied, otherwise the contents of
-	/// the rip may not be independently verifiable. This is doubly so when two
-	/// or more drives are used for a single rip; without appropriate offsets
-	/// the communal data could be corrupted.
+	/// If the match confidence from either of those is at least this value,
+	/// the data will be considered confirmed and no further ripping attempts
+	/// will be made.
 	///
-	/// The default is zero.
+	/// Values are capped to `3..=10`, with a default of `3`.
+	///
+	/// The default should be sufficient in nearly all cases, but if you
+	/// personally polluted the databases with prior bad rips, you can nudge it
+	/// a little higher to avoid matching your past self. ;)
+	pub const fn with_confidence(self, mut confidence: u8) -> Self {
+		if confidence < CONFIDENCE_MIN { confidence = CONFIDENCE_MIN; }
+		else if CONFIDENCE_MAX < confidence { confidence = CONFIDENCE_MAX; }
+		Self {
+			confidence,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # Likeliness Cutoff.
+	///
+	/// Drives may return different values for a given sample from read-to-read
+	/// due to… issues, but at a certain point it becomes necessary to call good
+	/// enough "Good Enough".
+	///
+	/// When a given value is returned this many times, and twice as often as
+	/// all competing values, Rip Rip Hooray! won't try to re-read it any more.
+	///
+	/// The lower the setting, the less work there will be to do on subsequent
+	/// passes; the higher the setting, the better the rip will be able to cope
+	/// with drive wishywashiness.
+	///
+	/// This also has no _practical_ effect unless all samples in a given
+	/// sector are likely/confirmed; if any require re-reading, the sector as a
+	/// whole will still need to be reread.
+	///
+	/// The value can be adjusted from run-to-run as needed.
+	///
+	/// The default is `2`, which is a reasonable starting point. Values are
+	/// capped automatically to `1..=32`.
+	pub const fn with_cutoff(self, mut cutoff: u8) -> Self {
+		if cutoff == 0 { cutoff = 1; }
+		else if CUTOFF_MAX < cutoff { cutoff = CUTOFF_MAX; }
+		Self {
+			cutoff,
+			..self
+		}
+	}
+
+	#[must_use]
+	/// # Read Offset.
+	///
+	/// Optical drives have weirdly arbitrary precision problems, causing them
+	/// to read data a little earlier or later than another drive might.
+	///
+	/// To normalize the data obtained across different drives, it is critical
+	/// to set the appropriate count-offset. See [here](http://www.accuraterip.com/driveoffsets.htm) if you're not sure
+	/// what your drive's offset is.
 	pub const fn with_offset(self, offset: ReadOffset) -> Self {
 		Self {
 			offset,
@@ -103,163 +213,68 @@ impl RipOptions {
 		}
 	}
 
-	#[must_use]
-	/// # With Reverse Ripping.
-	///
-	/// If `true`, data will be read in the reverse order — last sector to
-	/// first sector; if `false`, it will be read the usual way.
-	///
-	/// Note: this only affects the read order. Tracks will not sound any more
-	/// or less demonic than usual.
-	///
-	/// The default is `false`.
-	pub const fn with_backwards(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_BACKWARDS }
-			else { self.flags & ! FLAG_BACKWARDS };
-
-		Self {
-			flags,
-			..self
-		}
-	}
+	with_flag!(
+		with_raw,
+		FLAG_RAW,
+		"# Output Raw PCM.",
+		"",
+		"When `true`, tracks will be saved in raw PCM format. When `false`,",
+		"they'll be saved as WAV files.",
+		"",
+		"The default is `false`.",
+	);
 
 	#[must_use]
-	/// # With C2 Error Pointers.
+	/// # Automated Refinement.
 	///
-	/// Enable or disable the use of C2 error pointer information.
+	/// Rip Rip rips are indefinitely resumable, but if know it'll take
+	/// multiple passes to capture the data, you can use this option to
+	/// automate re-ripping up to this many times for each track.
 	///
-	/// This feature is critical for ensuring any degree of transfer accuracy,
-	/// but if a drive doesn't support it, it should be disabled.
+	/// The process will stop early if the track rip is verifiable — matches
+	/// AccurateRip and/or CUETools — or all samples meet the likeliness
+	/// threshold.
 	///
-	/// The default is enabled.
-	pub const fn with_c2(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_C2 }
-			else { self.flags & ! FLAG_C2 };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Cache Bust.
+	/// The default is `1`.
 	///
-	/// Enable or disable cache busting. (Rip Rip will try to circumvent the
-	/// drive cache by having it first read random data from somewhere else.)
-	///
-	/// Unlike with other CD-rippers, Rip Rip only needs to cache bust once per
-	/// track per pass, not after every single read. Its impact on performance
-	/// and on the drive should almost always be negligible.
-	///
-	/// The default is enabled.
-	pub const fn with_cache_bust(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_CACHE_BUST }
-			else { self.flags & ! FLAG_CACHE_BUST };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Paranoia Level.
-	///
-	/// Whenever a drive reports _any_ C2 or read errors for a block, consider
-	/// _all_ samples in that block — namely the allegedly good ones — as
-	/// suspicious until the same values have been returned this many times.
-	///
-	/// The default is three.
-	///
-	/// Custom values are automatically capped at `1..=32`.
-	pub const fn with_paranoia(self, mut paranoia: u8) -> Self {
-		if paranoia == 0 { paranoia = 1; }
-		else if paranoia > 32 { paranoia = 32; }
-		Self {
-			paranoia,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Raw PCM Output.
-	///
-	/// When `true`, tracks will be exported in raw PCM format. When `false`,
-	/// they'll be saved as WAV files instead.
-	///
-	/// The default is `false`.
-	pub const fn with_raw(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_RAW }
-			else { self.flags & ! FLAG_RAW };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Reconfirmation.
-	///
-	/// If true, previously-accepted samples will be "downgraded" to
-	/// "suspicious", requring reconfirmation from subsequent reads.
-	///
-	/// The default is disabled.
-	pub const fn with_reconfirm(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_RECONFIRM }
-			else { self.flags & ! FLAG_RECONFIRM };
-
-		Self {
-			flags,
-			..self
-		}
-	}
-
-	#[must_use]
-	/// # With Refine Passes.
-	///
-	/// Execute this many additional rip passes so long as any samples remain
-	/// unread or unconfirmed. This is equivalent to re-running the entire
-	/// program X number of times, but saves you the trouble of having to do
-	/// that.
-	///
-	/// The default is zero; the max is `15`, just to give the drive a break.
+	/// To give the drive a break, the maximum value is capped at `32`, but you
+	/// can manually rerun the program afterward as many times as needed. ;)
 	pub const fn with_refine(self, mut refine: u8) -> Self {
-		if refine > 15 { refine = 15; }
+		if REFINE_MAX < refine { refine = REFINE_MAX; }
 		Self {
 			refine,
 			..self
 		}
 	}
 
-	#[must_use]
-	/// # With Resume.
-	///
-	/// If `true`, rips will pick up from where they left off (if any previous
-	/// state exists). If `false`, they'll start over from scratch.
-	///
-	/// Default `true`.
-	pub const fn with_resume(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_RESUME }
-			else { self.flags & ! FLAG_RESUME };
+	with_flag!(
+		with_resume,
+		FLAG_RESUME,
+		"# Resume Previous Rip.",
+		"",
+		"When `true`, if state data exists for the track, Rip Rip Hooray!",
+		"will pick up from where it left off. When `false`, it will start",
+		"over from scratch.",
+		"",
+		"The default is `true`.",
+	);
 
-		Self {
-			flags,
-			..self
-		}
-	}
+	with_flag!(
+		with_strict,
+		FLAG_STRICT,
+		"# Strict Mode.",
+		"",
+		"When `true`, if a sector contains _any_ C2 errors, all samples in the",
+		"response are considered bad. When `false`, sample goodness is judged",
+		"individually.",
+		"",
+		"The default is `false`.",
+	);
 
 	#[must_use]
-	/// # With Track.
+	/// # Include Track.
 	///
-	/// Add a track to the rip list.
+	/// Add a given track number to the to-rip list.
 	pub const fn with_track(self, track: u8) -> Self {
 		let tracks = self.tracks | track_idx_to_bits(track);
 		Self {
@@ -267,53 +282,48 @@ impl RipOptions {
 			..self
 		}
 	}
-
-	#[must_use]
-	/// # With Trust.
-	///
-	/// When `true`, `paranoia` confirmation is only applied to samples within
-	/// a sector containing C2 errors. When `false`, every sample is subject to
-	/// confirmation before being accepted.
-	///
-	/// The default is `true`.
-	pub const fn with_trust(self, v: bool) -> Self {
-		let flags =
-			if v { self.flags | FLAG_TRUST }
-			else { self.flags & ! FLAG_TRUST };
-
-		Self {
-			flags,
-			..self
-		}
-	}
 }
 
+
+
+macro_rules! get_flag {
+	($fn:ident, $flag:ident, $title:literal) => (
+		#[must_use]
+		#[doc = concat!("# ", $title, "?")]
+		pub const fn $fn(&self) -> bool { $flag == self.flags & $flag }
+	);
+}
+
+/// # Getters.
 impl RipOptions {
-	#[must_use]
-	/// # Offset.
-	pub const fn offset(&self) -> ReadOffset { self.offset }
-
-	get_flag!("Rip Backwards?", backwards, FLAG_BACKWARDS);
-	get_flag!("Use C2 Error Pointers?", c2, FLAG_C2);
-	get_flag!("Bust Cache?", cache_bust, FLAG_CACHE_BUST);
-	get_flag!("Save as Raw PCM?", raw, FLAG_RAW);
-	get_flag!("Require Reconfirmation?", reconfirm, FLAG_RECONFIRM);
-	get_flag!("Resume Previous Rips (if applicable)?", resume, FLAG_RESUME);
-	get_flag!("Trust Good Sectors?", trust, FLAG_TRUST);
+	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
+	get_flag!(c2, FLAG_C2, "Leverage C2 Error Pointers");
+	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
+	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
+	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
+	get_flag!(strict, FLAG_STRICT, "Strict Mode");
 
 	#[must_use]
-	/// # Has Tracks?
+	/// # Minimum AccurateRip/CTDB Confidence.
+	pub const fn confidence(&self) -> u8 { self.confidence }
+
+	#[must_use]
+	/// # Likeliness Cutoff.
+	pub const fn cutoff(&self) -> u8 { self.cutoff }
+
+	#[must_use]
+	/// # Has Any Tracks?
 	pub const fn has_tracks(&self) -> bool { self.tracks != 0 }
 
 	#[must_use]
-	/// # Paranoia Level.
-	pub const fn paranoia(&self) -> u8 { self.paranoia }
+	/// # Read Offset.
+	pub const fn offset(&self) -> ReadOffset { self.offset }
 
 	#[must_use]
 	/// # Number of Passes.
 	///
-	/// Return the total number of passes, e.g. `1 + refine`.
-	pub const fn passes(&self) -> u8 { self.refine() + 1 }
+	/// This is always `1` + [`RipOptions::refine`].
+	pub const fn passes(&self) -> u8 { self.refine + 1 }
 
 	#[must_use]
 	/// # Number of Refine Passes.
@@ -366,7 +376,6 @@ impl Iterator for RipOptionsTracks {
 
 
 
-#[allow(clippy::too_many_lines)]
 /// # Track Number to Bitflag.
 ///
 /// Redbook audio CDs can only have a maximum of 99 tracks, so we can represent
@@ -395,13 +404,44 @@ mod test {
 			FLAG_C2,
 			FLAG_CACHE_BUST,
 			FLAG_RAW,
-			FLAG_RECONFIRM,
 			FLAG_RESUME,
-			FLAG_TRUST,
+			FLAG_STRICT,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 7);
+		assert_eq!(all.len(), 6);
+	}
+
+	#[test]
+	fn t_rip_options_confidence() {
+		for v in [3, 4, 5] {
+			let opts = RipOptions::default().with_confidence(v);
+			assert_eq!(opts.confidence(), v);
+		}
+
+		// Min.
+		let opts = RipOptions::default().with_confidence(0);
+		assert_eq!(opts.confidence(), CONFIDENCE_MIN);
+
+		// Max.
+		let opts = RipOptions::default().with_confidence(64);
+		assert_eq!(opts.confidence(), CONFIDENCE_MAX);
+	}
+
+	#[test]
+	fn t_rip_options_cutoff() {
+		for v in [1, 2, 3] {
+			let opts = RipOptions::default().with_cutoff(v);
+			assert_eq!(opts.cutoff(), v);
+		}
+
+		// Min.
+		let opts = RipOptions::default().with_cutoff(0);
+		assert_eq!(opts.cutoff(), 1);
+
+		// Max.
+		let opts = RipOptions::default().with_cutoff(64);
+		assert_eq!(opts.cutoff(), CUTOFF_MAX);
 	}
 
 	#[test]
@@ -425,9 +465,8 @@ mod test {
 		t_flags!("c2", with_c2, c2);
 		t_flags!("cache bust", with_cache_bust, cache_bust);
 		t_flags!("raw", with_raw, raw);
-		t_flags!("reconfirm", with_reconfirm, reconfirm);
 		t_flags!("resume", with_resume, resume);
-		t_flags!("trust", with_trust, trust);
+		t_flags!("strict", with_strict, strict);
 	}
 
 	#[test]
@@ -441,22 +480,6 @@ mod test {
 	}
 
 	#[test]
-	fn t_rip_options_paranoia() {
-		for v in [1, 2, 3] {
-			let opts = RipOptions::default().with_paranoia(v);
-			assert_eq!(opts.paranoia(), v);
-		}
-
-		// Min.
-		let opts = RipOptions::default().with_paranoia(0);
-		assert_eq!(opts.paranoia(), 1);
-
-		// Max.
-		let opts = RipOptions::default().with_paranoia(64);
-		assert_eq!(opts.paranoia(), 32);
-	}
-
-	#[test]
 	fn t_rip_options_refine() {
 		for v in [0, 1, 2, 3] {
 			let opts = RipOptions::default().with_refine(v);
@@ -466,8 +489,8 @@ mod test {
 
 		// Max.
 		let opts = RipOptions::default().with_refine(64);
-		assert_eq!(opts.refine(), 15);
-		assert_eq!(opts.passes(), 16);
+		assert_eq!(opts.refine(), REFINE_MAX);
+		assert_eq!(opts.passes(), REFINE_MAX + 1);
 	}
 
 	#[test]

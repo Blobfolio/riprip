@@ -8,7 +8,6 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
-	cache_path,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
@@ -26,7 +25,10 @@ use fyi_msg::{
 use std::{
 	collections::BTreeMap,
 	fmt,
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
@@ -82,7 +84,7 @@ impl fmt::Display for Disc {
 			writeln!(
 				f,
 				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
-				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
+				self.toc.data_sector().unwrap_or_default().saturating_sub(u32::from(CD_LEADIN))
 			)?;
 		}
 
@@ -107,7 +109,7 @@ impl fmt::Display for Disc {
 			writeln!(
 				f,
 				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
-				self.toc.data_sector().unwrap_or_default().saturating_sub(CD_LEADIN)
+				self.toc.data_sector().unwrap_or_default().saturating_sub(u32::from(CD_LEADIN))
 			)?;
 		}
 
@@ -115,7 +117,7 @@ impl fmt::Display for Disc {
 		writeln!(
 			f,
 			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                      LEAD-OUT",
-			self.toc.leadout().saturating_sub(CD_LEADIN),
+			self.toc.leadout().saturating_sub(u32::from(CD_LEADIN)),
 		)?;
 
 		// Close it off!
@@ -223,7 +225,7 @@ impl Disc {
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		// Loop the loop!
-		let mut saved = Vec::new();
+		let mut saved: Vec<PathBuf> = Vec::new();
 		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
@@ -234,20 +236,17 @@ impl Disc {
 
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
-			let mut rip = Rip::new(self.toc.accuraterip_id(), track, opts)?;
-			if let Some(dst) = rip.rip(self, opts, progress, killed)? {
-				saved.push(dst);
-			}
+			let mut rip = Rip::new(self, track, opts)?;
+			let dst = rip.rip(progress, killed)?;
+			saved.push(dst);
 		}
 
 		// Print what we did!
 		if ! saved.is_empty() {
 			eprintln!("\nThe fruits of your labor:");
 			for file in saved {
-				if let Ok(file) = cache_path(file) {
-					if file.is_file() {
-						eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
-					}
+				if file.is_file() {
+					eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
 				}
 			}
 			eprintln!();
