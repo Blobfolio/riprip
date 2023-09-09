@@ -142,9 +142,7 @@ impl RipSamples {
 			if v < 0 || leadout < v {
 				data.push(RipSample::Confirmed(NULL_SAMPLE));
 			}
-			else {
-				data.push(RipSample::Bad(NULL_SAMPLE));
-			}
+			else { data.push(RipSample::Tbd); }
 		}
 
 		// Initialize without data!
@@ -367,7 +365,7 @@ impl RipSamples {
 
 		for v in self.track_slice() {
 			match v {
-				RipSample::Bad(_) => { bad += 1; },
+				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
 				RipSample::Confirmed(_) => { confirmed += 1; },
 				RipSample::Maybe(_) =>
 					if v.is_likely(cutoff) { likely += 1; }
@@ -389,16 +387,10 @@ impl RipSamples {
 }
 
 impl RipSamples {
-	/// # Is Any?
+	/// # Is New?
 	///
-	/// Return `true` if there are any non-null samples. This is used as a proxy
-	/// for any work having been done, but might return a false positive for
-	/// totally silent tracks.
-	pub(crate) fn is_any(&self) -> bool {
-		self.track_slice()
-			.iter()
-			.any(|v| v.as_array() != NULL_SAMPLE)
-	}
+	/// Returns `true` if the data was not seeded from a previous state.
+	pub(crate) const fn is_new(&self) -> bool { self.new }
 
 	/// # Is Confirmed?
 	///
@@ -415,12 +407,16 @@ impl RipSamples {
 
 
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 /// # Rip Sample.
 ///
 /// This enum combines sample value(s) and their status.
 pub(crate) enum RipSample {
-	/// Unread samples or samples that came down with C2 or read errors.
+	#[default]
+	/// # Unread samples.
+	Tbd,
+
+	/// Samples that came down with C2 or read errors.
 	Bad(Sample),
 
 	/// Allegedly good samples sorted by popularity. (The first entry in the
@@ -439,6 +435,7 @@ impl RipSample {
 	/// Return the most appropriate single sample 4-byte value as an array.
 	pub(crate) fn as_array(&self) -> Sample {
 		match self {
+			Self::Tbd => NULL_SAMPLE,
 			Self::Bad(s) | Self::Confirmed(s) => *s,
 			Self::Maybe(s) => s[0].0,
 		}
@@ -449,6 +446,7 @@ impl RipSample {
 	/// Return the most appropriate single sample 4-byte value as a slice.
 	pub(crate) fn as_slice(&self) -> &[u8] {
 		match self {
+			Self::Tbd => NULL_SAMPLE.as_slice(),
 			Self::Bad(s) | Self::Confirmed(s) => s.as_slice(),
 			Self::Maybe(s) => s[0].0.as_slice(),
 		}
@@ -476,8 +474,8 @@ impl RipSample {
 	/// If this is called on `RipSample::Confirmed`, it will also return `true`.
 	pub(crate) fn is_likely(&self, cutoff: u8) -> bool {
 		match self {
+			Self::Tbd | Self::Bad(_) => false,
 			Self::Confirmed(_) => true,
-			Self::Bad(_) => false,
 			Self::Maybe(set) => {
 				let total = set.iter()
 					.fold(0_u16, |acc, (_, v)| acc.saturating_add(u16::from(*v)));
@@ -490,6 +488,8 @@ impl RipSample {
 impl RipSample {
 	/// # Update Sample.
 	///
+	/// If there was no original sample, the new one replaces it.
+	///
 	/// If the original sample is bad:
 	/// * If the new sample is good, the bad becomes a maybe;
 	/// * If the new sample is also bad, it replaces the original;
@@ -501,10 +501,20 @@ impl RipSample {
 	/// If the original sample is confirmed, nothing changes.
 	pub(crate) fn update(&mut self, new: Sample, err: bool) {
 		match self {
-			// Upgrade bad samples if we can.
-			Self::Bad(_) =>
+			// Always update a TBD.
+			Self::Tbd =>
 				if err { *self = Self::Bad(new); }
 				else { *self = Self::Maybe(vec![(new, 1)]); },
+
+			// Upgrade bad samples if we can.
+			Self::Bad(old) =>
+				if err { *self = Self::Bad(new); }
+				else {
+					// If this happens to match the old value, bump the read
+					// count.
+					let count = 1 + u8::from(new.eq(old));
+					*self = Self::Maybe(vec![(new, count)]);
+				},
 
 			// Augment maybes maybe.
 			Self::Maybe(set) if ! err => {
