@@ -502,19 +502,9 @@ impl RipSample {
 	pub(crate) fn update(&mut self, new: Sample, err: bool) {
 		match self {
 			// Always update a TBD.
-			Self::Tbd =>
+			Self::Tbd | Self::Bad(_) =>
 				if err { *self = Self::Bad(new); }
 				else { *self = Self::Maybe(vec![(new, 1)]); },
-
-			// Upgrade bad samples if we can.
-			Self::Bad(old) =>
-				if err { *self = Self::Bad(new); }
-				else {
-					// If this happens to match the old value, bump the read
-					// count.
-					let count = 1 + u8::from(new.eq(old));
-					*self = Self::Maybe(vec![(new, count)]);
-				},
 
 			// Augment maybes maybe.
 			Self::Maybe(set) if ! err => {
