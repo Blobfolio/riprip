@@ -253,7 +253,7 @@ impl<'a> Rip<'a> {
 			// Summarize the results.
 			self.summarize(confirmed, ar, ctdb);
 
-			if confirmed { break; }
+			if confirmed || killed.killed() { break; }
 		} // End pass.
 
 		Ok(confirmed)
