@@ -243,8 +243,8 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
 		("C2:", yesno(opts.c2()), opts.c2()),
 		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
+		("Cutoff:", Cow::Borrowed(nice_cutoff.as_str()), 1 < opts.cutoff()),
 		("Format:", nice_format, true),
-		("Likely At:", Cow::Borrowed(nice_cutoff.as_str()), 1 < opts.cutoff()),
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
 		("Resume:", yesno(opts.resume()), opts.resume()),
@@ -257,7 +257,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 			eprintln!("  {k:max_label$} \x1b[1m{v}\x1b[0m");
 		}
 		else {
-			eprintln!("  \x1b[2m{k:max_label$} {v}\x1b[0m");
+			eprintln!("  \x1b[2;9m{k:max_label$} {v}\x1b[0m");
 		}
 	}
 

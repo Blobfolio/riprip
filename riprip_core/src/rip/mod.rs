@@ -211,16 +211,13 @@ impl<'a> Rip<'a> {
 				progress.increment();
 			} // End block.
 
-			// AccurateRip.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Confirming the rip with AccurateRip…")));
+			// Verification.
+			progress.set_title(Some(Msg::custom("Standby", 11, "Verifying the ripped track…")));
 			let ar = chk_accuraterip(
 				self.disc.toc(),
 				self.state.track(),
 				self.state.track_slice(),
 			);
-
-			// CUETools.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Confirming the rip with CUETools…")));
 			let ctdb = chk_ctdb(
 				self.disc.toc(),
 				self.state.track(),
@@ -291,7 +288,7 @@ impl<'a> Rip<'a> {
 				dactyl::int_div_float(q_maybe * 100, q_total).unwrap_or(0.0)
 			);
 			Msg::custom("Ripped", 4, &format!(
-				"Track #{} is \x1b[2m(at most)\x1b[0m {}% complete.",
+				"Track #{} is \x1b[2m(maybe)\x1b[0m {}% complete.",
 				track.number(),
 				p.compact_str(),
 			))
@@ -300,16 +297,16 @@ impl<'a> Rip<'a> {
 		else {
 			let q_total = q_bad + q_maybe + q_likely + q_confirmed;
 			let low = NiceFloat::from(
-				dactyl::int_div_float((q_maybe + q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
+				dactyl::int_div_float((q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
 			);
 			let high = NiceFloat::from(
-				dactyl::int_div_float((q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
+				dactyl::int_div_float((q_maybe + q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
 			);
 
 			// If rounding makes the percentages the same, just print one.
 			if low.precise_str(3) == high.precise_str(3) {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(roughly)\x1b[0m {}% complete.",
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% complete.",
 					track.number(),
 					low.compact_str(),
 				))
@@ -317,7 +314,7 @@ impl<'a> Rip<'a> {
 			// Otherwise show both.
 			else {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% – {}% complete.",
 					track.number(),
 					low.precise_str(3),
 					high.precise_str(3),
