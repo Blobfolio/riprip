@@ -62,21 +62,23 @@ long = "--no-summary"
 description = "Skip the drive and disc summary and jump straight to ripping."
 
 [[package.metadata.bashman.switches]]
-long = "--no-trust"
-description = "Never trust the drive when it says a sector is good; always get confirmation. Requires a paranoia level of at least 2."
-
-[[package.metadata.bashman.switches]]
 long = "--raw"
 description = "Save ripped tracks in raw PCM format (instead of WAV)."
-
-[[package.metadata.bashman.switches]]
-long = "--reconfirm"
-description = "Reset the status of all previously-accepted samples to require reconfirmation. Requires a paranoia level of at least 2."
 
 [[package.metadata.bashman.switches]]
 short = "-V"
 long = "--version"
 description = "Print program version."
+
+[[package.metadata.bashman.options]]
+long = "--confidence"
+label = "<NUM>"
+description = "Consider the rip accurate — and stop working — if AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"
+
+[[package.metadata.bashman.options]]
+long = "--cutoff"
+label = "<NUM>"
+description = "Stop re-reading allegedly-good samples once the drive has confirmed the same value at least <NUM> times (or the track as a whole is verified with AccurateRip/CTDB). Higher values are recommended when the data seems fishy. [default: 2; range: 1..=32]"
 
 [[package.metadata.bashman.options]]
 short = "-d"
@@ -92,11 +94,7 @@ label = "<SAMPLES>"
 description = "The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]"
 
 [[package.metadata.bashman.options]]
-long = "--paranoia"
-label = "<NUM>"
-description = "When a sample or its neighbors have a C2 or read error, treat all samples in the region as supicious until either: A) the drive returns the same (allegedly good) value <NUM> times *and* that value has a super majority on any other (allegedly good) values in that same spot. B) AccurateRip or CTDB matches with a confidence of at least <NUM> are found for the track. When combined with --no-trust, *all* samples are subject to confirmation regardless of supposed status. [default: 3; range: 1..=32]"
-
-[[package.metadata.bashman.options]]
+short = "-r"
 long = "--refine"
 label = "<NUM>"
 description = "Execute up to <NUM> additional rip passes for each track while any samples remain unread/unconfirmed. [default: 0; max: 15]"

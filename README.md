@@ -67,32 +67,25 @@ If you know it is going to take a few passes to build up a reasonably complete r
 riprip -t 3,5 --refine 10
 ```
 
-### Ripping.
+### Basic Settings.
 
 ```text
-    --no-c2       Disable/ignore C2 error pointer information when ripping,
-                  e.g. for drives that do not support the feature. (This
-                  flag is otherwise not recommended.)
-    --no-cache-bust
-                  Do not attempt to reset the optical drive cache between
-                  each rip pass.
-    --paranoia <NUM>
-                  When a sample or its neighbors have a C2 or read error,
-                  treat all samples in the region as supicious until
-                  either:
-                    A) the drive returns the same (allegedly good) value
-                       <NUM> times *and* that value has a super majority on
-                       any other (allegedly good) values in that same spot.
-                    B) AccurateRip or CTDB matches with a confidence of at
-                       least <NUM> are found for the track.
-                  When combined with --no-trust, *all* samples are subject
-                  to confirmation regardless of supposed status.
-                  [default: 3; range: 1..=32]
+    --confidence <NUM>
+                  Consider the rip accurate — and stop working — if
+                  AccurateRip and/or CUETools matches are found with a
+                  confidence of at least <NUM>. [default: 3; range: 3..=10]
+    --cutoff <NUM>
+                  Stop re-reading allegedly-good samples once the drive has
+                  confirmed the same value at least <NUM> times (or the
+                  track as a whole is verified with AccurateRip/CTDB).
+                  Higher values are recommended when the data seems fishy.
+                  [default: 2; range: 1..=32]
     --raw         Save ripped tracks in raw PCM format (instead of WAV).
-    --refine <NUM>
+-r, --refine <NUM>
                   Execute up to <NUM> additional rip passes for each track
-                  while any samples remain unread/unconfirmed.
-                  [default: 0; max: 15]
+                  while any samples remain unread/unconfirmed. A value
+                  greater than or equal to --cutoff is recommended.
+                  [default: 2; max: 32]
 -t, --track <NUM(s),RNG>
                   Rip one or more specific tracks (rather than the whole
                   disc). Multiple tracks can be separated by commas (2,3),
@@ -106,12 +99,6 @@ riprip -t 3,5 --refine 10
     --backwards   Rip sectors in reverse order. (Data will still be saved
                   in the *correct* order. Haha.)
     --no-resume   Ignore any previous rip states; start over from scratch.
-    --no-trust    Never trust the drive when it says a sector is good;
-                  always get confirmation. Requires a paranoia level of at
-                  least 2.
-    --reconfirm   Reset the status of all previously-accepted samples to
-                  require reconfirmation. Requires a paranoia level of at
-                  least 2.
 ```
 
 ### Drive Settings.
@@ -124,6 +111,17 @@ These options are auto-detected and do not usually need to be explicitly provide
 -o, --offset <SAMPLES>
                   The AccurateRip, et al, sample read offset to apply to
                   data retrieved from the drive. [range: ±5880]
+```
+
+### Unusual Settings.
+
+```text
+    --no-c2       Disable/ignore C2 error pointer information when ripping,
+                  e.g. for drives that do not support the feature. (This
+                  flag is otherwise not recommended.)
+    --no-cache-bust
+                  Do not attempt to reset the optical drive cache between
+                  each rip pass.
 ```
 
 ### Miscellaneous.
@@ -141,13 +139,13 @@ These options are auto-detected and do not usually need to be explicitly provide
 
 If you don't have time to let a rip finish naturally, press `CTRL+C` to stop it early. Your progress will still be saved, there just won't be as much of it. Haha.
 
-### Tracks, Logs, and State Data
+### File I/O
 
-Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks themselves. To keep things tidy, it saves everything to its own subfolder within the current working directory called `_riprip`.
+Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks. To keep things tidy, it saves everything to its own subfolder within the current working directory called `_riprip`.
 
 To resume a rip, just rerun the program from the same place, with the same disc, and it will automatically pick up from where it left off.
 
-When you're completely done working on a disc — and have moved or converted the exported tracks! — go ahead and delete the `_riprip` folder to reclaim the disk space. ;)
+When you're completely done working on a disc — and have grabbed the exported tracks! — go ahead and delete the `_riprip` folder to reclaim the disk space. ;)
 
 
 

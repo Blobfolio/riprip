@@ -11,6 +11,7 @@ use crate::{
 	DriveVendorModel,
 	RipRipError,
 };
+use dactyl::traits::SaturatingFrom;
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -324,7 +325,7 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[allow(unsafe_code, clippy::cast_sign_loss)]
+	#[allow(unsafe_code)]
 	/// # Drive Vendor/Model.
 	///
 	/// Fetch the drive vendor and/or model, if possible.
@@ -340,8 +341,8 @@ impl LibcdioInstance {
 		if 1 == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
-			let vendor_u8 = raw.psz_vendor.map(|b| b as u8);
-			let model_u8 = raw.psz_model.map(|b| b as u8);
+			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
+			let model_u8 = raw.psz_model.map(u8::saturating_from);
 
 			// Vendor might be empty.
 			let vendor =

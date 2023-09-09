@@ -34,7 +34,6 @@
 
 mod abort;
 mod barcode;
-mod cache;
 mod cdio;
 mod cdtext;
 mod chk;
@@ -42,14 +41,10 @@ mod disc;
 mod drive;
 mod error;
 mod rip;
+mod utility;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
-pub(crate) use cache::{
-	cache_path,
-	cache_read,
-	cache_write,
-};
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;
 pub(crate) use chk::{
@@ -63,10 +58,20 @@ pub use drive::{
 };
 pub use error::RipRipError;
 pub(crate) use rip::{
+	data::{
+		RipSample,
+		RipSamples,
+	},
 	Rip,
-	RipSample,
 };
 pub use rip::opts::RipOptions;
+pub(crate) use utility::{
+	cache_path,
+	cache_read,
+	cache_write,
+	zstd_decode,
+	zstd_encode,
+};
 
 
 
@@ -77,6 +82,11 @@ type Sample = [u8; 4];
 ///
 /// The cache root is thus `CWD/CACHE_BASE`.
 pub(crate) const CACHE_BASE: &str = "_riprip";
+
+/// # Cache Scratch.
+///
+/// The scratch folder for non-track data, e.g. `CWD/CACHE_BASE/CACHE_SCRATCH`.
+pub(crate) const CACHE_SCRATCH: &str = "scratch";
 
 /// # Bytes Per Sample.
 pub const BYTES_PER_SAMPLE: u16 = 4;

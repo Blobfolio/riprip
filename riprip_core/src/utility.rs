@@ -1,5 +1,5 @@
 /*!
-# Rip Rip Hooray: Cache
+# Rip Rip Hooray: Encode/Decode
 */
 
 use crate::{
@@ -8,6 +8,10 @@ use crate::{
 };
 use fyi_msg::Msg;
 use std::{
+	io::{
+		Read,
+		Write,
+	},
 	path::{
 		Path,
 		PathBuf,
@@ -21,6 +25,8 @@ use std::{
 ///
 /// This will ultimately hold `CWD/CACHE_BASE`.
 static CACHE_ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+
 
 /// # Cache Path.
 ///
@@ -46,7 +52,8 @@ where P: AsRef<Path> {
 /// otherwise simply return `None` if there are problems with the file.
 pub(super) fn cache_read<P>(src: P) -> Result<Option<Vec<u8>>, RipRipError>
 where P: AsRef<Path> {
-	let src = cache_path(src)?;
+	let src = src.as_ref();
+	validate_cache_path(src)?;
 	Ok(std::fs::read(src).ok().filter(|v| ! v.is_empty()))
 }
 
@@ -62,10 +69,46 @@ where P: AsRef<Path> {
 /// there are problems writing this specific file.
 pub(super) fn cache_write<P>(dst: P, data: &[u8]) -> Result<(), RipRipError>
 where P: AsRef<Path> {
-	let dst = cache_path(dst)?;
-	write_atomic::write_file(&dst, data)
+	let dst = dst.as_ref();
+	validate_cache_path(dst)?;
+	write_atomic::write_file(dst, data)
 		.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))
 }
+
+/// # Zstd Decode.
+///
+/// Return a decompressed copy of `raw`, or `None` if the operation fails.
+pub(crate) fn zstd_decode(raw: &[u8]) -> Option<Vec<u8>> {
+	let mut out = Vec::with_capacity(raw.len() * 2);
+	let mut decoder = zstd::stream::Decoder::new(raw).ok()?;
+	decoder.read_to_end(&mut out).ok()?;
+
+	// Make sure we have something.
+	if out.is_empty() { None }
+	else { Some(out) }
+}
+
+/// # Zstd Encode.
+///
+/// Return a copy of the `raw` compressed with default-level zstd. If there is
+/// any sort of problem, `None` will be returned instead.
+///
+/// Compression is used for the serialized state data as it can get rather
+/// large.
+pub(crate) fn zstd_encode(raw: &[u8]) -> Option<Vec<u8>> {
+	let mut encoder = zstd::stream::Encoder::new(
+		Vec::with_capacity(raw.len().wrapping_div(2)),
+		zstd::DEFAULT_COMPRESSION_LEVEL,
+	).ok()?;
+	encoder.write_all(raw).ok()?;
+	let out = encoder.finish().ok()?;
+
+	// Make sure there's something.
+	if out.is_empty() { None }
+	else { Some(out) }
+}
+
+
 
 /// # Cache Root.
 ///
@@ -103,5 +146,39 @@ fn cache_root() -> Result<&'static Path, RipRipError> {
 		std::fs::create_dir_all(out).map_err(|_| RipRipError::Cache)?;
 		if out.is_dir() { Ok(out) }
 		else { Err(RipRipError::Cache) }
+	}
+}
+
+/// # Validate Cache Path.
+///
+/// Make sure a path is in the cache root.
+fn validate_cache_path(src: &Path) -> Result<(), RipRipError> {
+	let root = cache_root()?.to_string_lossy();
+	let src = src.to_string_lossy();
+	src.strip_prefix(root.as_ref())
+		.and_then(|r|
+			if 1 < r.len() { Some(()) }
+			else { None }
+		)
+		.ok_or_else(|| RipRipError::CachePath(src.into_owned()))
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_zstd() {
+		let test = b"Advertising may be described as the science of arresting the human intelligence long enough to get money from it.";
+
+		// Encode it.
+		let enc = zstd_encode(test).expect("Failed to encode pithy quote.");
+		assert!(enc.len() < test.len(), "Encoding sucks.");
+
+		// Decode it.
+		let dec = zstd_decode(&enc).expect("Failed to decode pithy quote.");
+		assert_eq!(dec, test, "Decoded quote does not match the original!");
 	}
 }

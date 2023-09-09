@@ -153,27 +153,29 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_c2(! args.switch(b"--no-c2"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
-		.with_reconfirm(args.switch(b"--reconfirm"))
-		.with_resume(! args.switch(b"--no-resume"))
-		.with_trust(! args.switch(b"--no-trust"));
+		.with_resume(! args.switch(b"--no-resume"));
 
-	// Detect offset?
-	if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
+	if let Some(v) = args.option2(b"-o", b"--offset") {
+		let v = ReadOffset::try_from(v)
+			.map_err(|_| RipRipError::CliParse("-o/--offset"))?;
+		opts = opts.with_offset(v);
+	}
+	else if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
 		opts = opts.with_offset(v);
 	}
 
-	if let Some(v) = args.option2(b"-o", b"--offset") {
-		let offset = ReadOffset::try_from(v)?;
-		opts = opts.with_offset(offset);
+	if let Some(v) = args.option(b"--confidence") {
+		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
+		opts = opts.with_cutoff(confidence);
 	}
 
-	if let Some(v) = args.option(b"--paranoia") {
-		let paranoia = u8::btou(v).ok_or(RipRipError::Paranoia)?;
-		opts = opts.with_paranoia(paranoia);
+	if let Some(v) = args.option(b"--cutoff") {
+		let cutoff = u8::btou(v).ok_or(RipRipError::CliParse("--cutoff"))?;
+		opts = opts.with_cutoff(cutoff);
 	}
 
-	if let Some(v) = args.option(b"--refine") {
-		let refine = u8::btou(v).ok_or(RipRipError::Refine)?;
+	if let Some(v) = args.option2(b"-r", b"--refine") {
+		let refine = u8::btou(v).ok_or(RipRipError::CliParse("-r/--refine"))?;
 		opts = opts.with_refine(refine);
 	}
 
@@ -187,21 +189,21 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 			// Split.
 			let a = v[..pos].trim();
 			let b = v[pos + 1..].trim();
-			if a.is_empty() || b.is_empty() { return Err(RipRipError::RipTracks); }
+			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--track")); }
 
 			// Decode.
-			let a = u8::btou(a).ok_or(RipRipError::RipTracks)?;
-			let b = u8::btou(b).ok_or(RipRipError::RipTracks)?;
+			let a = u8::btou(a).ok_or(RipRipError::CliParse("-t/--track"))?;
+			let b = u8::btou(b).ok_or(RipRipError::CliParse("-t/--track"))?;
 
 			// Add them all!
 			if a <= b {
 				for idx in a..=b { opts = opts.with_track(idx); }
 			}
-			else { return Err(RipRipError::RipTracks); }
+			else { return Err(RipRipError::CliParse("-t/--track")); }
 		}
 		// Otherwise it should be a single index.
 		else {
-			let v = u8::btou(v).ok_or(RipRipError::RipTracks)?;
+			let v = u8::btou(v).ok_or(RipRipError::CliParse("-t/--track"))?;
 			opts = opts.with_track(v);
 		}
 	}
@@ -209,12 +211,6 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	// If we didn't parse any tracks, add each track on the disc.
 	if ! opts.has_tracks() {
 		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
-	}
-
-	// Conflict checks.
-	if opts.paranoia() < 2 {
-		if opts.reconfirm() { return Err(RipRipError::ReconfirmParanoia); }
-		if ! opts.trust() { return Err(RipRipError::TrustParanoia); }
 	}
 
 	// Done!
@@ -237,22 +233,20 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	);
 	let nice_format = Cow::Borrowed(if opts.raw() { "Raw PCM" } else { "WAV" });
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
-	let nice_paranoia = Cow::Owned(
-		if opts.trust() { NiceU8::from(opts.paranoia()).to_string() }
-		else { format!("{} (No Trust Mode)", opts.paranoia()) }
-	);
+	let nice_confidence = Cow::Owned(format!("{}+ (Match Confidence)", opts.confidence()));
+	let nice_cutoff = NiceU8::from(opts.cutoff());
 	let nice_passes = NiceU8::from(opts.passes());
 
 	let set = [
 		("Tracks:", nice_tracks, true),
+		("AR/CTDB:", nice_confidence, true),
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
 		("C2:", yesno(opts.c2()), opts.c2()),
 		("Cache Bust:", yesno(opts.cache_bust()), opts.cache_bust()),
 		("Format:", nice_format, true),
+		("Likely At:", Cow::Borrowed(nice_cutoff.as_str()), 1 < opts.cutoff()),
 		("Offset:", nice_offset, 0 != opts.offset().samples_abs()),
-		("Paranoia:", nice_paranoia, 1 < opts.paranoia()),
 		("Passes:", Cow::Borrowed(nice_passes.as_str()), true),
-		("Reconfirm:", yesno(opts.reconfirm()), opts.reconfirm()),
 		("Resume:", yesno(opts.resume()), opts.resume()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
@@ -311,30 +305,23 @@ fn helper() {
 USAGE:
     riprip [OPTIONS]
 
-RIPPING:
-        --no-c2       Disable/ignore C2 error pointer information when ripping,
-                      e.g. for drives that do not support the feature. (This
-                      flag is otherwise not recommended.)
-        --no-cache-bust
-                      Do not attempt to reset the optical drive cache between
-                      each rip pass.
-        --paranoia <NUM>
-                      When a sample or its neighbors have a C2 or read error,
-                      treat all samples in the region as supicious until
-                      either:
-                        A) the drive returns the same (allegedly good) value
-                           <NUM> times *and* that value has a super majority on
-                           any other (allegedly good) values in that same spot.
-                        B) AccurateRip or CTDB matches with a confidence of at
-                           least <NUM> are found for the track.
-                      When combined with --no-trust, *all* samples are subject
-                      to confirmation regardless of supposed status.
-                      [default: 3; range: 1..=32]
+BASIC SETTINGS:
+        --confidence <NUM>
+                      Consider the rip accurate — and stop working — if
+                      AccurateRip and/or CUETools matches are found with a
+                      confidence of at least <NUM>. [default: 3; range: 3..=10]
+        --cutoff <NUM>
+                      Stop re-reading allegedly-good samples once the drive has
+                      confirmed the same value at least <NUM> times (or the
+                      track as a whole is verified with AccurateRip/CTDB).
+                      Higher values are recommended when the data seems fishy.
+                      [default: 2; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
-        --refine <NUM>
+    -r, --refine <NUM>
                       Execute up to <NUM> additional rip passes for each track
-                      while any samples remain unread/unconfirmed.
-                      [default: 0; max: 15]
+                      while any samples remain unread/unconfirmed. A value
+                      greater than or equal to --cutoff is recommended.
+                      [default: 2; max: 32]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
@@ -345,12 +332,6 @@ WHEN ALL ELSE FAILS:
         --backwards   Rip sectors in reverse order. (Data will still be saved
                       in the *correct* order. Haha.)
         --no-resume   Ignore any previous rip states; start over from scratch.
-        --no-trust    Never trust the drive when it says a sector is good;
-                      always get confirmation. Requires a paranoia level of at
-                      least 2.
-        --reconfirm   Reset the status of all previously-accepted samples to
-                      require reconfirmation. Requires a paranoia level of at
-                      least 2.
 
 DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly
@@ -361,6 +342,14 @@ DRIVE SETTINGS:
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive. [range: ±5880]
+
+UNUSUAL SETTINGS:
+        --no-c2       Disable/ignore C2 error pointer information when ripping,
+                      e.g. for drives that do not support the feature. (This
+                      flag is otherwise not recommended.)
+        --no-cache-bust
+                      Do not attempt to reset the optical drive cache between
+                      each rip pass.
 
 MISCELLANEOUS:
     -h, --help        Print help information and exit.

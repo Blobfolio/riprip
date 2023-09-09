@@ -18,8 +18,14 @@ pub enum RipRipError {
 	/// # Invalid barcode.
 	Barcode,
 
+	/// # Bug!
+	Bug(&'static str),
+
 	/// # Cache directory.
 	Cache,
+
+	/// # Cache Path.
+	CachePath(String),
 
 	/// # CDTOC passthrough.
 	Cdtoc(TocError),
@@ -63,23 +69,17 @@ pub enum RipRipError {
 	/// # Unable to obtain the number of tracks.
 	NumTracks,
 
-	/// # Unable to parse paranoia.
-	Paranoia,
-
 	/// # Read Offset.
 	ReadOffset,
-
-	/// # Reconfirm/Paranoia conflict.
-	ReconfirmParanoia,
-
-	/// # Unable to parse passes.
-	Refine,
 
 	/// # Numbers can't be converted to the necessary types.
 	RipOverflow(u8),
 
-	/// # Unable to parse rip tracks.
-	RipTracks,
+	/// # State Corruption.
+	StateCorrupt(u8),
+
+	/// # State Save.
+	StateSave(u8),
 
 	/// # Invalid/unsupported track format.
 	TrackFormat(u8),
@@ -90,15 +90,16 @@ pub enum RipRipError {
 	/// # Invalid track number.
 	TrackNumber(u8),
 
-	/// # Trust/Paranoia conflict.
-	TrustParanoia,
-
 	/// # Writing to disk.
 	Write(String),
 
 	#[cfg(feature = "bin")]
-	/// # CLI issues.
+	/// # General CLI issues.
 	Argue(argyle::ArgyleError),
+
+	#[cfg(feature = "bin")]
+	/// # CLI Parsing failure.
+	CliParse(&'static str),
 }
 
 impl Error for RipRipError {}
@@ -123,7 +124,9 @@ impl fmt::Display for RipRipError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Barcode => f.write_str("Invalid/unsupported barcode."),
+			Self::Bug(s) => write!(f, "Bug: {s}."),
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
+			Self::CachePath(ref s) => write!(f, "Invalid cache path {s}."),
 			Self::CdRead(n) => write!(f, "Unable to read sector {n}."),
 			Self::CdReadBuffer => f.write_str("BUG: Insufficient CD read buffer."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
@@ -142,20 +145,20 @@ impl fmt::Display for RipRipError {
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
 			Self::NoTracks => f.write_str("No tracks were found."),
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
-			Self::Paranoia => f.write_str("Invalid paranoia level."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
-			Self::ReconfirmParanoia => f.write_str("Reconfirmation requires a paranoia level of at least 2."),
-			Self::Refine => f.write_str("Invalid number of refine passes."),
 			Self::RipOverflow(n) => write!(f, "Track #{n} cannot be ripped on this system."),
-			Self::RipTracks => f.write_str("Invalid rip track or range."),
+			Self::StateCorrupt(n) => write!(f, "The state data for track #{n} is corrupt."),
+			Self::StateSave(n) => write!(f, "Unable to save the state data for track #{n}."),
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
-			Self::TrustParanoia => f.write_str("No Trust requires a paranoia level of at least 2."),
 			Self::Write(ref s) => write!(f, "Unable to write to {s}."),
 
 			#[cfg(feature = "bin")]
 			Self::Argue(a) => f.write_str(a.as_str()),
+
+			#[cfg(feature = "bin")]
+			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
 		}
 	}
 }
