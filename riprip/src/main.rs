@@ -35,6 +35,7 @@ use argyle::{
 	FLAG_VERSION,
 };
 use dactyl::{
+	NiceElapsed,
 	NiceU8,
 	traits::BytesToUnsigned,
 };
@@ -136,12 +137,13 @@ fn _main() -> Result<(), RipRipError> {
 	rip_summary(&opts)?;
 
 	// Rip and rip and rip!
+	let now = std::time::Instant::now();
 	disc.rip(&opts, &progress, &killed)?;
 
 	eprintln!();
 	if killed.killed() { Err(RipRipError::Killed) }
 	else {
-		Msg::success("That's all folks!").eprint();
+		Msg::success(format!("Finished in {}.", NiceElapsed::from(now))).eprint();
 		Ok(())
 	}
 }
