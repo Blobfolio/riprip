@@ -6,9 +6,8 @@ use crate::{
 	BYTES_PER_SAMPLE,
 	BYTES_PER_SECTOR,
 	cache_path,
-	cache_read,
 	CACHE_SCRATCH,
-	cache_write,
+	CacheWriter,
 	RipSample,
 	SAMPLES_PER_SECTOR,
 };
@@ -18,6 +17,7 @@ use cdtoc::{
 	Track,
 };
 use std::{
+	path::Path,
 	sync::OnceLock,
 	time::Duration,
 };
@@ -65,12 +65,10 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	let crc = crc32fast::hash(toc.to_string().as_bytes());
 	let ar = toc.accuraterip_id();
 	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ar.bin")).ok()?;
-	let chk = cache_read(&dst).ok()
-		.flatten()
+	let chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = ar.checksum_url();
-			let chk = download(&url)?;
-			let _res = cache_write(&dst, &chk); // Cache for later.
+			let chk = download(&url, &dst)?;
 			Some(chk)
 		})
 		.and_then(|chk| ar.parse_checksums(&chk).ok())
@@ -160,12 +158,10 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	// Fetch/cache the checksums.
 	let crc = crc32fast::hash(toc.to_string().as_bytes());
 	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ctdb.xml")).ok()?;
-	let mut chk = cache_read(&dst).ok()
-		.flatten()
+	let mut chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = toc.ctdb_checksum_url();
-			let chk = download(&url)?;
-			let _res = cache_write(&dst, &chk); // Cache for later.
+			let chk = download(&url, &dst)?;
 			Some(chk)
 		})
 		.and_then(|chk| {
@@ -328,12 +324,23 @@ fn agent() -> &'static Agent {
 /// # Download.
 ///
 /// Download and return the data!
-fn download(url: &str) -> Option<Vec<u8>> {
-	let res = agent().get(url).call().ok()?;
+fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
+	use std::io::Write;
 
+	// Download the data into a vector.
+	let res = agent().get(url).call().ok()?;
 	let mut out = Vec::new();
 	res.into_reader().read_to_end(&mut out).ok()?;
 
 	if out.is_empty() { None }
-	else { Some(out) }
+	else {
+		// Cache the contents for next time.
+		let _res = CacheWriter::new(dst).ok()
+			.and_then(|mut writer| {
+				writer.writer().write_all(&out).ok()?;
+				writer.finish().ok()
+			});
+
+		Some(out)
+	}
 }

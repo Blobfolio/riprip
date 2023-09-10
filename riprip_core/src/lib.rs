@@ -34,6 +34,7 @@
 
 mod abort;
 mod barcode;
+mod cache;
 mod cdio;
 mod cdtext;
 mod chk;
@@ -41,10 +42,13 @@ mod disc;
 mod drive;
 mod error;
 mod rip;
-mod utility;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
+pub(crate) use cache::{
+	cache_path,
+	CacheWriter,
+};
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;
 pub(crate) use chk::{
@@ -65,13 +69,6 @@ pub(crate) use rip::{
 	Rip,
 };
 pub use rip::opts::RipOptions;
-pub(crate) use utility::{
-	cache_path,
-	cache_read,
-	cache_write,
-	zstd_decode,
-	zstd_encode,
-};
 
 
 

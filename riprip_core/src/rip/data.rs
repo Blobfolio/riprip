@@ -9,16 +9,13 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	cache_path,
-	cache_read,
 	CACHE_SCRATCH,
-	cache_write,
+	CacheWriter,
 	NULL_SAMPLE,
 	ReadOffset,
 	RipRipError,
 	Sample,
 	SAMPLES_PER_SECTOR,
-	zstd_decode,
-	zstd_encode,
 };
 use dactyl::traits::SaturatingFrom;
 use fyi_msg::Msg;
@@ -32,7 +29,7 @@ use serde::{
 	Serialize,
 };
 use std::{
-	io::Cursor,
+	fs::File,
 	ops::Range,
 	path::PathBuf,
 };
@@ -167,10 +164,17 @@ impl RipSamples {
 	/// the cache exists and cannot be deserialized, or the data is in someway
 	/// nonsensical.
 	pub(crate) fn from_file(toc: &Toc, track: Track) -> Result<Option<Self>, RipRipError> {
-		if let Some(raw) = state_path(toc, track).and_then(cache_read)? {
-			let mut out = zstd_decode(&raw)
-				.and_then(|raw| bincode::deserialize::<Self>(&raw).ok())
-				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
+		let src = state_path(toc, track)?;
+		if let Ok(file) = File::open(src) {
+			// Performance tanks when chaining zstd/bincode together, so read
+			// and decompress into a temporary vec first.
+			let mut out = Vec::new();
+			zstd::stream::copy_decode(file, &mut out)
+				.map_err(|_| RipRipError::StateCorrupt(track.number()))?;
+
+			// Now deserialize from that vec, implicitly dropping it.
+			let mut out: Self = bincode::deserialize(&out)
+				.map_err(|_| RipRipError::StateCorrupt(track.number()))?;
 
 			// Calculate the rip range real quick.
 			let rng = track.sector_range_normalized();
@@ -227,15 +231,22 @@ impl RipSamples {
 	///
 	/// This will bubble up any errors encountered along the way.
 	pub(crate) fn save_state(&self) -> Result<(), RipRipError> {
-		let out = bincode::serialize(self).ok()
-			.and_then(|raw| zstd_encode(&raw))
-			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
-
+		// The destination path.
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
 
-		cache_write(dst, &out)
-			.map_err(|_| RipRipError::StateSave(self.track.number()))
+		// Performance tanks when chaining bincode/zstd together, so serialize
+		// the state to a temporary vec, then compress and write it to a file.
+		let mut writer = CacheWriter::new(&dst)?;
+		bincode::serialize(self).ok()
+			.and_then(|out|
+				// Zero is equivalent to the default level in this context.
+				zstd::stream::copy_encode(out.as_slice(), writer.writer(), 0).ok()
+			)
+			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
+
+		// Save the file.
+		writer.finish()
 	}
 
 	/// # Save Track.
@@ -252,15 +263,27 @@ impl RipSamples {
 	/// This will bubble up any I/O-related errors encountered, but should be
 	/// fine.
 	pub(crate) fn save_track(&self, raw: bool) -> Result<PathBuf, RipRipError> {
+		use std::io::Write;
+
 		let dst = track_path(self.track, raw)?;
 		let samples = self.track_slice();
+		let mut writer = CacheWriter::new(&dst)?;
 
-		// Raw is relatively easy; we just collect the samples in order.
+		// Raw is relatively easy; we just collect the samples in order. That
+		// said, writing just four bytes at a time would be terrible; we'll
+		// chunk it instead.
 		if raw {
-			let data: Vec<u8> = samples.iter()
-				.flat_map(RipSample::as_array)
-				.collect();
-			cache_write(&dst, &data)?;
+			let buf1 = writer.writer();
+			let mut buf = [0_u8; 16_384 * 4]; // 64 KiB.
+			for chunk in samples.chunks(16_384) {
+				let len = chunk.len() * 4; // The length of _this_ chunk.
+				for (b, s) in buf.chunks_exact_mut(4).zip(chunk) {
+					b.copy_from_slice(s.as_slice());
+				}
+				buf1.write_all(&buf[..len])
+					.and_then(|_| buf1.flush())
+					.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+			}
 		}
 		// Wavs on the other hand have to be _built_. Ug.
 		else {
@@ -270,30 +293,29 @@ impl RipSamples {
 				bits_per_sample: 16,
 				sample_format: SampleFormat::Int,
 			};
-			let mut buf = Cursor::new(Vec::with_capacity(samples.len() * usize::from(BYTES_PER_SAMPLE) + 44));
-			let mut wav = WavWriter::new(&mut buf, spec)
+			let mut wav = WavWriter::new(writer.writer(), spec)
 				.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
 			// In CD contexts, a sample is general one L+R pair. In other
 			// contexts, like hound, L and R are each their own sample. (We
 			// need to double our internal count to match.)
 			{
-				let mut writer = wav.get_i16_writer(u32::saturating_from(samples.len()) * 2);
+				let mut wav_writer = wav.get_i16_writer(u32::saturating_from(samples.len()) * 2);
 				for sample in samples {
 					let sample = sample.as_array();
-					writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
-					writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
+					wav_writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
+					wav_writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
 				}
-				writer.flush().map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+				wav_writer.flush().map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 			}
 
 			wav.flush().ok()
 				.and_then(|_| wav.finalize().ok())
-				.and_then(|_| cache_write(&dst, &buf.into_inner()).ok())
 				.ok_or_else(|| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 		}
 
-		Ok(dst)
+		// Save the file.
+		writer.finish().map(|_| dst)
 	}
 }
 
