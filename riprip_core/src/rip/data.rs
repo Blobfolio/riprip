@@ -30,6 +30,10 @@ use serde::{
 };
 use std::{
 	fs::File,
+	io::{
+		BufReader,
+		BufWriter,
+	},
 	ops::Range,
 	path::PathBuf,
 };
@@ -166,15 +170,10 @@ impl RipSamples {
 	pub(crate) fn from_file(toc: &Toc, track: Track) -> Result<Option<Self>, RipRipError> {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
-			// Performance tanks when chaining zstd/bincode together, so read
-			// and decompress into a temporary vec first.
-			let mut out = Vec::new();
-			zstd::stream::copy_decode(file, &mut out)
-				.map_err(|_| RipRipError::StateCorrupt(track.number()))?;
-
-			// Now deserialize from that vec, implicitly dropping it.
-			let mut out: Self = bincode::deserialize(&out)
-				.map_err(|_| RipRipError::StateCorrupt(track.number()))?;
+			// Read -> decompress -> deserialize.
+			let mut out: Self = zstd::stream::Decoder::new(file).ok()
+				.and_then(|dec| bincode::deserialize_from(BufReader::new(dec)).ok())
+				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
 
 			// Calculate the rip range real quick.
 			let rng = track.sector_range_normalized();
@@ -235,17 +234,23 @@ impl RipSamples {
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
 
-		// Performance tanks when chaining bincode/zstd together, so serialize
-		// the state to a temporary vec, then compress and write it to a file.
+		// Serialize -> compress -> write to tmpfile.
 		let mut writer = CacheWriter::new(&dst)?;
-		bincode::serialize(self).ok()
-			.and_then(|out|
-				// Zero is equivalent to the default level in this context.
-				zstd::stream::copy_encode(out.as_slice(), writer.writer(), 0).ok()
-			)
+		zstd::stream::Encoder::new(writer.writer(), 0).ok()
+			.and_then(|mut enc| {
+				// Try to parallelize, but don't die if it fails.
+				let _res = std::thread::available_parallelism()
+					.ok()
+					.and_then(|n| u32::try_from(n.get()).ok())
+					.and_then(|par| enc.multithread(par).ok());
+
+				// Push the compressor into a BufWriter to make bincode's
+				// chunking more efficient. Both writers flush on drop.
+				bincode::serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
+			})
 			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
 
-		// Save the file.
+		// Save the tmpfile to dst.
 		writer.finish()
 	}
 
