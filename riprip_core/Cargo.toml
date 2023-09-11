@@ -17,7 +17,6 @@ dactyl = "0.5.*"
 hound = "3.5.0"
 tempfile = "3.8.0"
 trimothy = "0.1.*"
-ureq = "2.7.0"
 
 [dependencies.argyle]
 version = "0.6.*"
@@ -40,17 +39,24 @@ features = [ "cdio" ]
 version = "1.0.*"
 features = [ "derive" ]
 
+[dependencies.ureq]
+version = "2.7.0"
+default-features = false
+# Neither AccurateRip nor CTDB use SSL for whatever
+# reason so we don't need any ureq features at all.
+
 [dependencies.zstd]
 version="0.12.*"
 default-features=false
 features = [ "zstdmt" ]
 
-[build-dependencies]
-ureq = "2.7.0"
+[build-dependencies.ureq]
+version = "2.7.0"
+default-features = false
 
 [features]
 default = []
 
-# This feature adds a few generic RipRipError types for the binary. It is not
-# something external crates need to worry about.
+# This feature adds a few generic RipRipError types for the binary.
+# It is not something external crates need to worry about.
 bin = [ "argyle" ]
