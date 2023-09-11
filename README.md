@@ -51,96 +51,49 @@ Rip Rip Hooray! is run from the command line, like:
 
 ```bash
 riprip [OPTIONS]
+
+# To see a list of options, use -h/--help:
+riprip --help
 ```
 
-It has more than a handful of options, but in most cases you'll probably only need to specify the track(s) of interest with `-t`/`--track`, e.g.
+### Example Recovery Workflow
+
+Start by ripping the entire disc using a traditional (and _accurate_!) CD ripper, like [fre:ac](https://github.com/enzo1982/freac/) or [Exact Audio Copy](https://www.exactaudiocopy.de/). Just be sure to:
+* Rip each track to its own file
+* Encode the tracks to a _lossless_ format, like FLAC or WAV
+* Generate a cue sheet for the collection
+* _Disable_ any error recovery-related options, or at least turn them way down
+
+(Rip Rip _can_ be used to rip an entire disc, but the overhead associated with recovery would be overkill for the easy stuff.)
+
+If any tracks are deemed "inaccurate", re-rip them with Rip Rip Hooray!:
 
 ```bash
-# Rip tracks 3 and 5.
-riprip -t 3,5
+# You might as well run this from the directory containing the original rip.
+cd /path/to/traditional/rip
+
+# Let's say tracks 4, 8, 9, and 10 are messed up.
+riprip -t 4,8-10
 ```
 
-If you know it is going to take a few passes to build up a reasonably complete rip, you can automate that with `--refine` (rather than manually rerunning the program):
+It is possible one or more of the problem tracks will magically come out "accurate" on the first try, but in most cases they'll still be somewhat incomplete.
+
+[CUETools](http://cue.tools/wiki/CUETools) has an amazing repair feature that can automatically fix up random sample errors. Before doing any further ripping, you should check to see if you've already ripped _enough_:
+* Replace the bad tracks from the traditional rip with Rip Rip's versions, even if they're incomplete
+* Open CUETools and point it to the cue sheet the traditional ripper generated for you
+* Set the action to "Encode" and select "repair" from the dropdown
+* Hit "Go" and cross your fingers!
+
+If that worked, great! You're done!
+
+If not, no worries. Just re-run Rip Rip to refine the data. If any of the tracks are in really rough shape, you can automate subsequent passes by using the `--refine` option:
 
 ```bash
-# Rip tracks 3 and 5, giving each up to 11 total passes.
-riprip -t 3,5 --refine 10
+# Same as before, but run through each track up to 5 times (1 + 4 extra).
+riprip -t 4,8-10 --refine 4
 ```
 
-### Basic Settings.
-
-```text
-    --confidence <NUM>
-                  Consider the rip accurate — and stop working — if
-                  AccurateRip and/or CUETools matches are found with a
-                  confidence of at least <NUM>. [default: 3; range: 3..=10]
-    --cutoff <NUM>
-                  Stop re-reading allegedly-good samples once the drive has
-                  confirmed the same value at least <NUM> times (or the
-                  track as a whole is verified with AccurateRip/CTDB).
-                  Higher values are recommended when the data seems fishy.
-                  [default: 2; range: 1..=32]
-    --raw         Save ripped tracks in raw PCM format (instead of WAV).
--r, --refine <NUM>
-                  Execute up to <NUM> additional rip passes for each track
-                  while any samples remain unread/unconfirmed. A value
-                  greater than or equal to --cutoff is recommended.
-                  [default: 2; max: 32]
--t, --track <NUM(s),RNG>
-                  Rip one or more specific tracks (rather than the whole
-                  disc). Multiple tracks can be separated by commas (2,3),
-                  specified as an inclusive range (2-3), and/or given their
-                  own -t/--track (-t 2 -t 3). [default: the whole disc]
-```
-
-### When All Else Fails…
-
-```text
-    --backwards   Rip sectors in reverse order. (Data will still be saved
-                  in the *correct* order. Haha.)
-    --no-resume   Ignore any previous rip states; start over from scratch.
-    --strict      Treat C2 errors as an all-or-nothing proposition for the
-                  sector as a whole rather than judging each individual
-                  sample on its own.
-```
-
-### Drive Settings.
-
-These options are auto-detected and do not usually need to be explicitly provided.
-
-```text
--d, --dev <PATH>  The device path for the optical drive containing the CD
-                  of interest, like /dev/cdrom.
--o, --offset <SAMPLES>
-                  The AccurateRip, et al, sample read offset to apply to
-                  data retrieved from the drive. [range: ±5880]
-```
-
-### Unusual Settings.
-
-```text
-    --no-c2       Disable/ignore C2 error pointer information when ripping,
-                  e.g. for drives that do not support the feature. (This
-                  flag is otherwise not recommended.)
-    --no-cache-bust
-                  Do not attempt to reset the optical drive cache between
-                  each rip pass.
-```
-
-### Miscellaneous.
-
-```text
--h, --help        Print help information and exit.
--V, --version     Print version information and exit.
-    --no-rip      Print the basic drive and disc information to STDERR and
-                  exit (without ripping anything).
-    --no-summary  Skip the drive and disc summary and jump straight to
-                  ripping.
-```
-
-### Early Exit.
-
-If you don't have time to let a rip finish naturally, press `CTRL+C` to stop it early. Your progress will still be saved, there just won't be as much of it. Haha.
+Unless the damage is severe, Rip Rip and/or CUETools should eventually manage to turn the rip accurate!
 
 ### File I/O
 
@@ -149,6 +102,10 @@ Rip Rip Hooray! will need to create a number of different files in addition to t
 To resume a rip, just rerun the program from the same place, with the same disc, and it will automatically pick up from where it left off.
 
 When you're completely done working on a disc — and have grabbed the exported tracks! — go ahead and delete the `_riprip` folder to reclaim the disk space. ;)
+
+### Early Exit.
+
+If you don't have time to let a rip finish naturally, press `CTRL+C` to stop it early. Your progress will still be saved, there just won't be as much of it. Haha.
 
 
 
