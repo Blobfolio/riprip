@@ -25,10 +25,16 @@ use hound::{
 	WavWriter,
 };
 use serde::{
+	de,
 	Deserialize,
+	ser::{
+		self,
+		SerializeStruct,
+	},
 	Serialize,
 };
 use std::{
+	fmt,
 	fs::File,
 	io::{
 		BufReader,
@@ -41,7 +47,7 @@ use super::SAMPLE_OVERREAD;
 
 
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
 /// # The State Data.
 ///
 /// Because optical drives cannot be trusted to accurately account for the data
@@ -66,6 +72,68 @@ pub(crate) struct RipSamples {
 	rip_rng: Range<i32>,
 	data: Vec<RipSample>,
 	new: bool,
+}
+
+impl<'de> Deserialize<'de> for RipSamples {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where D: de::Deserializer<'de> {
+		const FIELDS: &[&str] = &["toc", "track", "data"];
+		struct RipSamplesVisitor;
+
+		impl<'de> de::Visitor<'de> for RipSamplesVisitor {
+			type Value = RipSamples;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				formatter.write_str("struct RipSamples")
+			}
+
+			// Bincode is sequence-driven, so this is all we need.
+			fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            where V: de::SeqAccess<'de> {
+				let toc: Toc = seq.next_element()?
+					.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+
+				// The track is stored by index number only; we need to fetch
+				// the corresponding object from the TOC.
+				let track = seq.next_element()?
+					.and_then(|n: u8| toc.audio_track(usize::from(n)))
+					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+				// The rip_rng is derived from the track.
+				let rip_rng = track_rng_to_rip_range(track)
+					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+				// The data is a straightforward vec, but we need to check its
+				// length covers the full rip range.
+				let data = seq.next_element()?
+					.filter(|d: &Vec<RipSample>| d.len() == rip_rng.len())
+					.ok_or_else(|| de::Error::invalid_length(2, &self))?;
+
+				Ok(RipSamples {
+					toc,
+					track,
+					rip_rng,
+					data,
+					new: false,
+				})
+            }
+		}
+
+		deserializer.deserialize_struct("RipSamples", FIELDS, RipSamplesVisitor)
+	}
+}
+
+impl Serialize for RipSamples {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where S: ser::Serializer {
+		let mut state = serializer.serialize_struct("RipSamples", 3)?;
+
+		state.serialize_field("toc", &self.toc)?;
+		state.serialize_field("track", &self.track.number())?;
+		state.serialize_field("data", &self.data)?;
+
+		state.end()
+	}
 }
 
 impl RipSamples {
@@ -101,35 +169,24 @@ impl RipSamples {
 			}
 		}
 
-		// Convert the track LSN range to samples.
-		let track_rng = track.sector_range_normalized();
-		let track_rng =
-			i32::try_from(track_rng.start).ok()
-				.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-				.ok_or(RipRipError::RipOverflow(idx))?..
-			i32::try_from(track_rng.end).ok()
-				.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-				.ok_or(RipRipError::RipOverflow(idx))?;
-
-		// The rip range is the same with an extra 10 sectors on either end.
-		let rip_rng =
-			track_rng.start.checked_sub(i32::from(SAMPLE_OVERREAD))
-				.ok_or(RipRipError::RipOverflow(idx))?..
-			track_rng.end.checked_add(i32::from(SAMPLE_OVERREAD))
-				.ok_or(RipRipError::RipOverflow(idx))?;
+		// Pad the LSN range by 10 sectors on either end and convert to
+		// samples.
+		let rip_rng = track_rng_to_rip_range(track)
+			.ok_or(RipRipError::RipOverflow(idx))?;
 
 		// The total length we might be ripping.
 		let len = usize::try_from(rip_rng.end - rip_rng.start)
 			.map_err(|_| RipRipError::RipOverflow(idx))?;
 
-		// We should also make sure the track size in bytes fits i32, u32, and
+		// We should also make sure the rip range in bytes fits i32, u32, and
 		// usize. By testing for all three now, we can lazy-cast elsewhere.
-		(track_rng.end - track_rng.start).checked_mul(i32::from(BYTES_PER_SAMPLE))
+		(rip_rng.end - rip_rng.start).checked_mul(i32::from(BYTES_PER_SAMPLE))
 			.and_then(|n| u32::try_from(n).ok())
 			.and_then(|n| usize::try_from(n).ok())
 			.ok_or(RipRipError::RipOverflow(idx))?;
 
-		// The leadout also needs to fit various sizes.
+		// The leadout needs to fit i32 in various places, so let's check for
+		// that now too.
 		let leadout = i32::try_from(toc.audio_leadout()).ok()
 			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
 			.ok_or(RipRipError::RipOverflow(idx))?;
@@ -171,33 +228,12 @@ impl RipSamples {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
 			// Read -> decompress -> deserialize.
-			let mut out: Self = zstd::stream::Decoder::new(file).ok()
+			let out: Self = zstd::stream::Decoder::new(file).ok()
 				.and_then(|dec| bincode::deserialize_from(BufReader::new(dec)).ok())
 				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
 
-			// Calculate the rip range real quick.
-			let rng = track.sector_range_normalized();
-			let rng =
-				i32::try_from(rng.start).ok()
-					.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-					.and_then(|n| n.checked_sub(i32::from(SAMPLE_OVERREAD)))
-					.ok_or_else(|| RipRipError::RipOverflow(track.number()))?..
-				i32::try_from(rng.end).ok()
-					.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-					.and_then(|n| n.checked_add(i32::from(SAMPLE_OVERREAD)))
-					.ok_or_else(|| RipRipError::RipOverflow(track.number()))?;
-
 			// Return the instance if it matches the info we're expecting.
-			if
-				out.toc.eq(toc) &&
-				out.track == track &&
-				out.rip_rng.start == rng.start &&
-				out.rip_rng.end == rng.end &&
-				out.data.len() == rng.len()
-			{
-				out.new = false;
-				Ok(Some(out))
-			}
+			if out.toc.eq(toc) && out.track == track { Ok(Some(out)) }
 			else {
 				Err(RipRipError::StateCorrupt(track.number()))
 			}
@@ -224,7 +260,11 @@ impl RipSamples {
 
 	/// # Save State.
 	///
-	/// Serialize, compress, and save a copy of the state to the disk.
+	/// Save a copy of the state to disk so the rip can be resumed at some
+	/// future date.
+	///
+	/// To help mitigate the storage requirements, the serialized data is
+	/// compressed with default-level zstd.
 	///
 	/// ## Errors
 	///
@@ -612,6 +652,19 @@ fn track_path(track: Track, raw: bool) -> Result<PathBuf, RipRipError> {
 		track.number(),
 		if raw { "pcm" } else { "wav" }
 	))
+}
+
+/// # Track Range to Rip Range.
+fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
+	let rng = track.sector_range_normalized();
+	let rng =
+		i32::try_from(rng.start).ok()
+			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
+			.and_then(|n| n.checked_sub(i32::from(SAMPLE_OVERREAD)))?..
+		i32::try_from(rng.end).ok()
+			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
+			.and_then(|n| n.checked_add(i32::from(SAMPLE_OVERREAD)))?;
+	Some(rng)
 }
 
 
