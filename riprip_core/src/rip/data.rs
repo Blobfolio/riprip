@@ -470,11 +470,22 @@ impl RipSamples {
 			.iter()
 			.all(RipSample::is_confirmed)
 	}
+
+	/// # Quick Hash.
+	///
+	/// Hash the contents of the ripped data. This provides an easy metric for
+	/// comparison to e.g. determine if anything changed between runs.
+	pub(crate) fn quick_hash(&self) -> u64 {
+		use std::hash::{BuildHasher, Hash, Hasher};
+		let mut hasher = crate::AHASHER.build_hasher();
+		self.data.hash(&mut hasher);
+		hasher.finish()
+	}
 }
 
 
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Hash, Serialize)]
 /// # Rip Sample.
 ///
 /// This enum combines sample value(s) and their status.

@@ -18,6 +18,10 @@ hound = "3.5.0"
 tempfile = "3.8.0"
 trimothy = "0.1.*"
 
+[dependencies.ahash]
+version = "0.8.*"
+default-features = false
+
 [dependencies.argyle]
 version = "0.6.*"
 optional = true

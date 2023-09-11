@@ -148,8 +148,11 @@ impl<'a> Rip<'a> {
 
 		// Onto the pass(es)!
 		for pass in 0..self.opts.passes() {
-			// Reset progress bar.
-			let _res = progress.reset((self.distance.len() as u32).saturating_add(1)); // This won't fail.
+			// Note the starting state.
+			let before = self.state.quick_hash();
+
+			// Reset progress bar. (This won't fail.)
+			let _res = progress.reset((self.distance.len() as u32).saturating_add(1));
 
 			// Bust the cache.
 			if self.opts.cache_bust() && ! (killed.killed() || confirmed) {
@@ -158,15 +161,11 @@ impl<'a> Rip<'a> {
 			}
 
 			// Update the progress title to reflect the track at hand.
-			progress.set_title(Some(Msg::custom(
-				rip_title_prefix(pass + resume),
-				199,
-				&format!(
-					"Track #{}{}…",
-					self.state.track().number(),
-					if self.opts.backwards() { " (backwards)" } else { "" },
-				)
-			)));
+			progress.set_title(Some(Msg::custom(rip_title_prefix(pass + resume), 199, &format!(
+				"Track #{}{}…",
+				self.state.track().number(),
+				if self.opts.backwards() { " (backwards)" } else { "" },
+			))));
 
 			// Pull down the data, one sector at a time.
 			for k in self.distance.clone() {
@@ -231,16 +230,8 @@ impl<'a> Rip<'a> {
 
 			// Verification.
 			progress.set_title(Some(Msg::custom("Standby", 11, "Verifying the ripped track…")));
-			let ar = chk_accuraterip(
-				self.disc.toc(),
-				self.state.track(),
-				self.state.track_slice(),
-			);
-			let ctdb = chk_ctdb(
-				self.disc.toc(),
-				self.state.track(),
-				self.state.track_slice(),
-			);
+			let ar = chk_accuraterip(self.disc.toc(), self.state.track(), self.state.track_slice());
+			let ctdb = chk_ctdb(self.disc.toc(), self.state.track(), self.state.track_slice());
 
 			// If the rip was confirmed with enough confidence, mark it
 			// thusly!
@@ -257,16 +248,19 @@ impl<'a> Rip<'a> {
 			}
 
 			// Save the state.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Saving the state…")));
-			let saved = self.state.save_state();
-			progress.finish();
-
-			if saved.is_err() {
-				Msg::warning("The rip state could not be saved.").eprint();
+			let changed = self.state.quick_hash() != before;
+			if changed {
+				progress.set_title(Some(Msg::custom("Standby", 11, "Saving the state…")));
+				let saved = self.state.save_state();
+				progress.finish();
+				if saved.is_err() {
+					Msg::warning("The rip state could not be saved.").eprint();
+				}
 			}
+			else { progress.finish(); }
 
 			// Summarize the results.
-			self.summarize(confirmed, ar, ctdb);
+			self.summarize(confirmed, changed, ar, ctdb);
 
 			// Maybe stop early?
 			if confirmed || killed.killed() { break; }
@@ -280,24 +274,26 @@ impl<'a> Rip<'a> {
 	/// Count up the different sample statuses and print a nice colored bar and
 	/// legend to demonstrate the "quality". This will also print out
 	/// AccurateRip and CTDB results, if any.
-	fn summarize(&self, confirmed: bool, ar: Option<(u8, u8)>, ctdb: Option<u16>) {
+	fn summarize(&self, confirmed: bool, changed: bool, ar: Option<(u8, u8)>, ctdb: Option<u16>) {
 		let track = self.state.track();
 		let (q_bad, q_maybe, q_likely, q_confirmed) =
 			if confirmed { (0, 0, 0, usize::saturating_from(track.samples())) }
 			else { self.state.track_quality(self.opts.cutoff()) };
 		let q_total = q_bad + q_maybe + q_likely + q_confirmed;
 
+		let changed = if changed { "" } else { " \x1b[2m(No change.)\x1b[0m" };
+
 		// All good.
 		if confirmed {
 			Msg::custom("Ripped", 10, &format!(
-				"Track #{} has been accurately ripped!",
+				"Track #{} has been accurately ripped!{changed}",
 				track.number(),
 			))
 		}
 		// All bad.
 		else if q_bad == q_total {
 			Msg::custom("Ripped", 4, &format!(
-				"Track #{} still needs a lot of work!",
+				"Track #{} still needs a lot of work!{changed}",
 				track.number(),
 			))
 		}
@@ -307,7 +303,7 @@ impl<'a> Rip<'a> {
 				dactyl::int_div_float(q_maybe * 100, q_total).unwrap_or(0.0)
 			);
 			Msg::custom("Ripped", 4, &format!(
-				"Track #{} is \x1b[2m(maybe)\x1b[0m {}% complete.",
+				"Track #{} is \x1b[2m(maybe)\x1b[0m {}% complete.{changed}",
 				track.number(),
 				p.compact_str(),
 			))
@@ -325,7 +321,7 @@ impl<'a> Rip<'a> {
 			// If rounding makes the percentages the same, just print one.
 			if low.precise_str(3) == high.precise_str(3) {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(likely)\x1b[0m {}% complete.",
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% complete.{changed}",
 					track.number(),
 					low.compact_str(),
 				))
@@ -333,7 +329,7 @@ impl<'a> Rip<'a> {
 			// Otherwise show both.
 			else {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(likely)\x1b[0m {}% – {}% complete.",
+					"Track #{} is \x1b[2m(likely)\x1b[0m {}% – {}% complete.{changed}",
 					track.number(),
 					low.precise_str(3),
 					high.precise_str(3),

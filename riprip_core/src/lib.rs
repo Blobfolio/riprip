@@ -75,6 +75,9 @@ pub use rip::opts::RipOptions;
 /// # 16-bit Stereo Sample (raw PCM bytes).
 type Sample = [u8; 4];
 
+/// # Static Hasher.
+pub(crate) const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(13, 19, 23, 71);
+
 /// # Cache Base.
 ///
 /// The cache root is thus `CWD/CACHE_BASE`.
