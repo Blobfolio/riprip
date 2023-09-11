@@ -222,7 +222,7 @@ impl Disc {
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		// Loop the loop!
-		let mut saved: Vec<PathBuf> = Vec::new();
+		let mut saved: Vec<(PathBuf, bool)> = Vec::new();
 		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
@@ -234,16 +234,20 @@ impl Disc {
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
 			let mut rip = Rip::new(self, track, opts)?;
-			let dst = rip.rip(progress, killed)?;
-			saved.push(dst);
+			let res = rip.rip(progress, killed)?;
+			saved.push(res);
 		}
 
 		// Print what we did!
 		if ! saved.is_empty() {
 			eprintln!("\nThe fruits of your labor:");
-			for file in saved {
+			for (file, confirmed) in saved {
 				if file.is_file() {
-					eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
+					eprintln!(
+						"  \x1b[2m{}{}\x1b[0m",
+						file.to_string_lossy(),
+						if confirmed { " \x1b[0;1;92m✓" } else { "" },
+					);
 				}
 			}
 			eprintln!();

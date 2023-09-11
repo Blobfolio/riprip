@@ -100,22 +100,28 @@ impl<'a> Rip<'a> {
 	/// # Rip!
 	///
 	/// Rip the track, maybe more than once!
+	///
+	/// This returns the destination path and a bool indicating whether or not
+	/// AccurateRip/CTDB like the result, or an error.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
-	-> Result<PathBuf, RipRipError> {
-		if ! killed.killed() {
-			// Same method two ways. The only difference is the buffer size;
-			// a larger buffer is required for C2 when ripping without.
-			if self.opts.c2() {
-				let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-				self._rip(&mut buf, progress, killed)?
-			}
+	-> Result<(PathBuf, bool), RipRipError> {
+		let confirmed =
+			if killed.killed() { self.state.is_confirmed() }
 			else {
-				let mut buf = [0_u8; CD_DATA_SIZE as usize];
-				self._rip(&mut buf, progress, killed)?
+				// Same method two ways. The only difference is the buffer
+				// size; a larger buffer is required for C2 when ripping
+				// without.
+				if self.opts.c2() {
+					let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
+					self._rip(&mut buf, progress, killed)?
+				}
+				else {
+					let mut buf = [0_u8; CD_DATA_SIZE as usize];
+					self._rip(&mut buf, progress, killed)?
+				}
 			};
-		}
 
-		self.state.save_track(self.opts.raw())
+		self.state.save_track(self.opts.raw()).map(|k| (k, confirmed))
 	}
 
 	#[allow(
@@ -283,7 +289,7 @@ impl<'a> Rip<'a> {
 
 		// All good.
 		if confirmed {
-			Msg::custom("Ripped", 14, &format!(
+			Msg::custom("Ripped", 10, &format!(
 				"Track #{} has been accurately ripped!",
 				track.number(),
 			))
