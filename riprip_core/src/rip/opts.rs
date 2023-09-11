@@ -80,7 +80,7 @@ impl Default for RipOptions {
 			offset: ReadOffset::default(),
 			confidence: 3,
 			cutoff: 2,
-			refine: 1,
+			refine: 0,
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
@@ -235,7 +235,7 @@ impl RipOptions {
 	/// AccurateRip and/or CUETools — or all samples meet the likeliness
 	/// threshold.
 	///
-	/// The default is `1`.
+	/// The default is `0`.
 	///
 	/// To give the drive a break, the maximum value is capped at `32`, but you
 	/// can manually rerun the program afterward as many times as needed. ;)

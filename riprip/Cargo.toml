@@ -101,7 +101,7 @@ description = "The AccurateRip, et al, sample read offset to apply to data retri
 short = "-r"
 long = "--refine"
 label = "<NUM>"
-description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 32]"
+description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 0; max: 32]"
 
 [[package.metadata.bashman.options]]
 short = "-t"

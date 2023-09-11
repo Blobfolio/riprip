@@ -336,7 +336,7 @@ BASIC SETTINGS:
     -r, --refine <NUM>
                       Automatically execute up to <NUM> additional rip passes
                       for each track while any samples remain unread or
-                      unconfirmed. [default: 1; max: 32]
+                      unconfirmed. [default: 0; max: 32]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
