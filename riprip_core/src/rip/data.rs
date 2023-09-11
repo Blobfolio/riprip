@@ -43,7 +43,10 @@ use std::{
 	ops::Range,
 	path::PathBuf,
 };
-use super::SAMPLE_OVERREAD;
+use super::{
+	SAMPLE_OVERREAD,
+	TrackQuality,
+};
 
 
 
@@ -424,23 +427,8 @@ impl RipSamples {
 	///
 	/// Add up the bad, maybe, likely, and confirmed samples within the track
 	/// range.
-	pub(crate) fn track_quality(&self, cutoff: u8) -> (usize, usize, usize, usize) {
-		let mut bad = 0;
-		let mut maybe = 0;
-		let mut likely = 0;
-		let mut confirmed = 0;
-
-		for v in self.track_slice() {
-			match v {
-				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
-				RipSample::Confirmed(_) => { confirmed += 1; },
-				RipSample::Maybe(_) =>
-					if v.is_likely(cutoff) { likely += 1; }
-					else { maybe += 1; },
-			}
-		}
-
-		(bad, maybe, likely, confirmed)
+	pub(super) fn track_quality(&self, cutoff: u8) -> TrackQuality {
+		TrackQuality::new(self.track_slice(), cutoff)
 	}
 
 	/// # Track Slice.

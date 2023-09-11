@@ -235,6 +235,7 @@ impl Disc {
 			// a complete list at the end.
 			let mut rip = Rip::new(self, track, opts)?;
 			let res = rip.rip(progress, killed)?;
+			rip.summarize();
 			saved.push(res);
 		}
 

@@ -67,7 +67,7 @@ description = "Save ripped tracks in raw PCM format (instead of WAV)."
 
 [[package.metadata.bashman.switches]]
 long = "--strict"
-description = "Treat C2 errors as an all-or-nothing proposition for the sector as a whole rather than judging each individual sample on its own."
+description = "Treat C2 errors as an all-or-nothing proposition for the sector as a whole rather than judging each individual sample on its own. This is most effective when set for all rip passes (rather than being turned on after several runs have already completed)."
 
 [[package.metadata.bashman.switches]]
 short = "-V"

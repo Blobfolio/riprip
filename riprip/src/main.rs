@@ -320,17 +320,13 @@ USAGE:
     riprip [OPTIONS]
 
 BASIC SETTINGS:
-        --confidence <NUM>
-                      Consider a track accurately ripped — i.e. stop working on
-                      it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. [default: 3; range: 3..=10]
         --cutoff <NUM>
                       Consider allegedly-good samples \"likely\" once the same
-                      value has been read at least <NUM> times and twice as
+                      value has been read at least <NUM> times, and twice as
                       often as any competing values. Sectors containing only
                       likely/confirmed samples are skipped during subsequent
                       passes, so the lower the cutoff, the faster they'll go.
-                      Higher values are recommended for wishywashy drives.
+                      Higher values are recommended when the data seems fishy.
                       [default: 2; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
     -r, --refine <NUM>
@@ -349,7 +345,9 @@ WHEN ALL ELSE FAILS:
         --no-resume   Ignore any previous rip states; start over from scratch.
         --strict      Treat C2 errors as an all-or-nothing proposition for the
                       sector as a whole rather than judging each individual
-                      sample on its own.
+                      sample on its own. This is most effective when set for
+                      all rip passes (rather than being turned on after several
+                      runs have already completed).
 
 DRIVE SETTINGS:
     These options are auto-detected and do not usually need to be explicitly
@@ -362,6 +360,10 @@ DRIVE SETTINGS:
                       data retrieved from the drive. [range: ±5880]
 
 UNUSUAL SETTINGS:
+        --confidence <NUM>
+                      Consider a track accurately ripped — i.e. stop working on
+                      it — AccurateRip and/or CUETools matches are found with a
+                      confidence of at least <NUM>. [default: 3; range: 3..=10]
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
