@@ -1,14 +1,13 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.0.7
-    Generated: 2023-09-09 20:14:01 UTC
+    Version:   0.0.8
+    Generated: 2023-09-11 05:28:18 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
-| [adler](https://github.com/jonas-schievink/adler.git) | 1.0.2 | [Jonas Schievink](mailto:jonasschievink@gmail.com) | 0BSD, Apache-2.0, or MIT |
 | [ahash](https://github.com/tkaitchuck/ahash) | 0.8.3 | [Tom Kaitchuck](mailto:tom.kaitchuck@gmail.com) | Apache-2.0 or MIT |
 | [argyle](https://github.com/Blobfolio/argyle) | 0.6.8 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
-| [base64](https://github.com/marshallpierce/rust-base64) | 0.21.3 | [Alice Maz](mailto:alice@alicemaz.com) and [Marshall Pierce](mailto:marshall@mpierce.org) | Apache-2.0 or MIT |
+| [base64](https://github.com/marshallpierce/rust-base64) | 0.21.4 | [Alice Maz](mailto:alice@alicemaz.com) and [Marshall Pierce](mailto:marshall@mpierce.org) | Apache-2.0 or MIT |
 | [bincode](https://github.com/servo/bincode) | 1.3.3 | [Ty Overby](mailto:ty@pre-alpha.com), [Francesco Mazzoli](mailto:f@mazzo.li), [David Tolnay](mailto:dtolnay@gmail.com), and [Zoey Riordan](mailto:zoey@dos.cafe) | MIT |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.10.4 | RustCrypto Developers | Apache-2.0 or MIT |
 | [bytecount](https://github.com/llogiq/bytecount) | 0.6.3 | [Andre Bogus](mailto:bogusandre@gmail.de) and [Joshua Landau](mailto:joshua@landau.ws) | Apache-2.0 or MIT |
@@ -21,7 +20,6 @@
 | [digest](https://github.com/RustCrypto/traits) | 0.10.7 | RustCrypto Developers | Apache-2.0 or MIT |
 | [faster-hex](https://github.com/NervosFoundation/faster-hex) | 0.8.1 | [zhangsoledad](mailto:787953403@qq.com) | MIT |
 | [fastrand](https://github.com/smol-rs/fastrand) | 2.0.0 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 or MIT |
-| [flate2](https://github.com/rust-lang/flate2-rs) | 1.0.27 | [Alex Crichton](mailto:alex@alexcrichton.com) and [Josh Triplett](mailto:josh@joshtriplett.org) | Apache-2.0 or MIT |
 | [form_urlencoded](https://github.com/servo/rust-url) | 1.2.0 | The rust-url developers | Apache-2.0 or MIT |
 | [fyi_msg](https://github.com/Blobfolio/fyi) | 0.11.2 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [generic-array](https://github.com/fizyk20/generic-array.git) | 0.14.7 | [Bartłomiej Kamiński](mailto:fizyk20@gmail.com) and [Aaron Trent](mailto:novacrazy@gmail.com) | MIT |
@@ -31,23 +29,17 @@
 | [libc](https://github.com/rust-lang/libc) | 0.2.147 | The Rust Project Developers | Apache-2.0 or MIT |
 | [libcdio-sys](https://github.com/gmes78/libcdio-sys) | 0.5.0 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
 | [log](https://github.com/rust-lang/log) | 0.4.20 | The Rust Project Developers | Apache-2.0 or MIT |
-| [miniz_oxide](https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide) | 0.7.1 | [Frommi](mailto:daniil.liferenko@gmail.com) and [oyvindln](mailto:oyvindln@users.noreply.github.com) | Apache-2.0, MIT, or Zlib |
 | [num-traits](https://github.com/rust-num/num-traits) | 0.2.16 | The Rust Project Developers | Apache-2.0 or MIT |
 | [once_cell](https://github.com/matklad/once_cell) | 1.18.0 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | Apache-2.0 or MIT |
 | [oxford_join](https://github.com/Blobfolio/oxford_join) | 0.2.8 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.66 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [ring](https://github.com/briansmith/ring) | 0.16.20 | [Brian Smith](mailto:brian@briansmith.org) |  |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.7 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
-| [rustls](https://github.com/rustls/rustls) | 0.21.7 |  | Apache-2.0, ISC, or MIT |
-| [rustls-webpki](https://github.com/rustls/webpki) | 0.100.2 |  |  |
-| [rustls-webpki](https://github.com/rustls/webpki) | 0.101.4 |  | ISC |
-| [sct](https://github.com/ctz/sct.rs) | 0.7.0 | [Joseph Birr-Pixton](mailto:jpixton@gmail.com) | Apache-2.0, ISC, or MIT |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.0.8 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [serde](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [serde_derive](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.5 | RustCrypto Developers | Apache-2.0 or MIT |
-| [syn](https://github.com/dtolnay/syn) | 2.0.31 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
+| [syn](https://github.com/dtolnay/syn) | 2.0.32 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [tempfile](https://github.com/Stebalien/tempfile) | 3.8.0 | [Steven Allen](mailto:steven@stebalien.com), The Rust Project Developers, [Ashley Mannix](mailto:ashleymannix@live.com.au), and [Jason White](mailto:me@jasonwhite.io) | Apache-2.0 or MIT |
 | [term_size](https://github.com/kbknapp/term_size-rs.git) | 0.3.2 | [Kevin K.](mailto:kbknapp@gmail.com) and [Benjamin Sago](mailto:ogham@bsago.me) | Apache-2.0 or MIT |
 | [tinyvec](https://github.com/Lokathor/tinyvec) | 1.6.0 | [Lokathor](mailto:zefria@gmail.com) | Apache-2.0, MIT, or Zlib |
@@ -58,11 +50,8 @@
 | [unicode-ident](https://github.com/dtolnay/unicode-ident) | 1.0.11 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 AND Unicode-DFS-2016 or MIT |
 | [unicode-normalization](https://github.com/unicode-rs/unicode-normalization) | 0.1.22 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.1.10 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
-| [untrusted](https://github.com/briansmith/untrusted) | 0.7.1 | [Brian Smith](mailto:brian@briansmith.org) | ISC |
 | [ureq](https://github.com/algesten/ureq) | 2.7.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |
 | [url](https://github.com/servo/rust-url) | 2.4.1 | The rust-url developers | Apache-2.0 or MIT |
-| [webpki-roots](https://github.com/rustls/webpki-roots) | 0.23.1 |  | MPL-2.0 |
-| [write_atomic](https://github.com/Blobfolio/write_atomic) | 0.4.0 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [zstd](https://github.com/gyscos/zstd-rs) | 0.12.4 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | MIT |
 | [zstd-safe](https://github.com/gyscos/zstd-rs) | 6.0.6 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |
 | [zstd-sys](https://github.com/gyscos/zstd-rs) | 2.0.8+zstd.1.5.5 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |

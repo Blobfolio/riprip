@@ -1,11 +1,11 @@
 [package]
 name = "riprip"
-version = "0.0.7"
+version = "0.0.8"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.70"
-description = "An incremental, second-stage audio CD ripper for advanced data recovery."
+description = "A specialized audio CD-ripper optimized for incremental data recovery."
 repository = "https://github.com/Blobfolio/riprip"
 readme = "README.md"
 publish = false
@@ -19,7 +19,7 @@ depends = "$auto"
 section = "sound"
 extended-description = """\
 .\n\
-Rip Rip Hooray! is a second-stage audio CD ripper for advanced data recovery."""
+Rip Rip Hooray! is an audio CD-ripper optimized for incremental data recovery."""
 assets = [
     ["../target/x86_64-unknown-linux-gnu/release/riprip", "usr/bin/", "755"],
     ["../release/completions/riprip.bash", "etc/bash_completion.d/", "644"],

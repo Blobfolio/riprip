@@ -162,9 +162,6 @@ impl Disc {
 			}
 		}
 
-		// We should have at least one audio track, but just in case…
-		if audio.is_empty() { return Err(RipRipError::NoTracks); }
-
 		// Grab the leadout, then build the ToC.
 		let leadout = cdio.leadout_lba()?;
 		let toc = Toc::from_parts(audio, data, leadout)?;

@@ -63,9 +63,6 @@ pub enum RipRipError {
 	/// # Unable to get leadout.
 	Leadout,
 
-	/// # No tracks/empty disc.
-	NoTracks,
-
 	/// # Unable to obtain the number of tracks.
 	NumTracks,
 
@@ -143,7 +140,6 @@ impl fmt::Display for RipRipError {
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
 			Self::Killed => f.write_str("User abort."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
-			Self::NoTracks => f.write_str("No tracks were found."),
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
 			Self::RipOverflow(n) => write!(f, "Track #{n} cannot be ripped on this system."),
