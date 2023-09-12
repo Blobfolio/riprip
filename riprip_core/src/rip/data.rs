@@ -16,14 +16,11 @@ use crate::{
 	RipRipError,
 	Sample,
 	SAMPLES_PER_SECTOR,
+	WAVE_SPEC,
 };
 use dactyl::traits::SaturatingFrom;
 use fyi_msg::Msg;
-use hound::{
-	SampleFormat,
-	WavSpec,
-	WavWriter,
-};
+use hound::WavWriter;
 use serde::{
 	de,
 	Deserialize,
@@ -335,13 +332,7 @@ impl RipSamples {
 		}
 		// Wavs on the other hand have to be _built_. Ug.
 		else {
-			let spec = WavSpec {
-				channels: 2,
-				sample_rate: 44100,
-				bits_per_sample: 16,
-				sample_format: SampleFormat::Int,
-			};
-			let mut wav = WavWriter::new(writer.writer(), spec)
+			let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC)
 				.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
 			// In CD contexts, a sample is general one L+R pair. In other
