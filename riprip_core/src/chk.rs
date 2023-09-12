@@ -62,9 +62,8 @@ const SILENCE: &[u8] = &[0; CTDB_WIGGLE];
 pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 -> Option<(u8, u8)> {
 	// Fetch/cache the checksums.
-	let crc = crc32fast::hash(toc.to_string().as_bytes());
 	let ar = toc.accuraterip_id();
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ar.bin")).ok()?;
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", toc.cddb_id())).ok()?;
 	let chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = ar.checksum_url();
@@ -156,8 +155,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// for any value less than `2` to avoid confusion.
 pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
 	// Fetch/cache the checksums.
-	let crc = crc32fast::hash(toc.to_string().as_bytes());
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__chk-ctdb.xml")).ok()?;
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", toc.cddb_id())).ok()?;
 	let mut chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = toc.ctdb_checksum_url();

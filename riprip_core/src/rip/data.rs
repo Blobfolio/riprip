@@ -631,8 +631,7 @@ const fn is_super_majority(target: u8, mut total: u16) -> bool {
 /// This will return an error if there are problems determining the cache
 /// location.
 fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	let crc = crc32fast::hash(toc.to_string().as_bytes());
-	cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__{:02}.state", track.number()))
+	cache_path(format!("{CACHE_SCRATCH}/{}__{:02}.state", toc.cddb_id(), track.number()))
 }
 
 /// # Track Path.
