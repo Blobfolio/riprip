@@ -8,6 +8,7 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
+	CacheWriter,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
@@ -17,13 +18,17 @@ use crate::{
 	Rip,
 	RipOptions,
 	RipRipError,
+	SAMPLES_PER_SECTOR,
+	WAVE_SPEC,
 };
 use fyi_msg::{
 	Msg,
 	Progless,
 };
+use hound::WavWriter;
 use std::{
 	collections::BTreeMap,
+	ffi::OsStr,
 	fmt,
 	path::{
 		Path,
@@ -222,7 +227,7 @@ impl Disc {
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		// Loop the loop!
-		let mut saved: Vec<(PathBuf, bool)> = Vec::new();
+		let mut saved = BTreeMap::default();
 		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
@@ -236,24 +241,107 @@ impl Disc {
 			let mut rip = Rip::new(self, track, opts)?;
 			let res = rip.rip(progress, killed)?;
 			rip.summarize();
-			saved.push(res);
+			saved.insert(t, res);
 		}
 
 		// Print what we did!
 		if ! saved.is_empty() {
 			eprintln!("\nThe fruits of your labor:");
-			for (file, confirmed) in saved {
-				if file.is_file() {
-					eprintln!(
-						"  \x1b[2m{}{}\x1b[0m",
-						file.to_string_lossy(),
-						if confirmed { " \x1b[0;1;92m✓" } else { "" },
-					);
+
+			// If we did all tracks, make a cue sheet.
+			if ! opts.raw() {
+				if let Some(file) = save_cuesheet(&self.toc, &saved) {
+					eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
 				}
+			}
+
+			for (file, confirmed) in saved.values() {
+				eprintln!(
+					"  \x1b[2m{}{}\x1b[0m",
+					file.to_string_lossy(),
+					if *confirmed { " \x1b[0;1;92m✓" } else { "" },
+				);
 			}
 			eprintln!();
 		}
 
 		Ok(())
 	}
+}
+
+
+
+/// # Generate CUE Sheet if Complete.
+fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<PathBuf> {
+	use std::fmt::Write;
+
+	// Make sure all tracks on the disc have been ripped, and pair their file
+	// names with the corresponding Track object.
+	let mut all = Vec::with_capacity(ripped.len());
+	for track in toc.audio_tracks() {
+		let (dst, _) = ripped.get(&track.number())?;
+		let dst = dst.file_name().and_then(OsStr::to_str)?;
+		all.push((track, dst));
+	}
+
+	// The output folder.
+	let parent = ripped.get(&1).and_then(|(dst, _)| dst.parent())?;
+
+	let mut cue = String::new();
+	for (track, src) in all {
+		// If the first track has a non-zero start, we need to generate the
+		// pregap and write both their entries a little differently than we
+		// otherwise would.
+		if track.position().is_first() {
+			let rng = track.sector_range_normalized();
+			if rng.start != 0 {
+				// Generate an output path for our 00 track.
+				let dst = parent.join("00.wav");
+
+				// CD samples are stereo pairs, but hound treats each channel
+				// separately, so the number of hound-samples we'll write are
+				// double.
+				let len = (rng.end - rng.start).checked_mul(u32::from(SAMPLES_PER_SECTOR) * 2)?;
+
+				// Write the wav.
+				let mut writer = CacheWriter::new(&dst).ok()?;
+				{
+					let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC).ok()?;
+					let mut wav_writer = wav.get_i16_writer(len);
+					for _ in 0..len { wav_writer.write_sample(0_i16); }
+					wav_writer.flush().ok()?;
+					wav.flush().ok()?;
+					wav.finalize().ok()?;
+				}
+				writer.finish().ok()?;
+
+				// Add the lines to our cue!
+				cue.push_str("FILE \"00.wav\" WAVE\n");
+				cue.push_str("  TRACK 01 AUDIO\n");
+				cue.push_str("    INDEX 00 00:00:00\n");
+				writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
+				cue.push_str("    INDEX 01 00:00:00\n");
+
+				// We're done with tracks zero/one.
+				continue;
+			}
+		}
+
+		// All other tracks are just file/track/index.
+		writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
+		writeln!(&mut cue, "  TRACK {:02} AUDIO", track.number()).ok()?;
+		cue.push_str("    INDEX 01 00:00:00\n");
+	}
+
+	// Save the cue sheet!
+	let dst = parent.join(format!("{}.cue", toc.cddb_id()));
+	{
+		use std::io::Write;
+		let mut writer = CacheWriter::new(&dst).ok()?;
+		writer.writer().write_all(cue.as_bytes()).ok()?;
+		writer.finish().ok()?;
+	}
+
+	// Return the path.
+	Some(dst)
 }

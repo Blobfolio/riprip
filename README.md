@@ -31,6 +31,7 @@ Beyond that, it supports all the good things:
 * Sample re/confirmation
 * Backwards ripping
 * Raw PCM and WAV output
+* CUE sheet generation (when ripping whole disc in WAV format)
 
 Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
 
