@@ -233,14 +233,13 @@ impl<'a> Rip<'a> {
 			} // End block.
 
 			// Verification.
-			let changed = self.state.quick_hash() != before;
-			if changed || (self.q_ar.is_none() && self.q_ctdb.is_none()) {
+			if (self.q_ar.is_none() && self.q_ctdb.is_none()) || self.state.quick_hash() != before {
 				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Verifying the ripped track…")));
 				self.verify(&mut confirmed);
 			}
 
 			// Save the state.
-			if changed {
+			if self.state.quick_hash() != before {
 				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Saving the state…")));
 				let saved = self.state.save_state();
 				if saved.is_err() {
