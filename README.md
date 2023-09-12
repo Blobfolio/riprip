@@ -27,6 +27,7 @@ Beyond that, it supports all the good things:
 * Drive read offset correction
 * [AccurateRip](http://accuraterip.com/) checksum verification
 * [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
+* HTOA (can rip the pre-gap track, if any)
 * Cache busting
 * Sample re/confirmation
 * Backwards ripping
@@ -61,9 +62,9 @@ riprip --help
 
 First things first, rip the entire disc and see what happens!
 
-This can either be done with Rip Rip Hooray! or your favorite traditional CD ripper (provided it is _accurate_). If the latter, just be sure to disable its error recovery features to save yourself some time. ;)
+This can either be done with Rip Rip Hooray! or your favorite traditional CD ripper (provided it is _accurate_). If the latter, just be sure to disable its error recovery features to avoid wasting time. ;)
 
-If any tracks are reported as inaccurate, take a moment to see if you've already ripped _enough_ data for [CUETools](http://cue.tools/wiki/CUETools) repair. If you do, it will automatically fix any random errors in the rip and leave you with a perfect copy of the entire album.
+If any tracks are reported as inaccurate, take a moment to see if you've already ripped _enough_ data for [CUETools](http://cue.tools/wiki/CUETools) repair. If you have, it will automatically fix any remaining errors in the rip and leave you with a perfect copy of the entire album.
 
 If not, don't worry. Run or re-run Rip Rip Hooray!, focusing only on the problem tracks.
 

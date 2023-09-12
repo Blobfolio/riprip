@@ -213,6 +213,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 
 	// If we didn't parse any tracks, add each track on the disc.
 	if ! opts.has_tracks() {
+		// Include the HTOA if we're ripping everything.
+		if disc.toc().htoa().is_some() { opts = opts.with_track(0); }
 		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
@@ -226,14 +228,28 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
-	let nice_tracks = Cow::Owned(
-		opts.tracks()
-			.map(NiceU8::from)
-			.collect::<Vec<NiceU8>>()
-			.oxford_and()
-			.replace(',', "\x1b[2m,\x1b[0;1m")
-			.replace(" and ", "\x1b[2m and \x1b[0;1m")
-	);
+	let nice_tracks = Cow::Owned({
+		let mut last = u8::MAX;
+		let mut continuous = true;
+		let tracks = opts.tracks()
+			.map(|n| {
+				if last != u8::MAX && last + 1 != n { continuous = false; }
+				last = n;
+				NiceU8::from(n)
+			})
+			.collect::<Vec<NiceU8>>();
+
+		let len = tracks.len();
+		if len == 1 { tracks[0].to_string() }
+		else if 2 < len && continuous {
+			format!("{}\x1b[2m..=\x1b[0;1m{}", tracks[0], tracks[len - 1])
+		}
+		else {
+			tracks.oxford_and()
+				.replace(',', "\x1b[2m,\x1b[0;1m")
+				.replace(" and ", "\x1b[2m and \x1b[0;1m")
+		}
+	});
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_output = Cow::Owned(format!(
 		"./{}/##.{}",
@@ -337,7 +353,8 @@ BASIC SETTINGS:
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
-                      own -t/--track (-t 2 -t 3). [default: the whole disc]
+                      own -t/--track (-t 2 -t 3). Include track 0 to rip the
+                      HTOA (if any). [default: the whole disc]
 
 WHEN ALL ELSE FAILS:
         --backwards   Rip sectors in reverse order. (Data will still be saved

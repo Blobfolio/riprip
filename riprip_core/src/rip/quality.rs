@@ -91,18 +91,28 @@ impl TrackQuality {
 
 	/// # Percent Maybe.
 	pub(super) fn percent_maybe(&self) -> f64 {
-		dactyl::int_div_float(
-			(self.maybe + self.likely + self.confirmed) * 100,
-			self.total()
-		).unwrap_or(0.0)
+		let v = self.maybe + self.likely + self.confirmed;
+		if v == 0 { 0.0 }
+		else if v == self.total() { 100.0 }
+		else {
+			dactyl::int_div_float(
+				(self.maybe + self.likely + self.confirmed) * 100,
+				self.total()
+			).unwrap_or(0.0)
+		}
 	}
 
 	/// # Percent Likely.
 	pub(super) fn percent_likely(&self) -> f64 {
-		dactyl::int_div_float(
-			(self.likely + self.confirmed) * 100,
-			self.total()
-		).unwrap_or(0.0)
+		let v = self.likely + self.confirmed;
+		if v == 0 { 0.0 }
+		else if v == self.total() { 100.0 }
+		else {
+			dactyl::int_div_float(
+				(self.maybe + self.likely + self.confirmed) * 100,
+				self.total()
+			).unwrap_or(0.0)
+		}
 	}
 
 	/// # Total.

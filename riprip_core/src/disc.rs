@@ -18,14 +18,11 @@ use crate::{
 	Rip,
 	RipOptions,
 	RipRipError,
-	SAMPLES_PER_SECTOR,
-	WAVE_SPEC,
 };
 use fyi_msg::{
 	Msg,
 	Progless,
 };
-use hound::WavWriter;
 use std::{
 	collections::BTreeMap,
 	ffi::OsStr,
@@ -243,10 +240,19 @@ impl Disc {
 		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
-			let Some(track) = self.toc.audio_track(usize::from(t)) else {
-				Msg::warning(format!("There is no audio track #{t}.")).eprint();
-				continue;
-			};
+			let track =
+				if t == 0 {
+					if let Some(track) = self.toc.htoa() { track }
+					else {
+						Msg::warning("The disc has no HTOA; skipping track #0.").eprint();
+						continue;
+					}
+				}
+				else if let Some(track) = self.toc.audio_track(usize::from(t)) { track }
+				else {
+					Msg::warning(format!("There is no audio track #{t}.")).eprint();
+					continue;
+				};
 
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
@@ -301,42 +307,22 @@ fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<Pa
 
 	let mut cue = String::new();
 	for (track, src) in all {
-		// If the first track has a non-zero start, we need to generate the
-		// pregap and write both their entries a little differently than we
-		// otherwise would.
-		if track.position().is_first() {
-			let rng = track.sector_range_normalized();
-			if rng.start != 0 {
-				// Generate an output path for our 00 track.
-				let dst = parent.join("00.wav");
+		// If there's an HTOA, it needs to be grouped with the first track.
+		if track.position().is_first() && toc.htoa().is_some() {
+			// This should have been ripped with everything else.
+			let src0 = ripped.get(&0)
+				.and_then(|(dst, _)| dst.file_name())
+				.and_then(OsStr::to_str)?;
 
-				// CD samples are stereo pairs, but hound treats each channel
-				// separately, so the number of hound-samples we'll write are
-				// double.
-				let len = rng.start.checked_mul(u32::from(SAMPLES_PER_SECTOR) * 2)?;
+			// Add the lines to our cue!
+			writeln!(&mut cue, "FILE \"{src0}\" WAVE").ok()?;
+			cue.push_str("  TRACK 01 AUDIO\n");
+			cue.push_str("    INDEX 00 00:00:00\n");
+			writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
+			cue.push_str("    INDEX 01 00:00:00\n");
 
-				// Write the wav.
-				let mut writer = CacheWriter::new(&dst).ok()?;
-				{
-					let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC).ok()?;
-					let mut wav_writer = wav.get_i16_writer(len);
-					for _ in 0..len { wav_writer.write_sample(0_i16); }
-					wav_writer.flush().ok()?;
-					wav.flush().ok()?;
-					wav.finalize().ok()?;
-				}
-				writer.finish().ok()?;
-
-				// Add the lines to our cue!
-				cue.push_str("FILE \"00.wav\" WAVE\n");
-				cue.push_str("  TRACK 01 AUDIO\n");
-				cue.push_str("    INDEX 00 00:00:00\n");
-				writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
-				cue.push_str("    INDEX 01 00:00:00\n");
-
-				// We're done with tracks zero/one.
-				continue;
-			}
+			// We're done with tracks zero/one.
+			continue;
 		}
 
 		// All other tracks are just file/track/index.

@@ -96,7 +96,10 @@ impl<'de> Deserialize<'de> for RipSamples {
 				// The track is stored by index number only; we need to fetch
 				// the corresponding object from the TOC.
 				let track = seq.next_element()?
-					.and_then(|n: u8| toc.audio_track(usize::from(n)))
+					.and_then(|n: u8|
+						if n == 0 { toc.htoa() }
+						else { toc.audio_track(usize::from(n)) }
+					)
 					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
 				// The rip_rng is derived from the track.

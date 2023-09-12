@@ -107,7 +107,7 @@ description = "Automatically execute up to <NUM> additional rip passes for each 
 short = "-t"
 long = "--track"
 label = "<NUM>"
-description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). [default: the whole disc]"
+description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). Include track 0 to rip the HTOA (if any). [default: the whole disc]"
 duplicate = true
 
 [dependencies]

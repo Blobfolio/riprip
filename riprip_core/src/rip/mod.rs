@@ -260,6 +260,9 @@ impl<'a> Rip<'a> {
 	///
 	/// Check the rip against AccurateRip/CUETools.
 	fn verify(&mut self, confirmed: &mut bool) {
+		// HTOA isn't verifiable. Boo.
+		if self.state.track().is_htoa() { return; }
+
 		self.q_ar = chk_accuraterip(
 			self.disc.toc(),
 			self.state.track(),
@@ -314,19 +317,39 @@ impl<'a> Rip<'a> {
 			// Percentage(s) complete.
 			let p_lo = NiceFloat::from(q_to.percent_likely());
 			let p_hi = NiceFloat::from(q_to.percent_maybe());
-
 			let qualifier = if q_to.likely() == 0 { "maybe" } else { "likely" };
+
+			// Show one percent if rounding makes both equivalent.
 			if
 				q_to.maybe() == 0 ||
 				q_to.likely() == 0 ||
 				p_lo.precise_str(3) == p_hi.precise_str(3)
 			{
+				// Omit the percentage entirely.
+				if p_hi.compact_str() == "100" {
+					Msg::custom("Ripped", 4, &format!(
+						"Track #{} is \x1b[2m({qualifier})\x1b[0m complete.",
+						track.number(),
+					))
+				}
+				// Show it in its full glory.
+				else {
+					Msg::custom("Ripped", 4, &format!(
+						"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% complete.",
+						track.number(),
+						p_hi.compact_str(),
+					))
+				}
+			}
+			// Drop the 100% percent and call it "at least".
+			else if p_hi.compact_str() == "100" {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% complete.",
+					"Track #{} is \x1b[2m({qualifier})\x1b[0m at least {}% complete.",
 					track.number(),
-					p_hi.compact_str(),
+					p_lo.precise_str(3),
 				))
 			}
+			// Show both!
 			else {
 				Msg::custom("Ripped", 4, &format!(
 					"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% — {}% complete.",
