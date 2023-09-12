@@ -82,9 +82,21 @@ impl fmt::Display for Disc {
 		)?;
 		f.write_str(DIVIDER)?;
 
-		// Leading data track.
 		let mut total = 0;
-		if matches!(self.toc.kind(), TocKind::DataFirst) {
+
+		// HTOA.
+		if let Some(t) = self.toc.htoa() {
+			let rng = t.sector_range_normalized();
+			let len = rng.end - rng.start;
+			writeln!(
+				f,
+				"\x1b[2m00  {:>6}  {:>6}  {len:>6}          HTOA\x1b[0m",
+				rng.start,
+				rng.end - 1,
+			)?;
+		}
+		// Leading data track.
+		else if matches!(self.toc.kind(), TocKind::DataFirst) {
 			total += 1;
 			writeln!(
 				f,
