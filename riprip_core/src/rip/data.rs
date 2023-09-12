@@ -404,6 +404,11 @@ impl RipSamples {
 		Err(RipRipError::Bug("Offset sample out of range!"))
 	}
 
+	/// # Full Rip Slice.
+	///
+	/// Return a slice of all of the samples gathered, not just the track bits.
+	pub(crate) fn rip_slice(&self) -> &[RipSample] { &self.data }
+
 	/// # Sector Rip Range.
 	///
 	/// Convert the sample rip range to a sector rip range and return it.

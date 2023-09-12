@@ -34,8 +34,8 @@ static AGENT: OnceLock<Agent> = OnceLock::new();
 /// # Maximum CTDB Offset Shift (in bytes).
 const CTDB_WIGGLE: usize = BYTES_PER_SECTOR as usize * 10;
 
-/// # Ten Sectors of Silence.
-const SILENCE: &[u8] = &[0; CTDB_WIGGLE];
+/// # Maximum CTDB Offset Shift (in bytes).
+const CTDB_WIGGLE_SAMPLES: usize = SAMPLES_PER_SECTOR as usize * 10;
 
 
 
@@ -80,10 +80,10 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	// Figure out which samples we need to crunch.
 	let pos = track.position();
 	let start =
-		if pos.is_first() { SAMPLES_PER_SECTOR as usize * 5 - 1 }
+		if pos.is_first() { usize::from(SAMPLES_PER_SECTOR) * 5 - 1 }
 		else { 0 };
 	let end =
-		if pos.is_last() { data.len().saturating_sub(SAMPLES_PER_SECTOR as usize * 5 + 1) }
+		if pos.is_last() { data.len().saturating_sub(usize::from(SAMPLES_PER_SECTOR) * 5 + 1) }
 		else { data.len() };
 	if end <= start { return None; }
 
@@ -145,10 +145,10 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// there isn't much point shifting data too much. Rip Rip checks `±5880`
 /// to ensure the full ignored region at the start is testable.
 ///
-/// Ideally shifts would incorporate the beginning/end of the adjacent track
-/// data, but since Rip Rip doesn't have that, it null-pads instead. Most
-/// track boundaries _do_ contain null samples so that works well, but may
-/// undercount the matches as a result.
+/// Shifting works best when the adjacent track data is known, which we can
+/// accommodate since we overrip tracks by 10 sectors on either end anyway.
+/// Even if we didn't do that, edges are almost always null samples, so silence
+/// could be assumed.
 ///
 /// It is worth noting that CUETools submissions are published more or less
 /// immediately and require no second opinion, so this method will return `0`
@@ -180,25 +180,35 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	let pos = track.position();
 	let prefix =
 		// The first 10 sectors are ignored for the first track.
-		if pos.is_first() { SAMPLES_PER_SECTOR as usize * 20 }
-		else { SAMPLES_PER_SECTOR as usize * 10 };
+		if pos.is_first() { CTDB_WIGGLE_SAMPLES * 2 }
+		else { CTDB_WIGGLE_SAMPLES };
 	let suffix =
 		// The last 10 + (album % 10) sectors are ignored for the last track.
 		if pos.is_last() {
-			SAMPLES_PER_SECTOR as usize * 20 +
-			usize::try_from(toc.duration().samples()).ok()? % (SAMPLES_PER_SECTOR as usize * 10)
+			CTDB_WIGGLE_SAMPLES * 2 +
+			usize::try_from(toc.duration().samples()).ok()? % CTDB_WIGGLE_SAMPLES
 		}
-		else { SAMPLES_PER_SECTOR as usize * 10 };
+		else { CTDB_WIGGLE_SAMPLES };
 
-	// Make sure we have at least one sector's worth of data left over!
-	if data.len() < prefix + suffix + SAMPLES_PER_SECTOR as usize { return None; }
+	// Make sure we have at least one sector's worth of data left over, and
+	// that the data length is the track length + 20 sectors.
+	if
+		data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) ||
+		data.len() - CTDB_WIGGLE_SAMPLES * 2 != usize::try_from(track.sectors()).ok()? * usize::from(SAMPLES_PER_SECTOR)
+	{ return None; }
+
+	// Previous track and next track.
+	let (back, data) = data.split_at(CTDB_WIGGLE_SAMPLES);
+	let back: Vec<u8> = back.into_iter().flat_map(RipSample::as_array).collect();
+	let (data, next) = data.split_at(data.len() - CTDB_WIGGLE_SAMPLES);
+	let next: Vec<u8> = next.into_iter().flat_map(RipSample::as_array).collect();
 
 	// Carve up the data! The start and end bytes will be stored in vectors to
 	// keep them arbitrarily sliceable, but since everything else will remain
 	// constant at any offset, we can precompute its checksum.
-	let mut start = Vec::with_capacity(prefix * BYTES_PER_SAMPLE as usize);
+	let mut start = Vec::with_capacity(prefix * usize::from(BYTES_PER_SAMPLE));
 	let mut middle = Crc::new();
-	let mut end = Vec::with_capacity(suffix * BYTES_PER_SAMPLE as usize);
+	let mut end = Vec::with_capacity(suffix * usize::from(BYTES_PER_SAMPLE));
 	let end_starts = data.len() - suffix;
 	for (k, sample) in data.iter().enumerate() {
 		if k < prefix { start.extend_from_slice(sample.as_slice()); }
@@ -222,9 +232,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	}
 
 	// Shift and crunch and shift and crunch and shift and crunch…
-	for shift in 1..=SAMPLES_PER_SECTOR as usize * 10 {
+	for shift in 1..=usize::from(SAMPLES_PER_SECTOR) * 10 {
 		// We're stepping in samples, but working in bytes.
-		let shift = shift * BYTES_PER_SAMPLE as usize;
+		let shift = shift * usize::from(BYTES_PER_SAMPLE);
 
 		// Let's try for a negative match first, shifting the data into the
 		// end of the theoretical previous track. (We'll assume that track's
@@ -238,7 +248,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		if pos.is_first() { crc.update(&start[CTDB_WIGGLE - shift..]); }
 		// For other tracks, we need to supplement with silence.
 		else {
-			crc.update(&SILENCE[..shift]);
+			crc.update(&back[back.len() - shift..]);
 			crc.update(&start);
 		}
 
@@ -280,7 +290,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		// For other tracks, we need to supplement with silence.
 		else {
 			crc.update(&end);
-			crc.update(&SILENCE[..shift]);
+			crc.update(&next[..shift]);
 		}
 
 		// Check it!

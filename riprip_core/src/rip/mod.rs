@@ -272,7 +272,7 @@ impl<'a> Rip<'a> {
 		self.q_ctdb = chk_ctdb(
 			self.disc.toc(),
 			self.state.track(),
-			self.state.track_slice(),
+			self.state.rip_slice(),
 		);
 
 		// If the rip was confirmed with enough confidence, mark it
