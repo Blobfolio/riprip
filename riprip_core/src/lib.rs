@@ -48,6 +48,8 @@ pub use barcode::Barcode;
 pub(crate) use cache::{
 	cache_path,
 	CacheWriter,
+	state_path,
+	track_path,
 };
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;

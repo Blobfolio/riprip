@@ -8,14 +8,14 @@ use cdtoc::{
 };
 use crate::{
 	BYTES_PER_SAMPLE,
-	cache_path,
-	CACHE_SCRATCH,
 	CacheWriter,
 	NULL_SAMPLE,
 	ReadOffset,
 	RipRipError,
 	Sample,
 	SAMPLES_PER_SECTOR,
+	state_path,
+	track_path,
 	WAVE_SPEC,
 };
 use dactyl::traits::SaturatingFrom;
@@ -310,7 +310,7 @@ impl RipSamples {
 	pub(crate) fn save_track(&self, raw: bool) -> Result<PathBuf, RipRipError> {
 		use std::io::Write;
 
-		let dst = track_path(self.track, raw)?;
+		let dst = track_path(&self.toc, self.track, raw)?;
 		let samples = self.track_slice();
 		let mut writer = CacheWriter::new(&dst)?;
 
@@ -607,40 +607,6 @@ const fn is_super_majority(target: u8, mut total: u16) -> bool {
 		// Compare!
 		total <= target as u16
 	}
-}
-
-/// # State Path.
-///
-/// Return the file path to save the state data to.
-///
-/// Paths are prefixed with a CRC32 hash of the table of contents for basic
-/// collision mitigation. The state from track 2 from one disc, for example,
-/// shouldn't override the state from a different disc's track 2.
-///
-/// ## Errors
-///
-/// This will return an error if there are problems determining the cache
-/// location.
-fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	cache_path(format!("{CACHE_SCRATCH}/{}__{:02}.state", toc.cddb_id(), track.number()))
-}
-
-/// # Track Path.
-///
-/// Return the file path to save the exported track to. To keep things
-/// predictable, this is simply the two-digit track number with the format's
-/// extension tacked onto the end.
-///
-/// ## Errors
-///
-/// This will return an error if there are problems determining the cache
-/// location.
-fn track_path(track: Track, raw: bool) -> Result<PathBuf, RipRipError> {
-	cache_path(format!(
-		"{:02}.{}",
-		track.number(),
-		if raw { "pcm" } else { "wav" }
-	))
 }
 
 /// # Track Range to Rip Range.
