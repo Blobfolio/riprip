@@ -458,6 +458,23 @@ impl RipSamples {
 			.all(RipSample::is_confirmed)
 	}
 
+	/// # Is Likely?
+	///
+	/// Returns true if all of the samples in the rippable range are likely or
+	/// better.
+	pub(crate) fn is_likely(&self, offset: ReadOffset, cutoff: u8) -> bool {
+		// We'll be missing bits at the beginning or end depending on the
+		// offset.
+		let samples_abs = usize::from(offset.samples_abs());
+		let len = self.data.len();
+		if len < samples_abs { return false; } // Shouldn't happen!
+		let slice =
+			if offset.is_negative() { &self.data[samples_abs..] }
+			else { &self.data[..len - samples_abs] };
+
+		slice.iter().all(|v| v.is_likely(cutoff))
+	}
+
 	/// # Quick Hash.
 	///
 	/// Hash the contents of the ripped data. This provides an easy metric for

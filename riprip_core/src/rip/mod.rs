@@ -158,8 +158,15 @@ impl<'a> Rip<'a> {
 			// Reset progress bar. (This won't fail.)
 			let _res = progress.reset((self.distance.len() as u32).saturating_add(1));
 
-			// Bust the cache.
-			if self.opts.cache_bust() && ! (killed.killed() || confirmed) {
+			// Bust the cache, but only if desired and productive.
+			if
+				self.opts.cache_bust() &&
+				! (
+					killed.killed() ||
+					confirmed ||
+					self.state.is_likely(offset, self.opts.cutoff())
+				)
+			{
 				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Busting the cache…")));
 				self.disc.cdio().bust_cache(rip_rng.clone(), leadout);
 			}
@@ -368,7 +375,16 @@ impl<'a> Rip<'a> {
 		eprintln!("        {legend_b} \x1b[2msamples\x1b[0m");
 
 		// Third-party verification?
-		if self.q_ar.is_some() || self.q_ctdb.is_some() {
+		if self.state.track().is_htoa() {
+			eprintln!("        \x1b[2mHTOA tracks cannot be matched with AccurateRip or CUETools,\x1b[0m");
+			if q_to.is_likely() {
+				eprintln!("        \x1b[2mbut a \x1b[0;{COLOR_LIKELY}mlikely \x1b[0;2mrip is the next best thing, so good job!\x1b[0m");
+			}
+			else {
+				eprintln!("        \x1b[2mso you should aim for a status of \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
+			}
+		}
+		else if self.q_ar.is_some() || self.q_ctdb.is_some() {
 			let conf = self.opts.confidence();
 			macro_rules! color {
 				($v:expr, $conf:expr) => (

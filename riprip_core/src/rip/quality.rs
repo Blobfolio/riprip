@@ -84,6 +84,11 @@ impl TrackQuality {
 		self.bad() == self.total()
 	}
 
+	/// # Is Likely/Confirmed?
+	pub(super) const fn is_likely(&self) -> bool {
+		self.likely() + self.confirmed() == self.total()
+	}
+
 	/// # Is Confirmed?
 	pub(super) const fn is_confirmed(&self) -> bool {
 		self.confirmed() == self.total()
