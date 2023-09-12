@@ -301,7 +301,7 @@ fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<Pa
 				// CD samples are stereo pairs, but hound treats each channel
 				// separately, so the number of hound-samples we'll write are
 				// double.
-				let len = (rng.end - rng.start).checked_mul(u32::from(SAMPLES_PER_SECTOR) * 2)?;
+				let len = rng.start.checked_mul(u32::from(SAMPLES_PER_SECTOR) * 2)?;
 
 				// Write the wav.
 				let mut writer = CacheWriter::new(&dst).ok()?;
