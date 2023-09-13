@@ -33,9 +33,6 @@ pub enum RipRipError {
 	/// # CD read error.
 	CdRead(i32),
 
-	/// # Invalid buffer for CD reading.
-	CdReadBuffer,
-
 	/// # CD read operation terminal failure.
 	CdReadUnsupported,
 
@@ -125,7 +122,6 @@ impl fmt::Display for RipRipError {
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
 			Self::CachePath(ref s) => write!(f, "Invalid cache path {s}."),
 			Self::CdRead(n) => write!(f, "Unable to read sector {n}."),
-			Self::CdReadBuffer => f.write_str("BUG: Insufficient CD read buffer."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
 			Self::Device(ref s) => write!(f, "Invalid device path {s}."),
