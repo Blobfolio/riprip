@@ -34,7 +34,7 @@ static AGENT: OnceLock<Agent> = OnceLock::new();
 /// # Maximum CTDB Offset Shift (in bytes).
 const CTDB_WIGGLE: usize = BYTES_PER_SECTOR as usize * 10;
 
-/// # Maximum CTDB Offset Shift (in bytes).
+/// # Maximum CTDB Offset Shift (in samples).
 const CTDB_WIGGLE_SAMPLES: usize = SAMPLES_PER_SECTOR as usize * 10;
 
 
@@ -146,13 +146,17 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// to ensure the full ignored region at the start is testable.
 ///
 /// Shifting works best when the adjacent track data is known, which we can
-/// accommodate since we overrip tracks by 10 sectors on either end anyway.
-/// Even if we didn't do that, edges are almost always null samples, so silence
-/// could be assumed.
+/// accommodate since we overrip tracks by 10 sectors on either side anyway.
+/// (Depending on the overlap some samples from those 20 sectors won't have
+/// been read, but most should be, and null samples should be good enough for
+/// the rest.)
 ///
-/// It is worth noting that CUETools submissions are published more or less
-/// immediately and require no second opinion, so this method will return `0`
-/// for any value less than `2` to avoid confusion.
+/// Speaking of, the `data` passed to this method is the _full_ rip range, not
+/// just the track portion.
+///
+/// Also of note: CUETools submissions are published more or less immediately
+/// and require no second opinion, so this method will return `0` for any value
+/// less than `2` to avoid confusion.
 pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
 	// Fetch/cache the checksums.
 	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", toc.cddb_id())).ok()?;
@@ -172,40 +176,38 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 			else { None }
 		})?;
 
-	// Shifts will alter the beginning and end of the track, but not the
-	// middle. As such we need to hold the edges as raw bytes so their
-	// checksums can be computed dynamically. Space-wise, we need enough to
-	// match the maximum shift, plus the "ignored" regions if this track is the
-	// first and/or last on the disc.
+	// Our data range is the track with ten extra sectors on either end. We
+	// need to keep that padding in byte form, as well as the portions of the
+	// track that might get shifted off or are ignored. That works out to
+	// `max-shift * 2`, with a bit extra for the first and last track to
+	// account for their ignored regions.
 	let pos = track.position();
 	let prefix =
 		// The first 10 sectors are ignored for the first track.
-		if pos.is_first() { CTDB_WIGGLE_SAMPLES * 2 }
-		else { CTDB_WIGGLE_SAMPLES };
+		if pos.is_first() { CTDB_WIGGLE_SAMPLES * 3 }
+		else { CTDB_WIGGLE_SAMPLES * 2 };
 	let suffix =
 		// The last 10 + (album % 10) sectors are ignored for the last track.
 		if pos.is_last() {
-			CTDB_WIGGLE_SAMPLES * 2 +
+			CTDB_WIGGLE_SAMPLES * 3 +
 			usize::try_from(toc.duration().samples()).ok()? % CTDB_WIGGLE_SAMPLES
 		}
-		else { CTDB_WIGGLE_SAMPLES };
+		else { CTDB_WIGGLE_SAMPLES * 2 };
 
-	// Make sure we have at least one sector's worth of data left over, and
-	// that the data length is the track length + 20 sectors.
-	if
-		data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) ||
-		data.len() - CTDB_WIGGLE_SAMPLES * 2 != usize::try_from(track.sectors()).ok()? * usize::from(SAMPLES_PER_SECTOR)
-	{ return None; }
+	// Prefix and suffix are in samples, but it will also be handy to know how
+	// many bytes are being ignored for the start and end, so let's calculate
+	// that now.
+	let ignore_first = (prefix - CTDB_WIGGLE_SAMPLES * 2) * usize::from(BYTES_PER_SAMPLE);
+	let ignore_last = (suffix - CTDB_WIGGLE_SAMPLES * 2) * usize::from(BYTES_PER_SAMPLE);
 
-	// Previous track and next track.
-	let (back, data) = data.split_at(CTDB_WIGGLE_SAMPLES);
-	let back: Vec<u8> = back.into_iter().flat_map(RipSample::as_array).collect();
-	let (data, next) = data.split_at(data.len() - CTDB_WIGGLE_SAMPLES);
-	let next: Vec<u8> = next.into_iter().flat_map(RipSample::as_array).collect();
+	// Before we start slicing, make sure there is at least one sector's worth
+	// of data to shove in the middle, or it's too short to bother with.
+	if data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) { return None; }
 
-	// Carve up the data! The start and end bytes will be stored in vectors to
-	// keep them arbitrarily sliceable, but since everything else will remain
-	// constant at any offset, we can precompute its checksum.
+	// Carve it up! We need to keep the start and end in byte form so they can
+	// be dynamically resliced, but everything else (the middle) can be
+	// immediately crunched into a CRC32 since it will always be present at any
+	// offset.
 	let mut start = Vec::with_capacity(prefix * usize::from(BYTES_PER_SAMPLE));
 	let mut middle = Crc::new();
 	let mut end = Vec::with_capacity(suffix * usize::from(BYTES_PER_SAMPLE));
@@ -216,48 +218,21 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		else { end.extend_from_slice(sample.as_slice()); }
 	}
 
-	// Before we start shifting shit around, let's see if we match at zero,
-	// i.e. start + middle + end (minus ignorable regions, if any).
-	let mut confidence = 0;
-	let mut crc = Crc::new();
-	if pos.is_first() { crc.update(&start[CTDB_WIGGLE..]); }
-	else { crc.update(&start); }
-	crc.combine(&middle);
-	crc.update(&end[..CTDB_WIGGLE]);
-	if let Some(v) = chk.remove(&crc.finalize()) {
-		confidence += v;
-		if chk.is_empty() {
-			return Some(if confidence < 2 { 0 } else { confidence });
-		}
-	}
-
 	// Shift and crunch and shift and crunch and shift and crunch…
-	for shift in 1..=usize::from(SAMPLES_PER_SECTOR) * 10 {
+	let mut confidence = 0;
+	for shift in 0..=CTDB_WIGGLE_SAMPLES {
 		// We're stepping in samples, but working in bytes.
 		let shift = shift * usize::from(BYTES_PER_SAMPLE);
 
 		// Let's try for a negative match first, shifting the data into the
-		// end of the theoretical previous track. (We'll assume that track's
-		// data is silence.)
+		// end of the previous track.
 		let mut crc = Crc::new();
-
-		// Because the ignored region of the first track is the same as our
-		// wiggle, it always has enough data reserved for negative shifting.
-		// (Data is still being ignored, but now it's data we don't have, which
-		// works out great!)
-		if pos.is_first() { crc.update(&start[CTDB_WIGGLE - shift..]); }
-		// For other tracks, we need to supplement with silence.
-		else {
-			crc.update(&back[back.len() - shift..]);
-			crc.update(&start);
-		}
-
-		// Add the middle.
+		crc.update(&start[CTDB_WIGGLE + ignore_first - shift..]);
 		crc.combine(&middle);
-
-		// Maybe add the end. The ignored regions of the last track don't
-		// require special handling in this case.
-		if shift != CTDB_WIGGLE { crc.update(&end[..CTDB_WIGGLE - shift]); }
+		// The max shift won't include any end.
+		if shift < CTDB_WIGGLE {
+			crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last - shift]);
+		}
 
 		// Check it!
 		if let Some(v) = chk.remove(&crc.finalize()) {
@@ -268,36 +243,22 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		}
 
 		// Now let's check for a positive offset match, bleeding into the
-		// theoretical next track. The ideas are the same, except now any
-		// assumed silence will be at the end.
-		let mut crc = Crc::new();
+		// next track.
+		if shift != 0 {
+			let mut crc = Crc::new();
+			// The max shift won't include any start.
+			if shift < CTDB_WIGGLE {
+				crc.update(&start[CTDB_WIGGLE + ignore_first + shift..]);
+			}
+			crc.combine(&middle);
+			crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last + shift]);
 
-		// Maybe add the start.
-		if shift != CTDB_WIGGLE {
-			// The first track still requires special handling to keep the
-			// ignorable bits ignored.
-			if pos.is_first() { crc.update(&start[CTDB_WIGGLE + shift..]); }
-			// Everything else is what it is.
-			else { crc.update(&start[shift..]); }
-		}
-
-		// Add the middle.
-		crc.combine(&middle);
-
-		// Because the ignored region of the last track is >= our wiggle, it
-		// always has enough in reserve for positive shifting.
-		if pos.is_last() { crc.update(&end[..CTDB_WIGGLE + shift]); }
-		// For other tracks, we need to supplement with silence.
-		else {
-			crc.update(&end);
-			crc.update(&next[..shift]);
-		}
-
-		// Check it!
-		if let Some(v) = chk.remove(&crc.finalize()) {
-			confidence += v;
-			if chk.is_empty() {
-				return Some(if confidence < 2 { 0 } else { confidence });
+			// Check it!
+			if let Some(v) = chk.remove(&crc.finalize()) {
+				confidence += v;
+				if chk.is_empty() {
+					return Some(if confidence < 2 { 0 } else { confidence });
+				}
 			}
 		}
 	}
