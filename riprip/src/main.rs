@@ -267,17 +267,20 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
 		opts.confidence(),
 	));
-	let nice_passes = NiceU8::from(opts.passes());
+	let nice_passes = Cow::Owned(format!(
+		"{}{}",
+		opts.passes(),
+		if opts.resume() { "" } else { " (From Scratch)" },
+	));
 
 	let set = [
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Verification:", nice_verify, true),
-		("Rip Passes:", Cow::Borrowed(nice_passes.as_str()), true),
+		("Rip Passes:", nice_passes, true),
 		("Destination:", nice_output, true),
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
 		("Bust Cache:", yesno(opts.cache_bust()), opts.cache_bust()),
-		("Resumable:", yesno(opts.resume()), opts.resume()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
