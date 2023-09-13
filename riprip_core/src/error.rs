@@ -21,6 +21,9 @@ pub enum RipRipError {
 	/// # Bug!
 	Bug(&'static str),
 
+	/// # C2 296 Isn't Supported.
+	C2Mode296,
+
 	/// # Cache directory.
 	Cache,
 
@@ -119,6 +122,7 @@ impl fmt::Display for RipRipError {
 		match self {
 			Self::Barcode => f.write_str("Invalid/unsupported barcode."),
 			Self::Bug(s) => write!(f, "Bug: {s}."),
+			Self::C2Mode296 => f.write_str("This drive does not seem to support 296-byte C2 blocks."),
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
 			Self::CachePath(ref s) => write!(f, "Invalid cache path {s}."),
 			Self::CdRead(n) => write!(f, "Unable to read sector {n}."),

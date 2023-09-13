@@ -34,7 +34,11 @@ credits-dir = "../"
 
 [[package.metadata.bashman.switches]]
 long = "--backwards"
-description = "Rip sectors in reverse order. (Data will still be saved in the *correct* order. Haha.)"
+description = "Request sectors from the drive in reverse order, starting from the end of each track, and ending at the start."
+
+[[package.metadata.bashman.switches]]
+long = "--c2-296"
+description = "C2 error pointer data normally uses a blocksize of 294 bytes, but a few drives require 296 bytes instead. If the bad/maybe sample counts for your rips seem off, try setting this flag to see if it helps."
 
 [[package.metadata.bashman.switches]]
 short = "-h"
@@ -47,7 +51,7 @@ description = "Disable/ignore C2 error pointer information when ripping, e.g. fo
 
 [[package.metadata.bashman.switches]]
 long = "--no-cache-bust"
-description = "Do not attempt to reset the optical drive cache between each rip pass."
+description = "Do not attempt to moot the optical drive cache before each rip pass."
 
 [[package.metadata.bashman.switches]]
 long = "--no-resume"

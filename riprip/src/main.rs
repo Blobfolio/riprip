@@ -50,6 +50,7 @@ use riprip_core::{
 	ReadOffset,
 	RipRipError,
 	RipOptions,
+	RipOptionsC2,
 };
 use std::{
 	borrow::Cow,
@@ -152,11 +153,13 @@ fn _main() -> Result<(), RipRipError> {
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch(b"--backwards"))
-		.with_c2(! args.switch(b"--no-c2"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict(args.switch(b"--strict"));
+
+	if args.switch(b"--no-c2") { opts = opts.with_c2(RipOptionsC2::None); }
+	else if args.switch(b"--c2-296") { opts = opts.with_c2(RipOptionsC2::C2Mode296); }
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -260,8 +263,10 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_verify = Cow::Owned(format!(
 		"{}{}AccurateRip/CTDB ({})",
 		match (opts.c2(), opts.strict()) {
-			(true, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
-			(true, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
+			(RipOptionsC2::C2Mode294, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
+			(RipOptionsC2::C2Mode294, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
+			(RipOptionsC2::C2Mode296, true) => "(Strict) Sector C2 (296B)\x1b[2m;\x1b[0;1m ",
+			(RipOptionsC2::C2Mode296, false) => "Sample C2 (296B)\x1b[2m;\x1b[0;1m ",
 			_ => "",
 		},
 		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
@@ -360,8 +365,8 @@ BASIC SETTINGS:
                       HTOA (if any). [default: the whole disc]
 
 WHEN ALL ELSE FAILS:
-        --backwards   Rip sectors in reverse order. (Data will still be saved
-                      in the *correct* order. Haha.)
+        --backwards   Request sectors from the drive in reverse order, starting
+                      from the end of each track, and ending at the start.
         --no-resume   Ignore any previous rip states; start over from scratch.
         --strict      Treat C2 errors as an all-or-nothing proposition for the
                       sector as a whole rather than judging each individual
@@ -370,25 +375,27 @@ WHEN ALL ELSE FAILS:
                       runs have already completed).
 
 DRIVE SETTINGS:
-    These options are auto-detected and do not usually need to be explicitly
-    provided.
-
+        --c2-296      C2 error pointer data normally uses a blocksize of 294
+                      bytes, but a few drives require 296 bytes instead. If the
+                      bad/maybe sample counts for your rips seem "off", try
+                      setting this flag to see if it helps.
     -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom.
+                      of interest, like /dev/cdrom. [default: auto]
+        --no-c2       Disable/ignore C2 error pointer information when ripping,
+                      e.g. for drives that do not support the feature. (This
+                      flag is otherwise not recommended.)
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
-                      data retrieved from the drive. [range: ±5880]
+                      data retrieved from the drive.
+                      [default: auto or 0; range: ±5880]
 
 UNUSUAL SETTINGS:
         --confidence <NUM>
                       Consider a track accurately ripped — i.e. stop working on
                       it — AccurateRip and/or CUETools matches are found with a
                       confidence of at least <NUM>. [default: 3; range: 3..=10]
-        --no-c2       Disable/ignore C2 error pointer information when ripping,
-                      e.g. for drives that do not support the feature. (This
-                      flag is otherwise not recommended.)
         --no-cache-bust
-                      Do not attempt to reset the optical drive cache between
+                      Do not attempt to moot the optical drive cache before
                       each rip pass.
 
 MISCELLANEOUS:

@@ -2,6 +2,7 @@
 # Rip Rip Hooray: Ripping
 */
 
+pub(super) mod c2;
 pub(super) mod data;
 pub(super) mod iter;
 pub(super) mod opts;
@@ -9,7 +10,9 @@ mod quality;
 
 use cdtoc::Track;
 use crate::{
+	C2,
 	CD_DATA_C2_SIZE,
+	CD_DATA_C2B_SIZE,
 	CD_DATA_SIZE,
 	chk_accuraterip,
 	chk_ctdb,
@@ -17,6 +20,7 @@ use crate::{
 	KillSwitch,
 	ReadOffset,
 	RipOptions,
+	RipOptionsC2,
 	RipRipError,
 	RipSamples,
 	SAMPLE_OVERREAD,
@@ -46,12 +50,6 @@ const COLOR_LIKELY: &str = "93";
 
 /// # Color: Confirmed.
 const COLOR_CONFIRMED: &str = "92";
-
-/// # C2 Sample Set.
-///
-/// This contains a `bool` for each sample in a sector indicating whether or
-/// not it contains an error.
-type SectorC2s = [bool; SAMPLES_PER_SECTOR as usize];
 
 
 
@@ -105,17 +103,21 @@ impl<'a> Rip<'a> {
 		let confirmed =
 			if killed.killed() { self.state.is_confirmed() }
 			else {
-				// Same method two ways. The only difference is the buffer
-				// size; a larger buffer is required for C2 when ripping
-				// without.
-				if self.opts.c2() {
-					let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-					self._rip(&mut buf, progress, killed)?
-				}
-				else {
-					let mut buf = [0_u8; CD_DATA_SIZE as usize];
-					self._rip(&mut buf, progress, killed)?
-				}
+				// Same operation, three ways, depending on the C2 type.
+				match self.opts.c2() {
+					RipOptionsC2::None => {
+						let mut buf = [0_u8; CD_DATA_SIZE as usize];
+						self._rip(&mut buf, progress, killed)
+					},
+					RipOptionsC2::C2Mode294 => {
+						let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
+						self._rip(&mut buf, progress, killed)
+					},
+					RipOptionsC2::C2Mode296 => {
+						let mut buf = [0_u8; CD_DATA_C2B_SIZE as usize];
+						self._rip(&mut buf, progress, killed)
+					},
+				}?
 			};
 
 		self.state.save_track(self.opts.raw()).map(|k| (k, confirmed))
@@ -140,7 +142,7 @@ impl<'a> Rip<'a> {
 		let rip_rng = self.state.sector_rip_range();
 		let lsn_start = rip_rng.start;
 		let leadout = self.disc.toc().audio_leadout() as i32;
-		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
+		let mut c2 = C2::default();
 		let mut confirmed = self.state.is_confirmed();
 		let progress_label = format!("Track #{:02}", self.state.track().number());
 
@@ -192,32 +194,14 @@ impl<'a> Rip<'a> {
 
 				// Otherwise we have to actually talk to the drive. Ug.
 				match self.disc.cdio().read_cd(buf, read_lsn) {
+					// Update the C2 data and, if in strict mode and there are
+					// any problems, mark everything bad.
 					Ok(()) =>
-						// Parse the C2 data. Each bit represents one byte of
-						// audio data, we'll never worry about sub-sample
-						// accuracy.
-						if self.opts.c2() {
-							// Set errors at sector level.
-							if self.opts.strict() {
-								reset_c2(
-									&mut c2,
-									buf.iter()
-										.skip(usize::from(CD_DATA_SIZE))
-										.any(|&v| 0 != v)
-								);
-							}
-							// Set errors at sample level.
-							else {
-								for (k2, &v) in c2.chunks_exact_mut(2).zip(buf.iter().skip(usize::from(CD_DATA_SIZE))) {
-									k2[0] = 0 != v & 0b1111_0000;
-									k2[1] = 0 != v & 0b0000_1111;
-								}
-							}
-						}
-						// Assume C2 is fine since that data is absent.
-						else { reset_c2(&mut c2, false); },
+						if ! c2.update(&buf[usize::from(CD_DATA_SIZE)..])? && self.opts.strict() {
+							c2.make_bad();
+						},
 					// Assume total C2 failure if there's a hard read error.
-					Err(RipRipError::CdRead(_)) => { reset_c2(&mut c2, true); },
+					Err(RipRipError::CdRead(_)) => { c2.make_bad(); },
 					// Other kinds of errors are show-stoppers; abort!
 					Err(e) => return Err(e),
 				}
@@ -225,7 +209,7 @@ impl<'a> Rip<'a> {
 				// Patch the data!
 				for ((old, new), err) in state.iter_mut()
 					.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
-					.zip(c2.iter().copied())
+					.zip(c2.sample_errors())
 				{
 					old.update(new.try_into().unwrap(), err);
 				}
@@ -413,14 +397,6 @@ impl<'a> Rip<'a> {
 }
 
 
-
-#[inline]
-/// # Reset C2 Statuses.
-///
-/// Change all C2 statuses to `val`.
-fn reset_c2(set: &mut SectorC2s, val: bool) {
-	for c2 in set { *c2 = val; }
-}
 
 /// # Rippable Sectors.
 ///
