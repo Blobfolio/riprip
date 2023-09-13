@@ -264,6 +264,9 @@ impl Disc {
 
 		// Print what we did!
 		if ! saved.is_empty() {
+			let mut total = 0;
+			let mut good = 0;
+
 			eprintln!("\nThe fruits of your labor:");
 
 			// If we did all tracks, make a cue sheet.
@@ -279,7 +282,22 @@ impl Disc {
 					file.to_string_lossy(),
 					if *confirmed { " \x1b[0;1;92m✓" } else { "" },
 				);
+				total += 1;
+				if *confirmed { good += 1; }
 			}
+
+			// Summarize confirmation counts if we confirmed anything and
+			// ripped more than one track.
+			if good != 0 && total != 1 {
+				if good == total {
+					eprintln!("\x1b[1;92m✓\x1b[0m All tracks have been accurately ripped!");
+				}
+				else {
+					eprintln!("\x1b[1;92m✓\x1b[0m {good}/{total} tracks have been accurately ripped!");
+				}
+			}
+
+			// An extra line break for separation.
 			eprintln!();
 		}
 
