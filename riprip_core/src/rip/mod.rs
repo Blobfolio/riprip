@@ -323,7 +323,7 @@ impl<'a> Rip<'a> {
 			// Percentage(s) complete.
 			let p_lo = NiceFloat::from(q_to.percent_likely());
 			let p_hi = NiceFloat::from(q_to.percent_maybe());
-			let qualifier = if q_to.likely() == 0 { "maybe" } else { "likely" };
+			let qualifier = if q_to.maybe() == 0 { "likely" } else { "maybe" };
 
 			// Show one percent if rounding makes both equivalent.
 			if
