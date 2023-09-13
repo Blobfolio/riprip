@@ -261,6 +261,17 @@ impl RipSamples {
 		}
 	}
 
+	/// # Reset Counts.
+	///
+	/// Drop all maybe counts to one so their sectors can be reread.
+	pub(crate) fn reset_counts(&mut self) {
+		for v in &mut self.data {
+			if let RipSample::Maybe(set) = v {
+				for (_, count) in &mut *set { *count = 1; }
+			}
+		}
+	}
+
 	/// # Save State.
 	///
 	/// Save a copy of the state to disk so the rip can be resumed at some

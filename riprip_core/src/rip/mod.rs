@@ -100,6 +100,9 @@ impl<'a> Rip<'a> {
 	/// AccurateRip/CTDB like the result, or an error.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(PathBuf, bool), RipRipError> {
+		// Reset the counts before beginning?
+		if self.opts.reset_counts() { self.state.reset_counts(); }
+
 		let confirmed =
 			if killed.killed() { self.state.is_confirmed() }
 			else {

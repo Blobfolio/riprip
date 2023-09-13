@@ -11,19 +11,22 @@ use crate::{
 
 
 /// # FLAG: Rip Backwards.
-const FLAG_BACKWARDS: u8 =  0b0000_0001;
+const FLAG_BACKWARDS: u8 =    0b0000_0001;
 
 /// # FLAG: Cache Bust.
-const FLAG_CACHE_BUST: u8 = 0b0000_0010;
+const FLAG_CACHE_BUST: u8 =   0b0000_0010;
 
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =        0b0000_0100;
+const FLAG_RAW: u8 =          0b0000_0100;
+
+/// # FLAG: Reset counts.
+const FLAG_RESET_COUNTS: u8 = 0b0000_1000;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =     0b0000_1000;
+const FLAG_RESUME: u8 =       0b0001_0000;
 
 /// # FLAG: Strict Mode.
-const FLAG_STRICT: u8 =     0b0001_0000;
+const FLAG_STRICT: u8 =       0b0010_0000;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_CACHE_BUST | FLAG_RESUME;
@@ -250,6 +253,17 @@ impl RipOptions {
 	}
 
 	with_flag!(
+		with_reset_counts,
+		FLAG_RESET_COUNTS,
+		"# Reset Counts.",
+		"",
+		"When `true`, all previously-collected sample counts, downgrading all",
+		"likely values to maybe.",
+		"",
+		"The default is `false`.",
+	);
+
+	with_flag!(
 		with_resume,
 		FLAG_RESUME,
 		"# Resume Previous Rip.",
@@ -301,6 +315,7 @@ impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
 	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
 	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
+	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(strict, FLAG_STRICT, "Strict Mode");
 
@@ -435,12 +450,13 @@ mod test {
 			FLAG_BACKWARDS,
 			FLAG_CACHE_BUST,
 			FLAG_RAW,
+			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
 			FLAG_STRICT,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 5);
+		assert_eq!(all.len(), 6);
 	}
 
 	#[test]
@@ -504,6 +520,7 @@ mod test {
 		t_flags!("backwards", with_backwards, backwards);
 		t_flags!("cache bust", with_cache_bust, cache_bust);
 		t_flags!("raw", with_raw, raw);
+		t_flags!("reset_counts", with_reset_counts, reset_counts);
 		t_flags!("resume", with_resume, resume);
 		t_flags!("strict", with_strict, strict);
 	}

@@ -155,6 +155,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_backwards(args.switch(b"--backwards"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
 		.with_raw(args.switch(b"--raw"))
+		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict(args.switch(b"--strict"));
 
@@ -275,7 +276,11 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_passes = Cow::Owned(format!(
 		"{}{}",
 		opts.passes(),
-		if opts.resume() { "" } else { " (From Scratch)" },
+		if opts.resume() {
+			if opts.reset_counts() { " (Reset Counts)" }
+			else { "" }
+		}
+		else { " (From Scratch)" },
 	));
 
 	let set = [
@@ -368,6 +373,10 @@ WHEN ALL ELSE FAILS:
         --backwards   Request sectors from the drive in reverse order, starting
                       from the end of each track, and ending at the start.
         --no-resume   Ignore any previous rip states; start over from scratch.
+        --reset-counts
+                      Reset all previously-collected sample counts, allowing
+                      their sectors to be re-read (provided --cutoff is at
+                      least two).
         --strict      Treat C2 errors as an all-or-nothing proposition for the
                       sector as a whole rather than judging each individual
                       sample on its own. This is most effective when set for
