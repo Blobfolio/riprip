@@ -102,6 +102,12 @@ pub const BYTES_PER_SECTOR: u16 = SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE;
 /// # Samples per sector.
 pub const SAMPLES_PER_SECTOR: u16 = 588;
 
+/// # Sample Overread (Padding).
+///
+/// To help account for variable read offsets and CTDB matching, each track rip
+/// will overread up to ten sectors on either end.
+pub const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
+
 /// # Size of C2 block.
 ///
 /// Note: some drives support a 296-byte variation with an extra block bit, but

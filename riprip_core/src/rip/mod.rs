@@ -19,7 +19,7 @@ use crate::{
 	RipOptions,
 	RipRipError,
 	RipSamples,
-	SAMPLES_PER_SECTOR,
+	SAMPLE_OVERREAD,
 };
 use dactyl::NiceFloat;
 use fyi_msg::{
@@ -46,12 +46,6 @@ const COLOR_LIKELY: &str = "93";
 
 /// # Color: Confirmed.
 const COLOR_CONFIRMED: &str = "92";
-
-/// # Sample Padding.
-///
-/// Our rip ranges are padded on either end by 10 sectors to make it easier for
-/// drives with different read offsets to contribute to the same rip.
-const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
 
 /// # C2 Sample Set.
 ///

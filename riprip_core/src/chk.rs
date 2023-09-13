@@ -4,11 +4,11 @@
 
 use crate::{
 	BYTES_PER_SAMPLE,
-	BYTES_PER_SECTOR,
 	cache_path,
 	CACHE_SCRATCH,
 	CacheWriter,
 	RipSample,
+	SAMPLE_OVERREAD,
 	SAMPLES_PER_SECTOR,
 };
 use crc32fast::Hasher as Crc;
@@ -32,10 +32,10 @@ use ureq::{
 static AGENT: OnceLock<Agent> = OnceLock::new();
 
 /// # Maximum CTDB Offset Shift (in bytes).
-const CTDB_WIGGLE: usize = BYTES_PER_SECTOR as usize * 10;
+const CTDB_WIGGLE: usize = CTDB_WIGGLE_SAMPLES * BYTES_PER_SAMPLE as usize;
 
 /// # Maximum CTDB Offset Shift (in samples).
-const CTDB_WIGGLE_SAMPLES: usize = SAMPLES_PER_SECTOR as usize * 10;
+const CTDB_WIGGLE_SAMPLES: usize = SAMPLE_OVERREAD as usize;
 
 
 
