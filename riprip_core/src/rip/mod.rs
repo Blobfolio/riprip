@@ -206,12 +206,15 @@ impl<'a> Rip<'a> {
 					Err(e) => return Err(e),
 				}
 
-				// Patch the data!
-				for ((old, new), err) in state.iter_mut()
-					.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
-					.zip(c2.sample_errors())
-				{
-					old.update(new.try_into().unwrap(), err);
+				// Patch the data, unless the user just aborted, as that will
+				// probably have messed up the data.
+				if ! killed.killed() {
+					for ((old, new), err) in state.iter_mut()
+						.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
+						.zip(c2.sample_errors())
+					{
+						old.update(new.try_into().unwrap(), err);
+					}
 				}
 
 				progress.increment();
