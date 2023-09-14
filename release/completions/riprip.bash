@@ -15,6 +15,7 @@ _basher___riprip() {
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")
 	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
+	[[ " ${COMP_LINE} " =~ " --reset-counts " ]] || opts+=("--reset-counts")
 	[[ " ${COMP_LINE} " =~ " --strict " ]] || opts+=("--strict")
 	if [[ ! " ${COMP_LINE} " =~ " -V " ]] && [[ ! " ${COMP_LINE} " =~ " --version " ]]; then
 		opts+=("-V")
