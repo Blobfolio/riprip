@@ -591,6 +591,10 @@ impl RipSample {
 	/// * If the value is already in the set, its count is incremented;
 	/// * Otherwise a new entry is added with a count of 1.
 	///
+	/// If the original sample is maybe and the new sample is bad _and_ that
+	/// sample is in the set, _decrease_ the count and/or remove the entry. If
+	/// the set is empty after that change, downgrade it to bad.
+	///
 	/// If the original sample is confirmed, nothing changes.
 	pub(crate) fn update(&mut self, new: Sample, err: bool) {
 		match self {
@@ -599,24 +603,54 @@ impl RipSample {
 				if err { *self = Self::Bad(new); }
 				else { *self = Self::Maybe(vec![(new, 1)]); },
 
-			// Augment maybes maybe.
-			Self::Maybe(set) if ! err => {
-				for old in &mut *set {
-					// Bump the count and re-sort if this value was already
-					// present.
-					if new == old.0 {
-						old.1 = old.1.saturating_add(1);
-						set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-						return;
+			// Maybe change a maybe.
+			Self::Maybe(set) =>
+				// If the new sample is bad and in our set, *decrease* the
+				// count and/or remove the entry entirely.
+				if err {
+					let mut changed = false;
+					set.retain_mut(|(old, count)|
+						if new.eq(old) {
+							changed = true;
+							if 1.eq(count) { false }
+							else {
+								*count -= 1;
+								true
+							}
+						}
+						else { true }
+					);
+
+					if changed {
+						// If our set is empty now, downgrade to bad.
+						if set.is_empty() {
+							*self = Self::Bad(new);
+						}
+						// Otherwise give it a re-sort in case the change
+						// affected something.
+						else {
+							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+						}
 					}
 				}
+				// Otherwise add or increment the set.
+				else {
+					for old in &mut *set {
+						// Bump the count and re-sort if this value was already
+						// present.
+						if new == old.0 {
+							old.1 = old.1.saturating_add(1);
+							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+							return;
+						}
+					}
 
-				// Otherwise add it fresh.
-				set.push((new, 1));
-			},
+					// Otherwise add it fresh.
+					set.push((new, 1));
+				},
 
-			// Leave everything else alone.
-			_ => {},
+			// Leave confirmed samples alone.
+			Self::Confirmed(_) => {},
 		}
 	}
 }
@@ -678,5 +712,59 @@ mod test {
 				is_super_majority(a, b),
 				expected);
 		}
+	}
+
+	#[test]
+	fn t_update() {
+		// Start with TBD.
+		let mut sample = RipSample::Tbd;
+		sample.update(NULL_SAMPLE, true);
+		assert!(matches!(sample, RipSample::Bad(NULL_SAMPLE)));
+
+		// TBD + Bad = Bad.
+		sample.update(NULL_SAMPLE, false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 1)]);
+		}
+
+		// Bad + Good = Maybe.
+		sample.update(NULL_SAMPLE, false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2)]);
+		}
+
+		// Maybe + Good = ++
+		sample.update([1, 1, 1, 1], false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (different) = no change
+		sample.update([1, 2, 1, 2], true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = --
+		sample.update(NULL_SAMPLE, true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 1), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = --
+		sample.update(NULL_SAMPLE, true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = -- = empty = Bad.
+		sample.update([1, 1, 1, 1], true);
+		assert!(matches!(sample, RipSample::Bad([1, 1, 1, 1])));
 	}
 }
