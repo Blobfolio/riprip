@@ -132,7 +132,6 @@ impl<'a> Rip<'a> {
 	/// Returns `true` if the rip has been confirmed, `false` if not.
 	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
 	-> Result<bool, RipRipError> {
-		let resume = u8::from(! self.state.is_new());
 		let offset = self.opts.offset();
 		let rip_rng = self.state.sector_rip_range();
 		let lsn_start = rip_rng.start;
@@ -166,7 +165,7 @@ impl<'a> Rip<'a> {
 			progress.set_title(Some(Msg::custom(
 				progress_label.as_str(),
 				199,
-				rip_title(pass + resume, self.opts.backwards()),
+				rip_title(pass, self.state.is_new(), self.opts.backwards()),
 			)));
 
 			// Pull down the data, one sector at a time.
@@ -425,25 +424,23 @@ fn rip_distance(max_sectors: i32, offset: ReadOffset) -> Range<i32> {
 	rng_start..rng_end
 }
 
-#[inline]
-/// # Rip Title Prefix.
+/// # Rip Title.
 ///
-/// Just for fun, change up the progress bar title from rip to rip.
-const fn rip_title(pass: u8, backwards: bool) -> &'static str {
-	match (pass, backwards) {
-		(0, false) => "Ripping…",
-		(1, false) => "Re-Ripping…",
-		(2, false) => "Re-Re-Ripping…",
-		(3, false) => "Re-Re-Re-Ripping…",
-		(4, false) => "Re-Re-Re-Re-Ripping…",
-		(5, false) => "Re-Re-Re-Re-Re-Ripping…",
-		(_, false) => "Re-Re-Re-Re-Re-[…]-Ripping…",
-		(0, true) => "Ripping… (Backwards)",
-		(1, true) => "Re-Ripping… (Backwards)",
-		(2, true) => "Re-Re-Ripping… (Backwards)",
-		(3, true) => "Re-Re-Re-Ripping… (Backwards)",
-		(4, true) => "Re-Re-Re-Re-Ripping… (Backwards)",
-		(5, true) => "Re-Re-Re-Re-Re-Ripping… (Backwards)",
-		(_, true) => "Re-Re-Re-Re-Re-[…]-Ripping… (Backwards)",
+/// Return a description for the rip progress bar, drawing attention to
+/// direction and newness, with a little bit of periodic sass.
+const fn rip_title(pass: u8, new: bool, backwards: bool) -> &'static str {
+	match (! new) as u8 + pass {
+		0 => "Starting a new rip…",
+		1 =>
+			if backwards && pass == 0 { "Re-ripping the iffy bits, backwards, and in heels…" }
+			else { "Re-ripping the iffy bits…" },
+		5  => "Ripticulating splines…",
+		10 => "Reconnoitering the rip…",
+		15 => "Rip-a-dee-doo-dah, rip-a-dee-ay…",
+		20 => "Recovery is more of an art than a science, really…",
+		25 => "The quickest way is sometimes the longest…",
+		32 if new => "Pulling the rip cord…",
+		33 if ! new => "Pulling the rip cord…",
+		_ => "Re-re-ripping, et cetera, ad nauseam…",
 	}
 }
