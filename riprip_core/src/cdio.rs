@@ -5,7 +5,6 @@
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,
-	CD_DATA_C2B_SIZE,
 	CD_DATA_SIZE,
 	CD_LEADIN,
 	CDTextKind,
@@ -394,7 +393,7 @@ impl LibcdioInstance {
 		// We can infer whether or not C2 is desired based on the block size,
 		// and at the same time rule out wacky sizes.
 		let c2_too = match block_size {
-			CD_DATA_C2_SIZE | CD_DATA_C2B_SIZE => 1,
+			CD_DATA_C2_SIZE => 1,
 			CD_DATA_SIZE => 0,
 			_ => return Err(RipRipError::Bug("Invalid read buffer size.")),
 		};

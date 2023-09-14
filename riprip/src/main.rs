@@ -50,7 +50,6 @@ use riprip_core::{
 	ReadOffset,
 	RipRipError,
 	RipOptions,
-	RipOptionsC2,
 };
 use std::{
 	borrow::Cow,
@@ -154,13 +153,11 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch(b"--backwards"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
+		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
 		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict(args.switch(b"--strict"));
-
-	if args.switch(b"--no-c2") { opts = opts.with_c2(RipOptionsC2::None); }
-	else if args.switch(b"--c2-296") { opts = opts.with_c2(RipOptionsC2::C2Mode296); }
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -264,10 +261,8 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_verify = Cow::Owned(format!(
 		"{}{}AccurateRip/CTDB ({})",
 		match (opts.c2(), opts.strict()) {
-			(RipOptionsC2::C2Mode294, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
-			(RipOptionsC2::C2Mode294, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
-			(RipOptionsC2::C2Mode296, true) => "(Strict) Sector C2 (296B)\x1b[2m;\x1b[0;1m ",
-			(RipOptionsC2::C2Mode296, false) => "Sample C2 (296B)\x1b[2m;\x1b[0;1m ",
+			(true, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
+			(true, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
 			_ => "",
 		},
 		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
@@ -384,10 +379,6 @@ WHEN ALL ELSE FAILS:
                       runs have already completed).
 
 DRIVE SETTINGS:
-        --c2-296      C2 error pointer data normally uses a blocksize of 294
-                      bytes, but a few drives require 296 bytes instead. If the
-                      bad/maybe sample counts for your rips seem "off", try
-                      setting this flag to see if it helps.
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
         --no-c2       Disable/ignore C2 error pointer information when ripping,

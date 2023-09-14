@@ -71,10 +71,7 @@ pub(crate) use rip::{
 	},
 	Rip,
 };
-pub use rip::opts::{
-	RipOptions,
-	RipOptionsC2,
-};
+pub use rip::opts::RipOptions;
 
 
 
@@ -119,9 +116,6 @@ pub const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
 /// redundant.
 pub const CD_C2_SIZE: u16 = 294;
 
-/// # Size of C2 block with block bit.
-pub const CD_C2B_SIZE: u16 = 296;
-
 /// # Size of data block.
 ///
 /// Data as in "audio data".
@@ -129,9 +123,6 @@ pub const CD_DATA_SIZE: u16 = BYTES_PER_SECTOR;
 
 /// # Combined size of data/c2.
 pub const CD_DATA_C2_SIZE: u16 = CD_DATA_SIZE + CD_C2_SIZE;
-
-/// # Combined size of data/c2 (with block bit).
-pub const CD_DATA_C2B_SIZE: u16 = CD_DATA_SIZE + CD_C2B_SIZE;
 
 /// # Number of lead-in sectors.
 ///

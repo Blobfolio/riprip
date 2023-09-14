@@ -12,7 +12,6 @@ use cdtoc::Track;
 use crate::{
 	C2,
 	CD_DATA_C2_SIZE,
-	CD_DATA_C2B_SIZE,
 	CD_DATA_SIZE,
 	chk_accuraterip,
 	chk_ctdb,
@@ -20,7 +19,6 @@ use crate::{
 	KillSwitch,
 	ReadOffset,
 	RipOptions,
-	RipOptionsC2,
 	RipRipError,
 	RipSamples,
 	SAMPLE_OVERREAD,
@@ -106,20 +104,14 @@ impl<'a> Rip<'a> {
 		let confirmed =
 			if killed.killed() { self.state.is_confirmed() }
 			else {
-				// Same operation, three ways, depending on the C2 type.
-				match self.opts.c2() {
-					RipOptionsC2::None => {
-						let mut buf = [0_u8; CD_DATA_SIZE as usize];
-						self._rip(&mut buf, progress, killed)
-					},
-					RipOptionsC2::C2Mode294 => {
-						let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-						self._rip(&mut buf, progress, killed)
-					},
-					RipOptionsC2::C2Mode296 => {
-						let mut buf = [0_u8; CD_DATA_C2B_SIZE as usize];
-						self._rip(&mut buf, progress, killed)
-					},
+				// Same operation two ways, one with C2 support, one without.
+				if self.opts.c2() {
+					let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
+					self._rip(&mut buf, progress, killed)
+				}
+				else {
+					let mut buf = [0_u8; CD_DATA_SIZE as usize];
+					self._rip(&mut buf, progress, killed)
 				}?
 			};
 

@@ -2,11 +2,7 @@
 # Rip Rip Hooray: Ripping Options
 */
 
-use crate::{
-	CD_C2_SIZE,
-	CD_C2B_SIZE,
-	ReadOffset,
-};
+use crate::ReadOffset;
 
 
 
@@ -16,20 +12,23 @@ const FLAG_BACKWARDS: u8 =    0b0000_0001;
 /// # FLAG: Cache Bust.
 const FLAG_CACHE_BUST: u8 =   0b0000_0010;
 
+/// # FLAG: C2 Error Pointers.
+const FLAG_C2: u8 =           0b0000_0100;
+
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =          0b0000_0100;
+const FLAG_RAW: u8 =          0b0000_1000;
 
 /// # FLAG: Reset counts.
-const FLAG_RESET_COUNTS: u8 = 0b0000_1000;
+const FLAG_RESET_COUNTS: u8 = 0b0001_0000;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =       0b0001_0000;
+const FLAG_RESUME: u8 =       0b0010_0000;
 
 /// # FLAG: Strict Mode.
-const FLAG_STRICT: u8 =       0b0010_0000;
+const FLAG_STRICT: u8 =       0b0100_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_CACHE_BUST | FLAG_RESUME;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
 
 /// # Minimum Confidence.
 const CONFIDENCE_MIN: u8 = 3;
@@ -67,7 +66,6 @@ const REFINE_MAX: u8 = 32;
 /// ```
 pub struct RipOptions {
 	offset: ReadOffset,
-	c2: RipOptionsC2,
 	confidence: u8,
 	cutoff: u8,
 	refine: u8,
@@ -79,7 +77,6 @@ impl Default for RipOptions {
 	fn default() -> Self {
 		Self {
 			offset: ReadOffset::default(),
-			c2: RipOptionsC2::default(),
 			confidence: 3,
 			cutoff: 2,
 			refine: 0,
@@ -120,19 +117,16 @@ impl RipOptions {
 		"The default is `false`.",
 	);
 
-	#[must_use]
-	/// # C2 Error Pointers.
-	///
-	/// Set the C2 mode or disable it altogether, although if the latter, be
-	/// warned that data accuracy will be really hard to verify.
-	///
-	/// By default, 294-byte C2 error support is assumed.
-	pub const fn with_c2(self, c2: RipOptionsC2) -> Self {
-		Self {
-			c2,
-			..self
-		}
-	}
+	with_flag!(
+		with_c2,
+		FLAG_C2,
+		"# Leverage C2 Error Pointers.",
+		"",
+		"This should only be disabled when absolutely necessary, otherwise",
+		"the data accuracy will suffer.",
+		"",
+		"The default is `true`.",
+	);
 
 	with_flag!(
 		with_cache_bust,
@@ -313,15 +307,12 @@ macro_rules! get_flag {
 /// # Getters.
 impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
+	get_flag!(c2, FLAG_C2, "Leverage C2 Error Pointers");
 	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
 	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
 	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(strict, FLAG_STRICT, "Strict Mode");
-
-	#[must_use]
-	/// # C2 Error Pointer Mode.
-	pub const fn c2(&self) -> RipOptionsC2 { self.c2 }
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
@@ -359,32 +350,6 @@ impl RipOptions {
 			pos: 0,
 		}
 	}
-}
-
-
-
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
-#[repr(u16)]
-/// # Rip Option C2.
-///
-/// Lest data accuracy be _too_ easy, there are two different ways of handling
-/// C2 error pointers, plus the possibility they won't be handled at all. Haha.
-pub enum RipOptionsC2 {
-	/// # No C2 Support.
-	None = 0,
-
-	#[default]
-	/// # 294-byte Block.
-	C2Mode294 = CD_C2_SIZE,
-
-	/// # 296-byte Block.
-	C2Mode296 = CD_C2B_SIZE,
-}
-
-impl RipOptionsC2 {
-	#[must_use]
-	/// # Is None?
-	pub const fn is_none(self) -> bool { matches!(self, Self::None) }
 }
 
 
@@ -449,6 +414,7 @@ mod test {
 		let mut all = vec![
 			FLAG_BACKWARDS,
 			FLAG_CACHE_BUST,
+			FLAG_C2,
 			FLAG_RAW,
 			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
@@ -456,16 +422,7 @@ mod test {
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 6);
-	}
-
-	#[test]
-	fn t_c2() {
-		let mut opts = RipOptions::default();
-		for v in [RipOptionsC2::None, RipOptionsC2::C2Mode294, RipOptionsC2::C2Mode296] {
-			opts = opts.with_c2(v);
-			assert_eq!(opts.c2(), v);
-		}
+		assert_eq!(all.len(), 7);
 	}
 
 	#[test]
@@ -518,6 +475,7 @@ mod test {
 		}
 
 		t_flags!("backwards", with_backwards, backwards);
+		t_flags!("c2", with_c2, c2);
 		t_flags!("cache bust", with_cache_bust, cache_bust);
 		t_flags!("raw", with_raw, raw);
 		t_flags!("reset_counts", with_reset_counts, reset_counts);

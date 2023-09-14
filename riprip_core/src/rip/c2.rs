@@ -4,7 +4,6 @@
 
 use crate::{
 	CD_C2_SIZE,
-	CD_C2B_SIZE,
 	RipRipError,
 };
 
@@ -28,6 +27,11 @@ impl Default for C2 {
 }
 
 impl C2 {
+	/// # All Good?
+	///
+	/// Return true if there are no C2 errors.
+	pub(crate) fn is_good(&self) -> bool { self.0.iter().all(|v| 0.eq(v)) }
+
 	/// # Make Bad.
 	///
 	/// Mark all samples as bad to the bone.
@@ -70,51 +74,18 @@ impl C2 {
 		// If there's no C2 information, we have to assume the data's fine.
 		// Likewise if everything's fine, we don't have to think too hard about
 		// what to do with it.
-		if new.is_empty() || new.iter().all(|v| 0.eq(v)) {
+		if new.is_empty() {
 			self.make_good();
-			return Ok(true);
+			Ok(true)
 		}
-
-		// If the 296-byte block mode is used, we have to figure out which side
-		// that damn block bit is stored on. It's supposed to be on the left,
-		// but some drives place it on the end instead.
-		if new.len() == usize::from(CD_C2B_SIZE) {
-			// See if the first two and/or last two bytes contain non-zero
-			// data. One of them is supposed to be representative of the sector
-			// as a whole, so one of them should be non-zero given the fact c2
-			// errors were returned.
-			let lhs = new[0] != 0 || new[1] != 0;
-			let rhs = new[usize::from(CD_C2B_SIZE) - 1] != 0 || new[usize::from(CD_C2B_SIZE) - 2] != 0;
-
-			// If both are non-zero, we can't really know which is which, so
-			// let's just treat the entire block as bad.
-			if lhs && rhs {
-				self.make_bad();
-				return Ok(false);
-			}
-
-			// If both are zero, that can't be right! The drive likely doesn't
-			// support this c2 block size.
-			if ! lhs && ! rhs {
-				self.make_bad();
-				return Err(RipRipError::C2Mode296);
-			}
-
-			// Chop off whichever two bytes have values, and copy the rest into
-			// place.
-			if lhs { self.0.copy_from_slice(&new[2..]); }
-			else   { self.0.copy_from_slice(&new[..usize::from(CD_C2B_SIZE) - 2]); }
+		// Copy the bits into place!
+		else if new.len() == usize::from(CD_C2_SIZE) {
+			self.0.copy_from_slice(new);
+			Ok(self.is_good())
 		}
-		// The 294-byte block mode can be copied straight!
-		else if new.len() == usize::from(CD_C2_SIZE) { self.0.copy_from_slice(new); }
-		// If for some reason we accidentally passed a different slice size in,
-		// return an error so the bug can be found and fixed.
-		else {
-			return Err(RipRipError::Bug("Invalid C2 block size!"));
-		}
-
-		// Done!
-		Ok(false)
+		// This shouldn't happen, but return an error if it does so the bug can
+		// be fixed.
+		else { Err(RipRipError::Bug("Invalid C2 block size!")) }
 	}
 }
 
@@ -159,5 +130,40 @@ impl<'a> ExactSizeIterator for C2SampleErrors<'a> {
 		// Each byte is 2 samples, so double what's left, then add one for the
 		// buffer value, if any.
 		usize::from(CD_C2_SIZE).saturating_sub(self.pos) * 2 + usize::from(self.buf.is_some())
+	}
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_c2() {
+		let mut c2 = C2::default();
+		assert!(c2.is_good());
+		assert!(c2.sample_errors().all(|v| ! v));
+
+		c2.make_bad();
+		assert!(! c2.is_good());
+		assert!(c2.sample_errors().all(|v| v));
+
+		c2.make_good();
+		assert!(c2.is_good());
+		assert!(c2.sample_errors().all(|v| ! v));
+
+		let mut tmp = [0; CD_C2_SIZE as usize];
+		assert_eq!(c2.update(&tmp), Ok(true));
+		assert!(c2.is_good());
+		assert!(c2.sample_errors().all(|v| ! v));
+
+		tmp[3] = 1;
+		assert_eq!(c2.update(&tmp), Ok(false));
+		assert!(! c2.is_good());
+		assert_eq!(c2.sample_errors().filter(|v| *v).count(), 1);
+
+		// Make sure we've got 588 values too.
+		assert_eq!(c2.sample_errors().count(), 588);
 	}
 }

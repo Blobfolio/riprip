@@ -37,10 +37,6 @@ long = "--backwards"
 description = "Request sectors from the drive in reverse order, starting from the end of each track, and ending at the start."
 
 [[package.metadata.bashman.switches]]
-long = "--c2-296"
-description = "C2 error pointer data normally uses a blocksize of 294 bytes, but a few drives require 296 bytes instead. If the bad/maybe sample counts for your rips seem off, try setting this flag to see if it helps."
-
-[[package.metadata.bashman.switches]]
 short = "-h"
 long = "--help"
 description = "Print help information."
