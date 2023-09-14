@@ -48,6 +48,8 @@ pub use barcode::Barcode;
 pub(crate) use cache::{
 	cache_path,
 	CacheWriter,
+	state_path,
+	track_path,
 };
 pub(crate) use cdio::LibcdioInstance;
 pub use cdtext::CDTextKind;
@@ -62,6 +64,7 @@ pub use drive::{
 };
 pub use error::RipRipError;
 pub(crate) use rip::{
+	c2::C2,
 	data::{
 		RipSample,
 		RipSamples,
@@ -74,6 +77,9 @@ pub use rip::opts::RipOptions;
 
 /// # 16-bit Stereo Sample (raw PCM bytes).
 type Sample = [u8; 4];
+
+/// # Static Hasher.
+pub(crate) const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(13, 19, 23, 71);
 
 /// # Cache Base.
 ///
@@ -96,6 +102,12 @@ pub const BYTES_PER_SECTOR: u16 = SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE;
 
 /// # Samples per sector.
 pub const SAMPLES_PER_SECTOR: u16 = 588;
+
+/// # Sample Overread (Padding).
+///
+/// To help account for variable read offsets and CTDB matching, each track rip
+/// will overread up to ten sectors on either end.
+pub const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
 
 /// # Size of C2 block.
 ///
@@ -127,3 +139,11 @@ pub const CD_LEADOUT_LABEL: &str = "AA";
 ///
 /// Audio CD silence is typically literally nothing.
 pub const NULL_SAMPLE: Sample = [0, 0, 0, 0];
+
+/// # Wave Spec.
+pub(crate) const WAVE_SPEC: hound::WavSpec = hound::WavSpec {
+	channels: 2,
+	sample_rate: 44100,
+	bits_per_sample: 16,
+	sample_format: hound::SampleFormat::Int,
+};

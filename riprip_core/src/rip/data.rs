@@ -8,22 +8,19 @@ use cdtoc::{
 };
 use crate::{
 	BYTES_PER_SAMPLE,
-	cache_path,
-	CACHE_SCRATCH,
 	CacheWriter,
 	NULL_SAMPLE,
 	ReadOffset,
 	RipRipError,
 	Sample,
 	SAMPLES_PER_SECTOR,
+	state_path,
+	track_path,
+	WAVE_SPEC,
 };
 use dactyl::traits::SaturatingFrom;
 use fyi_msg::Msg;
-use hound::{
-	SampleFormat,
-	WavSpec,
-	WavWriter,
-};
+use hound::WavWriter;
 use serde::{
 	de,
 	Deserialize,
@@ -43,7 +40,10 @@ use std::{
 	ops::Range,
 	path::PathBuf,
 };
-use super::SAMPLE_OVERREAD;
+use super::{
+	SAMPLE_OVERREAD,
+	TrackQuality,
+};
 
 
 
@@ -96,7 +96,10 @@ impl<'de> Deserialize<'de> for RipSamples {
 				// The track is stored by index number only; we need to fetch
 				// the corresponding object from the TOC.
 				let track = seq.next_element()?
-					.and_then(|n: u8| toc.audio_track(usize::from(n)))
+					.and_then(|n: u8|
+						if n == 0 { toc.htoa() }
+						else { toc.audio_track(usize::from(n)) }
+					)
 					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
 				// The rip_rng is derived from the track.
@@ -258,6 +261,17 @@ impl RipSamples {
 		}
 	}
 
+	/// # Reset Counts.
+	///
+	/// Drop all maybe counts to one so their sectors can be reread.
+	pub(crate) fn reset_counts(&mut self) {
+		for v in &mut self.data {
+			if let RipSample::Maybe(set) = v {
+				for (_, count) in &mut *set { *count = 1; }
+			}
+		}
+	}
+
 	/// # Save State.
 	///
 	/// Save a copy of the state to disk so the rip can be resumed at some
@@ -310,7 +324,7 @@ impl RipSamples {
 	pub(crate) fn save_track(&self, raw: bool) -> Result<PathBuf, RipRipError> {
 		use std::io::Write;
 
-		let dst = track_path(self.track, raw)?;
+		let dst = track_path(&self.toc, self.track, raw)?;
 		let samples = self.track_slice();
 		let mut writer = CacheWriter::new(&dst)?;
 
@@ -332,13 +346,7 @@ impl RipSamples {
 		}
 		// Wavs on the other hand have to be _built_. Ug.
 		else {
-			let spec = WavSpec {
-				channels: 2,
-				sample_rate: 44100,
-				bits_per_sample: 16,
-				sample_format: SampleFormat::Int,
-			};
-			let mut wav = WavWriter::new(writer.writer(), spec)
+			let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC)
 				.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
 			// In CD contexts, a sample is general one L+R pair. In other
@@ -407,6 +415,11 @@ impl RipSamples {
 		Err(RipRipError::Bug("Offset sample out of range!"))
 	}
 
+	/// # Full Rip Slice.
+	///
+	/// Return a slice of all of the samples gathered, not just the track bits.
+	pub(crate) fn rip_slice(&self) -> &[RipSample] { &self.data }
+
 	/// # Sector Rip Range.
 	///
 	/// Convert the sample rip range to a sector rip range and return it.
@@ -424,23 +437,8 @@ impl RipSamples {
 	///
 	/// Add up the bad, maybe, likely, and confirmed samples within the track
 	/// range.
-	pub(crate) fn track_quality(&self, cutoff: u8) -> (usize, usize, usize, usize) {
-		let mut bad = 0;
-		let mut maybe = 0;
-		let mut likely = 0;
-		let mut confirmed = 0;
-
-		for v in self.track_slice() {
-			match v {
-				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
-				RipSample::Confirmed(_) => { confirmed += 1; },
-				RipSample::Maybe(_) =>
-					if v.is_likely(cutoff) { likely += 1; }
-					else { maybe += 1; },
-			}
-		}
-
-		(bad, maybe, likely, confirmed)
+	pub(super) fn track_quality(&self, cutoff: u8) -> TrackQuality {
+		TrackQuality::new(self.track_slice(), cutoff)
 	}
 
 	/// # Track Slice.
@@ -470,11 +468,39 @@ impl RipSamples {
 			.iter()
 			.all(RipSample::is_confirmed)
 	}
+
+	/// # Is Likely?
+	///
+	/// Returns true if all of the samples in the rippable range are likely or
+	/// better.
+	pub(crate) fn is_likely(&self, offset: ReadOffset, cutoff: u8) -> bool {
+		// We'll be missing bits at the beginning or end depending on the
+		// offset.
+		let samples_abs = usize::from(offset.samples_abs());
+		let len = self.data.len();
+		if len < samples_abs { return false; } // Shouldn't happen!
+		let slice =
+			if offset.is_negative() { &self.data[samples_abs..] }
+			else { &self.data[..len - samples_abs] };
+
+		slice.iter().all(|v| v.is_likely(cutoff))
+	}
+
+	/// # Quick Hash.
+	///
+	/// Hash the contents of the ripped data. This provides an easy metric for
+	/// comparison to e.g. determine if anything changed between runs.
+	pub(crate) fn quick_hash(&self) -> u64 {
+		use std::hash::{BuildHasher, Hash, Hasher};
+		let mut hasher = crate::AHASHER.build_hasher();
+		self.data.hash(&mut hasher);
+		hasher.finish()
+	}
 }
 
 
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Hash, Serialize)]
 /// # Rip Sample.
 ///
 /// This enum combines sample value(s) and their status.
@@ -565,6 +591,10 @@ impl RipSample {
 	/// * If the value is already in the set, its count is incremented;
 	/// * Otherwise a new entry is added with a count of 1.
 	///
+	/// If the original sample is maybe and the new sample is bad _and_ that
+	/// sample is in the set, _decrease_ the count and/or remove the entry. If
+	/// the set is empty after that change, downgrade it to bad.
+	///
 	/// If the original sample is confirmed, nothing changes.
 	pub(crate) fn update(&mut self, new: Sample, err: bool) {
 		match self {
@@ -573,24 +603,54 @@ impl RipSample {
 				if err { *self = Self::Bad(new); }
 				else { *self = Self::Maybe(vec![(new, 1)]); },
 
-			// Augment maybes maybe.
-			Self::Maybe(set) if ! err => {
-				for old in &mut *set {
-					// Bump the count and re-sort if this value was already
-					// present.
-					if new == old.0 {
-						old.1 = old.1.saturating_add(1);
-						set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-						return;
+			// Maybe change a maybe.
+			Self::Maybe(set) =>
+				// If the new sample is bad and in our set, *decrease* the
+				// count and/or remove the entry entirely.
+				if err {
+					let mut changed = false;
+					set.retain_mut(|(old, count)|
+						if new.eq(old) {
+							changed = true;
+							if 1.eq(count) { false }
+							else {
+								*count -= 1;
+								true
+							}
+						}
+						else { true }
+					);
+
+					if changed {
+						// If our set is empty now, downgrade to bad.
+						if set.is_empty() {
+							*self = Self::Bad(new);
+						}
+						// Otherwise give it a re-sort in case the change
+						// affected something.
+						else {
+							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+						}
 					}
 				}
+				// Otherwise add or increment the set.
+				else {
+					for old in &mut *set {
+						// Bump the count and re-sort if this value was already
+						// present.
+						if new == old.0 {
+							old.1 = old.1.saturating_add(1);
+							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+							return;
+						}
+					}
 
-				// Otherwise add it fresh.
-				set.push((new, 1));
-			},
+					// Otherwise add it fresh.
+					set.push((new, 1));
+				},
 
-			// Leave everything else alone.
-			_ => {},
+			// Leave confirmed samples alone.
+			Self::Confirmed(_) => {},
 		}
 	}
 }
@@ -617,41 +677,6 @@ const fn is_super_majority(target: u8, mut total: u16) -> bool {
 		// Compare!
 		total <= target as u16
 	}
-}
-
-/// # State Path.
-///
-/// Return the file path to save the state data to.
-///
-/// Paths are prefixed with a CRC32 hash of the table of contents for basic
-/// collision mitigation. The state from track 2 from one disc, for example,
-/// shouldn't override the state from a different disc's track 2.
-///
-/// ## Errors
-///
-/// This will return an error if there are problems determining the cache
-/// location.
-fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	let crc = crc32fast::hash(toc.to_string().as_bytes());
-	cache_path(format!("{CACHE_SCRATCH}/{crc:08X}__{:02}.state", track.number()))
-}
-
-/// # Track Path.
-///
-/// Return the file path to save the exported track to. To keep things
-/// predictable, this is simply the two-digit track number with the format's
-/// extension tacked onto the end.
-///
-/// ## Errors
-///
-/// This will return an error if there are problems determining the cache
-/// location.
-fn track_path(track: Track, raw: bool) -> Result<PathBuf, RipRipError> {
-	cache_path(format!(
-		"{:02}.{}",
-		track.number(),
-		if raw { "pcm" } else { "wav" }
-	))
 }
 
 /// # Track Range to Rip Range.
@@ -687,5 +712,59 @@ mod test {
 				is_super_majority(a, b),
 				expected);
 		}
+	}
+
+	#[test]
+	fn t_update() {
+		// Start with TBD.
+		let mut sample = RipSample::Tbd;
+		sample.update(NULL_SAMPLE, true);
+		assert!(matches!(sample, RipSample::Bad(NULL_SAMPLE)));
+
+		// TBD + Bad = Bad.
+		sample.update(NULL_SAMPLE, false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 1)]);
+		}
+
+		// Bad + Good = Maybe.
+		sample.update(NULL_SAMPLE, false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2)]);
+		}
+
+		// Maybe + Good = ++
+		sample.update([1, 1, 1, 1], false);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (different) = no change
+		sample.update([1, 2, 1, 2], true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = --
+		sample.update(NULL_SAMPLE, true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 1), ([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = --
+		sample.update(NULL_SAMPLE, true);
+		{
+			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[([1, 1, 1, 1], 1)]);
+		}
+
+		// Maybe + Bad (existing) = -- = empty = Bad.
+		sample.update([1, 1, 1, 1], true);
+		assert!(matches!(sample, RipSample::Bad([1, 1, 1, 1])));
 	}
 }

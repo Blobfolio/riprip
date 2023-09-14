@@ -388,14 +388,14 @@ impl LibcdioInstance {
 	) -> Result<(), RipRipError> {
 		// The buffer and block size are equivalent for our purposes.
 		let block_size = u16::try_from(buf.len())
-			.map_err(|_| RipRipError::CdReadBuffer)?;
+			.map_err(|_| RipRipError::Bug("Invalid read buffer size."))?;
 
 		// We can infer whether or not C2 is desired based on the block size,
 		// and at the same time rule out wacky sizes.
 		let c2_too = match block_size {
 			CD_DATA_C2_SIZE => 1,
 			CD_DATA_SIZE => 0,
-			_ => return Err(RipRipError::CdReadBuffer),
+			_ => return Err(RipRipError::Bug("Invalid read buffer size.")),
 		};
 
 		// Reset the buffer before beginning.

@@ -152,9 +152,10 @@ fn _main() -> Result<(), RipRipError> {
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch(b"--backwards"))
-		.with_c2(! args.switch(b"--no-c2"))
 		.with_cache_bust(! args.switch(b"--no-cache-bust"))
+		.with_c2(! args.switch(b"--no-c2"))
 		.with_raw(args.switch(b"--raw"))
+		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict(args.switch(b"--strict"));
 
@@ -213,6 +214,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 
 	// If we didn't parse any tracks, add each track on the disc.
 	if ! opts.has_tracks() {
+		// Include the HTOA if we're ripping everything.
+		if disc.toc().htoa().is_some() { opts = opts.with_track(0); }
 		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
@@ -226,14 +229,28 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
-	let nice_tracks = Cow::Owned(
-		opts.tracks()
-			.map(NiceU8::from)
-			.collect::<Vec<NiceU8>>()
-			.oxford_and()
-			.replace(',', "\x1b[2m,\x1b[0;1m")
-			.replace(" and ", "\x1b[2m and \x1b[0;1m")
-	);
+	let nice_tracks = Cow::Owned({
+		let mut last = u8::MAX;
+		let mut continuous = true;
+		let tracks = opts.tracks()
+			.map(|n| {
+				if last != u8::MAX && last + 1 != n { continuous = false; }
+				last = n;
+				NiceU8::from(n)
+			})
+			.collect::<Vec<NiceU8>>();
+
+		let len = tracks.len();
+		if len == 1 { tracks[0].to_string() }
+		else if 2 < len && continuous {
+			format!("{}\x1b[2m..=\x1b[0;1m{}", tracks[0], tracks[len - 1])
+		}
+		else {
+			tracks.oxford_and()
+				.replace(',', "\x1b[2m,\x1b[0;1m")
+				.replace(" and ", "\x1b[2m and \x1b[0;1m")
+		}
+	});
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_output = Cow::Owned(format!(
 		"./{}/##.{}",
@@ -251,17 +268,24 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
 		opts.confidence(),
 	));
-	let nice_passes = NiceU8::from(opts.passes());
+	let nice_passes = Cow::Owned(format!(
+		"{}{}",
+		opts.passes(),
+		if opts.resume() {
+			if opts.reset_counts() { " (Reset Counts)" }
+			else { "" }
+		}
+		else { " (From Scratch)" },
+	));
 
 	let set = [
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Verification:", nice_verify, true),
-		("Rip Passes:", Cow::Borrowed(nice_passes.as_str()), true),
+		("Rip Passes:", nice_passes, true),
 		("Destination:", nice_output, true),
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
 		("Bust Cache:", yesno(opts.cache_bust()), opts.cache_bust()),
-		("Resumable:", yesno(opts.resume()), opts.resume()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
@@ -320,53 +344,58 @@ USAGE:
     riprip [OPTIONS]
 
 BASIC SETTINGS:
-        --confidence <NUM>
-                      Consider a track accurately ripped — i.e. stop working on
-                      it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. [default: 3; range: 3..=10]
         --cutoff <NUM>
                       Consider allegedly-good samples \"likely\" once the same
-                      value has been read at least <NUM> times and twice as
+                      value has been read at least <NUM> times, and twice as
                       often as any competing values. Sectors containing only
                       likely/confirmed samples are skipped during subsequent
                       passes, so the lower the cutoff, the faster they'll go.
-                      Higher values are recommended for wishywashy drives.
+                      Higher values are recommended when the data seems fishy.
                       [default: 2; range: 1..=32]
         --raw         Save ripped tracks in raw PCM format (instead of WAV).
     -r, --refine <NUM>
                       Automatically execute up to <NUM> additional rip passes
                       for each track while any samples remain unread or
-                      unconfirmed. [default: 1; max: 32]
+                      unconfirmed. [default: 0; max: 32]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
-                      own -t/--track (-t 2 -t 3). [default: the whole disc]
+                      own -t/--track (-t 2 -t 3). Include track 0 to rip the
+                      HTOA (if any). [default: the whole disc]
 
 WHEN ALL ELSE FAILS:
-        --backwards   Rip sectors in reverse order. (Data will still be saved
-                      in the *correct* order. Haha.)
+        --backwards   Request sectors from the drive in reverse order, starting
+                      from the end of each track, and ending at the start.
         --no-resume   Ignore any previous rip states; start over from scratch.
+        --reset-counts
+                      Reset all previously-collected sample counts, allowing
+                      their sectors to be re-read (provided --cutoff is at
+                      least two).
         --strict      Treat C2 errors as an all-or-nothing proposition for the
                       sector as a whole rather than judging each individual
-                      sample on its own.
+                      sample on its own. This is most effective when set for
+                      all rip passes (rather than being turned on after several
+                      runs have already completed).
 
 DRIVE SETTINGS:
-    These options are auto-detected and do not usually need to be explicitly
-    provided.
-
     -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom.
-    -o, --offset <SAMPLES>
-                      The AccurateRip, et al, sample read offset to apply to
-                      data retrieved from the drive. [range: ±5880]
-
-UNUSUAL SETTINGS:
+                      of interest, like /dev/cdrom. [default: auto]
         --no-c2       Disable/ignore C2 error pointer information when ripping,
                       e.g. for drives that do not support the feature. (This
                       flag is otherwise not recommended.)
+    -o, --offset <SAMPLES>
+                      The AccurateRip, et al, sample read offset to apply to
+                      data retrieved from the drive.
+                      [default: auto or 0; range: ±5880]
+
+UNUSUAL SETTINGS:
+        --confidence <NUM>
+                      Consider a track accurately ripped — i.e. stop working on
+                      it — AccurateRip and/or CUETools matches are found with a
+                      confidence of at least <NUM>. [default: 3; range: 3..=10]
         --no-cache-bust
-                      Do not attempt to reset the optical drive cache between
+                      Do not attempt to moot the optical drive cache before
                       each rip pass.
 
 MISCELLANEOUS:

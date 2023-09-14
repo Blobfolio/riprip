@@ -2,8 +2,13 @@
 # Rip Rip Hooray: Encode/Decode
 */
 
+use cdtoc::{
+	Toc,
+	Track,
+};
 use crate::{
 	CACHE_BASE,
+	CACHE_SCRATCH,
 	RipRipError,
 };
 use fyi_msg::Msg;
@@ -104,6 +109,41 @@ impl<'a> CacheWriter<'a> {
 pub(super) fn cache_path<P>(src: P) -> Result<PathBuf, RipRipError>
 where P: AsRef<Path> {
 	cache_root().map(|root| root.join(src))
+}
+
+/// # State Path.
+///
+/// Return the file path to save the state data to.
+///
+/// Paths are prefixed with a CRC32 hash of the table of contents for basic
+/// collision mitigation. The state from track 2 from one disc, for example,
+/// shouldn't override the state from a different disc's track 2.
+///
+/// ## Errors
+///
+/// This will return an error if there are problems determining the cache
+/// location.
+pub(crate) fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
+	cache_path(format!("{CACHE_SCRATCH}/{}__{:02}.state", toc.cddb_id(), track.number()))
+}
+
+/// # Track Path.
+///
+/// Return the file path to save the exported track to. To keep things
+/// predictable, this is simply the two-digit track number with the format's
+/// extension tacked onto the end.
+///
+/// ## Errors
+///
+/// This will return an error if there are problems determining the cache
+/// location.
+pub(crate) fn track_path(toc: &Toc, track: Track, raw: bool) -> Result<PathBuf, RipRipError> {
+	cache_path(format!(
+		"{}__{:02}.{}",
+		toc.cddb_id(),
+		track.number(),
+		if raw { "pcm" } else { "wav" }
+	))
 }
 
 

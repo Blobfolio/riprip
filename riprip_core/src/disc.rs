@@ -8,6 +8,7 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
+	CacheWriter,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
@@ -24,6 +25,7 @@ use fyi_msg::{
 };
 use std::{
 	collections::BTreeMap,
+	ffi::OsStr,
 	fmt,
 	path::{
 		Path,
@@ -77,9 +79,21 @@ impl fmt::Display for Disc {
 		)?;
 		f.write_str(DIVIDER)?;
 
-		// Leading data track.
 		let mut total = 0;
-		if matches!(self.toc.kind(), TocKind::DataFirst) {
+
+		// HTOA.
+		if let Some(t) = self.toc.htoa() {
+			let rng = t.sector_range_normalized();
+			let len = rng.end - rng.start;
+			writeln!(
+				f,
+				"\x1b[2m00  {:>6}  {:>6}  {len:>6}          HTOA\x1b[0m",
+				rng.start,
+				rng.end - 1,
+			)?;
+		}
+		// Leading data track.
+		else if matches!(self.toc.kind(), TocKind::DataFirst) {
 			total += 1;
 			writeln!(
 				f,
@@ -222,33 +236,128 @@ impl Disc {
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		// Loop the loop!
-		let mut saved: Vec<PathBuf> = Vec::new();
+		let mut saved = BTreeMap::default();
 		for t in opts.tracks() {
 			if killed.killed() { continue; }
 
-			let Some(track) = self.toc.audio_track(usize::from(t)) else {
-				Msg::warning(format!("There is no audio track #{t}.")).eprint();
-				continue;
-			};
+			let track =
+				if t == 0 {
+					if let Some(track) = self.toc.htoa() { track }
+					else {
+						Msg::warning("The disc has no HTOA; skipping track #0.").eprint();
+						continue;
+					}
+				}
+				else if let Some(track) = self.toc.audio_track(usize::from(t)) { track }
+				else {
+					Msg::warning(format!("There is no audio track #{t}.")).eprint();
+					continue;
+				};
 
 			// Rip it, and keep track of the destination file so we can print
 			// a complete list at the end.
 			let mut rip = Rip::new(self, track, opts)?;
-			let dst = rip.rip(progress, killed)?;
-			saved.push(dst);
+			let res = rip.rip(progress, killed)?;
+			rip.summarize();
+			saved.insert(t, res);
 		}
 
 		// Print what we did!
 		if ! saved.is_empty() {
+			let mut total = 0;
+			let mut good = 0;
+
 			eprintln!("\nThe fruits of your labor:");
-			for file in saved {
-				if file.is_file() {
+
+			// If we did all tracks, make a cue sheet.
+			if ! opts.raw() {
+				if let Some(file) = save_cuesheet(&self.toc, &saved) {
 					eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
 				}
 			}
+
+			for (file, confirmed) in saved.values() {
+				eprintln!(
+					"  \x1b[2m{}{}\x1b[0m",
+					file.to_string_lossy(),
+					if *confirmed { " \x1b[0;1;92m✓" } else { "" },
+				);
+				total += 1;
+				if *confirmed { good += 1; }
+			}
+
+			// Summarize confirmation counts if we confirmed anything and
+			// ripped more than one track.
+			if good != 0 && total != 1 {
+				if good == total {
+					eprintln!("\x1b[1;92m✓\x1b[0m All tracks have been accurately ripped!");
+				}
+				else {
+					eprintln!("\x1b[1;92m✓\x1b[0m {good}/{total} tracks have been accurately ripped!");
+				}
+			}
+
+			// An extra line break for separation.
 			eprintln!();
 		}
 
 		Ok(())
 	}
+}
+
+
+
+/// # Generate CUE Sheet if Complete.
+fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<PathBuf> {
+	use std::fmt::Write;
+
+	// Make sure all tracks on the disc have been ripped, and pair their file
+	// names with the corresponding Track object.
+	let mut all = Vec::with_capacity(ripped.len());
+	for track in toc.audio_tracks() {
+		let (dst, _) = ripped.get(&track.number())?;
+		let dst = dst.file_name().and_then(OsStr::to_str)?;
+		all.push((track, dst));
+	}
+
+	// The output folder.
+	let parent = ripped.get(&1).and_then(|(dst, _)| dst.parent())?;
+
+	let mut cue = String::new();
+	for (track, src) in all {
+		// If there's an HTOA, it needs to be grouped with the first track.
+		if track.position().is_first() && toc.htoa().is_some() {
+			// This should have been ripped with everything else.
+			let src0 = ripped.get(&0)
+				.and_then(|(dst, _)| dst.file_name())
+				.and_then(OsStr::to_str)?;
+
+			// Add the lines to our cue!
+			writeln!(&mut cue, "FILE \"{src0}\" WAVE").ok()?;
+			cue.push_str("  TRACK 01 AUDIO\n");
+			cue.push_str("    INDEX 00 00:00:00\n");
+			writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
+			cue.push_str("    INDEX 01 00:00:00\n");
+
+			// We're done with tracks zero/one.
+			continue;
+		}
+
+		// All other tracks are just file/track/index.
+		writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
+		writeln!(&mut cue, "  TRACK {:02} AUDIO", track.number()).ok()?;
+		cue.push_str("    INDEX 01 00:00:00\n");
+	}
+
+	// Save the cue sheet!
+	let dst = parent.join(format!("{}.cue", toc.cddb_id()));
+	{
+		use std::io::Write;
+		let mut writer = CacheWriter::new(&dst).ok()?;
+		writer.writer().write_all(cue.as_bytes()).ok()?;
+		writer.finish().ok()?;
+	}
+
+	// Return the path.
+	Some(dst)
 }

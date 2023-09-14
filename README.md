@@ -27,10 +27,12 @@ Beyond that, it supports all the good things:
 * Drive read offset correction
 * [AccurateRip](http://accuraterip.com/) checksum verification
 * [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
+* HTOA (can rip the pre-gap track, if any)
 * Cache busting
 * Sample re/confirmation
 * Backwards ripping
 * Raw PCM and WAV output
+* CUE sheet generation (when ripping whole disc in WAV format)
 
 Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
 
@@ -45,110 +47,67 @@ That summary can be produced on its own using the `--no-rip` flag, if that's all
 
 
 
+## Limitations
+
+Like any CD-ripper, Rip Rip Hooray! is ultimately dependent on the optical drive to correctly read and report the data from the disc, or at least be accurate about any inaccuracies it passes down.
+
+If a drive isn't up to the task, the resulting rip may be incomplete or inaccurate.
+
+Unlike traditional CD-rippers, Rip Rip Hooray! needs to store _a lot_ of detailed state information for each track in order to mitigate drive inconsistencies and keep track of which sectors need (re)reading, which ones don't, etc.
+
+This information is only needed while it's needed — you can delete the `_riprip` subfolder as soon as you've gotten what you wanted — but is nonetheless hefty, generally about 1-3x the size of the original CD source.
+
+The peak memory usage of Rip Rip Hooray! is comparable to some traditional CD-ripping software, albeit for completely different reasons. Depending on the size of the track, the consistency of its data, and how the system allocates resources, it could reach 1-3 GiB, maybe a little more.
+
+Recovery isn't free, but it's damn satisfying. Haha.
+
+
+
 ## Usage
 
 Rip Rip Hooray! is run from the command line, like:
 
 ```bash
 riprip [OPTIONS]
+
+# To see a list of options, use -h/--help:
+riprip --help
 ```
 
-It has more than a handful of options, but in most cases you'll probably only need to specify the track(s) of interest with `-t`/`--track`, e.g.
+### Example Recovery Workflow
+
+First things first, rip the entire disc and see what happens!
+
+With no arguments, Rip Rip Hooray! will simply rip the entire disc, including the HTOA (if any). Each track will be saved to its own WAV file, and a cue sheet will be generated for the collection.
 
 ```bash
-# Rip tracks 3 and 5.
-riprip -t 3,5
+# Rip everything, one pass per track.
+riprip
 ```
 
-If you know it is going to take a few passes to build up a reasonably complete rip, you can automate that with `--refine` (rather than manually rerunning the program):
+Audio CD rips cannot be _directly_ verified, but they can be _statistically_ verified. Rip Rip automatically checks each track after each pass to see if there are sufficient matches in the AccurateRip and CUETools databases. If there are, it will call the rip **GOOD** and move on.
+
+If there are any non-confirmed (problem) tracks remaining after the first pass, open the cue sheet with [CUETools](http://cue.tools/wiki/CUETools) to see if automatic repair is possible. If it is, great! CUETools will fix everything up and give you a perfect copy of each track. (You can also use CUETools to fill in metadata, convert formats, etc.)
+
+If problems remain, don't worry; _iterate_!
+
+Simply re-run Rip Rip. It will pick up from where it left off, (re)reading any sectors that have room for improvement (and skipping the rest).
 
 ```bash
-# Rip tracks 3 and 5, giving each up to 11 total passes.
-riprip -t 3,5 --refine 10
+# Refine the original rip.
+riprip
+
+# You can also automate a certain number of extra passes by using --refine.
+# The following, for example, will run through each track up to 5
+# (1 + 4 extra) times.
+riprip --refine 4
 ```
 
-### Basic Settings.
+As before, if problem tracks remain after the re-rip, open the cue sheet in CUETools, etc. 
 
-```text
-    --confidence <NUM>
-                  Consider the rip accurate — and stop working — if
-                  AccurateRip and/or CUETools matches are found with a
-                  confidence of at least <NUM>. [default: 3; range: 3..=10]
-    --cutoff <NUM>
-                  Stop re-reading allegedly-good samples once the drive has
-                  confirmed the same value at least <NUM> times (or the
-                  track as a whole is verified with AccurateRip/CTDB).
-                  Higher values are recommended when the data seems fishy.
-                  [default: 2; range: 1..=32]
-    --raw         Save ripped tracks in raw PCM format (instead of WAV).
--r, --refine <NUM>
-                  Execute up to <NUM> additional rip passes for each track
-                  while any samples remain unread/unconfirmed. A value
-                  greater than or equal to --cutoff is recommended.
-                  [default: 2; max: 32]
--t, --track <NUM(s),RNG>
-                  Rip one or more specific tracks (rather than the whole
-                  disc). Multiple tracks can be separated by commas (2,3),
-                  specified as an inclusive range (2-3), and/or given their
-                  own -t/--track (-t 2 -t 3). [default: the whole disc]
-```
+Rinse and repeat until all tracks have been confirmed, or your drive has read everything it possibly can.
 
-### When All Else Fails…
-
-```text
-    --backwards   Rip sectors in reverse order. (Data will still be saved
-                  in the *correct* order. Haha.)
-    --no-resume   Ignore any previous rip states; start over from scratch.
-    --strict      Treat C2 errors as an all-or-nothing proposition for the
-                  sector as a whole rather than judging each individual
-                  sample on its own.
-```
-
-### Drive Settings.
-
-These options are auto-detected and do not usually need to be explicitly provided.
-
-```text
--d, --dev <PATH>  The device path for the optical drive containing the CD
-                  of interest, like /dev/cdrom.
--o, --offset <SAMPLES>
-                  The AccurateRip, et al, sample read offset to apply to
-                  data retrieved from the drive. [range: ±5880]
-```
-
-### Unusual Settings.
-
-```text
-    --no-c2       Disable/ignore C2 error pointer information when ripping,
-                  e.g. for drives that do not support the feature. (This
-                  flag is otherwise not recommended.)
-    --no-cache-bust
-                  Do not attempt to reset the optical drive cache between
-                  each rip pass.
-```
-
-### Miscellaneous.
-
-```text
--h, --help        Print help information and exit.
--V, --version     Print version information and exit.
-    --no-rip      Print the basic drive and disc information to STDERR and
-                  exit (without ripping anything).
-    --no-summary  Skip the drive and disc summary and jump straight to
-                  ripping.
-```
-
-### Early Exit.
-
-If you don't have time to let a rip finish naturally, press `CTRL+C` to stop it early. Your progress will still be saved, there just won't be as much of it. Haha.
-
-### File I/O
-
-Rip Rip Hooray! will need to create a number of different files in addition to the ripped tracks. To keep things tidy, it saves everything to its own subfolder within the current working directory called `_riprip`.
-
-To resume a rip, just rerun the program from the same place, with the same disc, and it will automatically pick up from where it left off.
-
-When you're completely done working on a disc — and have grabbed the exported tracks! — go ahead and delete the `_riprip` folder to reclaim the disk space. ;)
+Good luck!
 
 
 

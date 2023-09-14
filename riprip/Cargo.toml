@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.0.8"
+version = "0.0.9"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -34,7 +34,7 @@ credits-dir = "../"
 
 [[package.metadata.bashman.switches]]
 long = "--backwards"
-description = "Rip sectors in reverse order. (Data will still be saved in the *correct* order. Haha.)"
+description = "Request sectors from the drive in reverse order, starting from the end of each track, and ending at the start."
 
 [[package.metadata.bashman.switches]]
 short = "-h"
@@ -47,7 +47,7 @@ description = "Disable/ignore C2 error pointer information when ripping, e.g. fo
 
 [[package.metadata.bashman.switches]]
 long = "--no-cache-bust"
-description = "Do not attempt to reset the optical drive cache between each rip pass."
+description = "Do not attempt to moot the optical drive cache before each rip pass."
 
 [[package.metadata.bashman.switches]]
 long = "--no-resume"
@@ -66,8 +66,12 @@ long = "--raw"
 description = "Save ripped tracks in raw PCM format (instead of WAV)."
 
 [[package.metadata.bashman.switches]]
+long = "--reset-counts"
+description = "Reset all previously-collected sample counts, allowing their sectors to be re-read (provided --cutoff is at least two)."
+
+[[package.metadata.bashman.switches]]
 long = "--strict"
-description = "Treat C2 errors as an all-or-nothing proposition for the sector as a whole rather than judging each individual sample on its own."
+description = "Treat C2 errors as an all-or-nothing proposition for the sector as a whole rather than judging each individual sample on its own. This is most effective when set for all rip passes (rather than being turned on after several runs have already completed)."
 
 [[package.metadata.bashman.switches]]
 short = "-V"
@@ -101,13 +105,13 @@ description = "The AccurateRip, et al, sample read offset to apply to data retri
 short = "-r"
 long = "--refine"
 label = "<NUM>"
-description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 32]"
+description = "Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 0; max: 32]"
 
 [[package.metadata.bashman.options]]
 short = "-t"
 long = "--track"
 label = "<NUM>"
-description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). [default: the whole disc]"
+description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). Include track 0 to rip the HTOA (if any). [default: the whole disc]"
 duplicate = true
 
 [dependencies]

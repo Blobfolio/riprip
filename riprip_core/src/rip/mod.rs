@@ -2,12 +2,15 @@
 # Rip Rip Hooray: Ripping
 */
 
+pub(super) mod c2;
 pub(super) mod data;
 pub(super) mod iter;
 pub(super) mod opts;
+mod quality;
 
 use cdtoc::Track;
 use crate::{
+	C2,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	chk_accuraterip,
@@ -18,16 +21,14 @@ use crate::{
 	RipOptions,
 	RipRipError,
 	RipSamples,
-	SAMPLES_PER_SECTOR,
+	SAMPLE_OVERREAD,
 };
-use dactyl::{
-	NiceFloat,
-	traits::SaturatingFrom,
-};
+use dactyl::NiceFloat;
 use fyi_msg::{
 	Msg,
 	Progless,
 };
+use quality::TrackQuality;
 use iter::ReadIter;
 use std::{
 	ops::Range,
@@ -48,21 +49,6 @@ const COLOR_LIKELY: &str = "93";
 /// # Color: Confirmed.
 const COLOR_CONFIRMED: &str = "92";
 
-/// # Quality Bar.
-const QUALITY_BAR: &str = "########################################################################";
-
-/// # Sample Padding.
-///
-/// Our rip ranges are padded on either end by 10 sectors to make it easier for
-/// drives with different read offsets to contribute to the same rip.
-const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
-
-/// # C2 Sample Set.
-///
-/// This contains a `bool` for each sample in a sector indicating whether or
-/// not it contains an error.
-type SectorC2s = [bool; SAMPLES_PER_SECTOR as usize];
-
 
 
 /// # Rip Session.
@@ -73,6 +59,9 @@ pub(crate) struct Rip<'a> {
 	opts: &'a RipOptions,
 	distance: ReadIter,
 	state: RipSamples,
+	q_from: TrackQuality,
+	q_ar: Option<(u8, u8)>,
+	q_ctdb: Option<u16>,
 }
 
 impl<'a> Rip<'a> {
@@ -88,34 +77,45 @@ impl<'a> Rip<'a> {
 			opts.offset()
 		);
 		let distance = ReadIter::new(rng.start, rng.end, opts.backwards());
+		let q_from = state.track_quality(opts.cutoff());
 
 		Ok(Self {
 			disc,
 			opts,
 			distance,
 			state,
+			q_from,
+			q_ar: None,
+			q_ctdb: None,
 		})
 	}
 
 	/// # Rip!
 	///
 	/// Rip the track, maybe more than once!
+	///
+	/// This returns the destination path and a bool indicating whether or not
+	/// AccurateRip/CTDB like the result, or an error.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
-	-> Result<PathBuf, RipRipError> {
-		if ! killed.killed() {
-			// Same method two ways. The only difference is the buffer size;
-			// a larger buffer is required for C2 when ripping without.
-			if self.opts.c2() {
-				let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-				self._rip(&mut buf, progress, killed)?
-			}
-			else {
-				let mut buf = [0_u8; CD_DATA_SIZE as usize];
-				self._rip(&mut buf, progress, killed)?
-			};
-		}
+	-> Result<(PathBuf, bool), RipRipError> {
+		// Reset the counts before beginning?
+		if self.opts.reset_counts() { self.state.reset_counts(); }
 
-		self.state.save_track(self.opts.raw())
+		let confirmed =
+			if killed.killed() { self.state.is_confirmed() }
+			else {
+				// Same operation two ways, one with C2 support, one without.
+				if self.opts.c2() {
+					let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
+					self._rip(&mut buf, progress, killed)
+				}
+				else {
+					let mut buf = [0_u8; CD_DATA_SIZE as usize];
+					self._rip(&mut buf, progress, killed)
+				}?
+			};
+
+		self.state.save_track(self.opts.raw()).map(|k| (k, confirmed))
 	}
 
 	#[allow(
@@ -132,34 +132,40 @@ impl<'a> Rip<'a> {
 	/// Returns `true` if the rip has been confirmed, `false` if not.
 	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
 	-> Result<bool, RipRipError> {
-		let resume = u8::from(! self.state.is_new());
 		let offset = self.opts.offset();
 		let rip_rng = self.state.sector_rip_range();
 		let lsn_start = rip_rng.start;
 		let leadout = self.disc.toc().audio_leadout() as i32;
-		let mut c2: SectorC2s = [false; SAMPLES_PER_SECTOR as usize];
+		let mut c2 = C2::default();
 		let mut confirmed = self.state.is_confirmed();
+		let progress_label = format!("Track #{:02}", self.state.track().number());
 
 		// Onto the pass(es)!
 		for pass in 0..self.opts.passes() {
-			// Reset progress bar.
-			let _res = progress.reset((self.distance.len() as u32).saturating_add(1)); // This won't fail.
+			// Note the starting state.
+			let before = self.state.quick_hash();
 
-			// Bust the cache.
-			if self.opts.cache_bust() && ! (killed.killed() || confirmed) {
-				progress.set_title(Some(Msg::custom("Standby", 11, "Busting the cache…")));
+			// Reset progress bar. (This won't fail.)
+			let _res = progress.reset((self.distance.len() as u32).saturating_add(1));
+
+			// Bust the cache, but only if desired and productive.
+			if
+				self.opts.cache_bust() &&
+				! (
+					killed.killed() ||
+					confirmed ||
+					self.state.is_likely(offset, self.opts.cutoff())
+				)
+			{
+				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Busting the cache…")));
 				self.disc.cdio().bust_cache(rip_rng.clone(), leadout);
 			}
 
 			// Update the progress title to reflect the track at hand.
 			progress.set_title(Some(Msg::custom(
-				rip_title_prefix(pass + resume),
+				progress_label.as_str(),
 				199,
-				&format!(
-					"Track #{}{}…",
-					self.state.track().number(),
-					if self.opts.backwards() { " (backwards)" } else { "" },
-				)
+				rip_title(pass, self.state.is_new(), self.opts.backwards()),
 			)));
 
 			// Pull down the data, one sector at a time.
@@ -182,91 +188,87 @@ impl<'a> Rip<'a> {
 
 				// Otherwise we have to actually talk to the drive. Ug.
 				match self.disc.cdio().read_cd(buf, read_lsn) {
+					// Update the C2 data and, if in strict mode and there are
+					// any problems, mark everything bad.
 					Ok(()) =>
-						// Parse the C2 data. Each bit represents one byte of
-						// audio data, we'll never worry about sub-sample
-						// accuracy.
-						if self.opts.c2() {
-							// Set errors at sector level.
-							if self.opts.strict() {
-								reset_c2(
-									&mut c2,
-									buf.iter()
-										.skip(usize::from(CD_DATA_SIZE))
-										.any(|&v| 0 != v)
-								);
-							}
-							// Set errors at sample level.
-							else {
-								for (k2, &v) in c2.chunks_exact_mut(2).zip(buf.iter().skip(usize::from(CD_DATA_SIZE))) {
-									k2[0] = 0 != v & 0b1111_0000;
-									k2[1] = 0 != v & 0b0000_1111;
-								}
-							}
-						}
-						// Assume C2 is fine since that data is absent.
-						else { reset_c2(&mut c2, false); },
+						if ! c2.update(&buf[usize::from(CD_DATA_SIZE)..])? && self.opts.strict() {
+							c2.make_bad();
+						},
 					// Assume total C2 failure if there's a hard read error.
-					Err(RipRipError::CdRead(_)) => { reset_c2(&mut c2, true); },
+					Err(RipRipError::CdRead(_)) => { c2.make_bad(); },
 					// Other kinds of errors are show-stoppers; abort!
 					Err(e) => return Err(e),
 				}
 
-				// Patch the data!
-				for ((old, new), err) in state.iter_mut()
-					.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
-					.zip(c2.iter().copied())
-				{
-					old.update(new.try_into().unwrap(), err);
+				// Patch the data, unless the user just aborted, as that will
+				// probably have messed up the data.
+				if ! killed.killed() {
+					for ((old, new), err) in state.iter_mut()
+						.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
+						.zip(c2.sample_errors())
+					{
+						old.update(new.try_into().unwrap(), err);
+					}
 				}
 
 				progress.increment();
 			} // End block.
 
 			// Verification.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Verifying the ripped track…")));
-			let ar = chk_accuraterip(
-				self.disc.toc(),
-				self.state.track(),
-				self.state.track_slice(),
-			);
-			let ctdb = chk_ctdb(
-				self.disc.toc(),
-				self.state.track(),
-				self.state.track_slice(),
-			);
-
-			// If the rip was confirmed with enough confidence, mark it
-			// thusly!
-			let conf = self.opts.confidence();
-			if
-				! confirmed &&
-				(
-					ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
-					ctdb.map_or(false, |v| u16::from(conf) <= v)
-				)
-			{
-				self.state.confirm_track();
-				confirmed = true;
+			if (self.q_ar.is_none() && self.q_ctdb.is_none()) || self.state.quick_hash() != before {
+				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Verifying the ripped track…")));
+				self.verify(&mut confirmed);
 			}
 
 			// Save the state.
-			progress.set_title(Some(Msg::custom("Standby", 11, "Saving the state…")));
-			let saved = self.state.save_state();
-			progress.finish();
-
-			if saved.is_err() {
-				Msg::warning("The rip state could not be saved.").eprint();
+			if self.state.quick_hash() != before {
+				progress.set_title(Some(Msg::custom(progress_label.as_str(), 199, "Saving the state…")));
+				let saved = self.state.save_state();
+				if saved.is_err() {
+					Msg::warning("The rip state could not be saved.").eprint();
+				}
 			}
-
-			// Summarize the results.
-			self.summarize(confirmed, ar, ctdb);
 
 			// Maybe stop early?
 			if confirmed || killed.killed() { break; }
 		} // End pass.
 
+		progress.finish();
 		Ok(confirmed)
+	}
+
+	/// # Verify.
+	///
+	/// Check the rip against AccurateRip/CUETools.
+	fn verify(&mut self, confirmed: &mut bool) {
+		// HTOA isn't verifiable. Boo.
+		if self.state.track().is_htoa() { return; }
+
+		self.q_ar = chk_accuraterip(
+			self.disc.toc(),
+			self.state.track(),
+			self.state.track_slice(),
+		);
+
+		self.q_ctdb = chk_ctdb(
+			self.disc.toc(),
+			self.state.track(),
+			self.state.rip_slice(),
+		);
+
+		// If the rip was confirmed with enough confidence, mark it
+		// thusly!
+		let conf = self.opts.confidence();
+		if
+			! *confirmed &&
+			(
+				self.q_ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
+				self.q_ctdb.map_or(false, |v| u16::from(conf) <= v)
+			)
+		{
+			self.state.confirm_track();
+			*confirmed = true;
+		}
 	}
 
 	/// # Summarize.
@@ -274,177 +276,124 @@ impl<'a> Rip<'a> {
 	/// Count up the different sample statuses and print a nice colored bar and
 	/// legend to demonstrate the "quality". This will also print out
 	/// AccurateRip and CTDB results, if any.
-	fn summarize(&self, confirmed: bool, ar: Option<(u8, u8)>, ctdb: Option<u16>) {
+	pub(crate) fn summarize(&self) {
+		// Figure out where we landed.
+		let q_to = self.state.track_quality(self.opts.cutoff());
 		let track = self.state.track();
-		let (q_bad, q_maybe, q_likely, q_confirmed) =
-			if confirmed { (0, 0, 0, usize::saturating_from(track.samples())) }
-			else { self.state.track_quality(self.opts.cutoff()) };
-		let q_total = q_bad + q_maybe + q_likely + q_confirmed;
 
-		// All good.
-		if confirmed {
-			Msg::custom("Ripped", 14, &format!(
+		// Print a heading.
+		if q_to.is_confirmed() {
+			Msg::custom("Ripped", 10, &format!(
 				"Track #{} has been accurately ripped!",
 				track.number(),
 			))
 		}
-		// All bad.
-		else if q_bad == q_total {
+		else if q_to.is_bad() {
 			Msg::custom("Ripped", 4, &format!(
 				"Track #{} still needs a lot of work!",
 				track.number(),
 			))
 		}
-		// Nothing likely yet.
-		else if q_likely == 0 && q_confirmed == 0 {
-			let p = NiceFloat::from(
-				dactyl::int_div_float(q_maybe * 100, q_total).unwrap_or(0.0)
-			);
-			Msg::custom("Ripped", 4, &format!(
-				"Track #{} is \x1b[2m(maybe)\x1b[0m {}% complete.",
-				track.number(),
-				p.compact_str(),
-			))
-		}
-		// A completeness range.
 		else {
-			let q_total = q_bad + q_maybe + q_likely + q_confirmed;
-			let low = NiceFloat::from(
-				dactyl::int_div_float((q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
-			);
-			let high = NiceFloat::from(
-				dactyl::int_div_float((q_maybe + q_likely + q_confirmed) * 100, q_total).unwrap_or(0.0)
-			);
+			// Percentage(s) complete.
+			let p_lo = NiceFloat::from(q_to.percent_likely());
+			let p_hi = NiceFloat::from(q_to.percent_maybe());
+			let qualifier = if q_to.maybe() == 0 { "likely" } else { "maybe" };
 
-			// If rounding makes the percentages the same, just print one.
-			if low.precise_str(3) == high.precise_str(3) {
+			// Show one percent if rounding makes both equivalent.
+			if
+				q_to.maybe() == 0 ||
+				q_to.likely() == 0 ||
+				p_lo.precise_str(3) == p_hi.precise_str(3)
+			{
+				// Omit the percentage entirely.
+				if p_hi.compact_str() == "100" {
+					Msg::custom("Ripped", 4, &format!(
+						"Track #{} is \x1b[2m({qualifier})\x1b[0m complete.",
+						track.number(),
+					))
+				}
+				// Show it in its full glory.
+				else {
+					Msg::custom("Ripped", 4, &format!(
+						"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% complete.",
+						track.number(),
+						p_hi.compact_str(),
+					))
+				}
+			}
+			// Drop the 100% percent and call it "at least".
+			else if p_hi.compact_str() == "100" {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(likely)\x1b[0m {}% complete.",
+					"Track #{} is \x1b[2m({qualifier})\x1b[0m at least {}% complete.",
 					track.number(),
-					low.compact_str(),
+					p_lo.precise_str(3),
 				))
 			}
-			// Otherwise show both.
+			// Show both!
 			else {
 				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m(likely)\x1b[0m {}% – {}% complete.",
+					"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% — {}% complete.",
 					track.number(),
-					low.precise_str(3),
-					high.precise_str(3),
+					p_lo.precise_str(3),
+					p_hi.precise_str(3),
 				))
 			}
 		}
 			.with_newline(true)
 			.eprint();
 
-		// Print a color-coded bar and legend.
-		print_bar(q_bad, q_maybe, q_likely, q_confirmed);
+		// Print the bar and legend(s).
+		eprintln!("        {}", q_to.bar());
+		let (legend_a, legend_b) = q_to.legend(&self.q_from);
+		if let Some(legend_a) = legend_a { eprintln!("        {legend_a}"); }
+		eprintln!("        {legend_b} \x1b[2msamples\x1b[0m");
 
-		// Add AccurateRip, if any.
-		let conf = self.opts.confidence();
-		macro_rules! color {
-			($v:expr, $conf:expr) => (
-				if $v == 0 { COLOR_BAD }
-				else if $v < $conf { COLOR_MAYBE }
-				else { COLOR_CONFIRMED }
-			);
+		// Third-party verification?
+		if self.state.track().is_htoa() {
+			eprintln!("        \x1b[2mHTOA tracks cannot be matched with AccurateRip or CUETools,\x1b[0m");
+			if q_to.is_likely() {
+				eprintln!("        \x1b[2mbut a \x1b[0;{COLOR_LIKELY}mlikely \x1b[0;2mrip is the next best thing, so good job!\x1b[0m");
+			}
+			else {
+				eprintln!("        \x1b[2mso you should aim for a status of \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
+			}
 		}
-		if let Some((v1, v2)) = ar {
-			let c1 = color!(v1, conf);
-			let c2 = color!(v2, conf);
-			eprintln!(
-				"        AccurateRip: \x1b[{c1}m{:02}\x1b[0;2m+\x1b[0;{c2}m{:02}\x1b[0m",
-				u8::min(99, v1),
-				u8::min(99, v2),
-			);
+		else if self.q_ar.is_some() || self.q_ctdb.is_some() {
+			let conf = self.opts.confidence();
+			macro_rules! color {
+				($v:expr, $conf:expr) => (
+					if $v == 0 { COLOR_BAD }
+					else if $v < $conf { COLOR_MAYBE }
+					else { COLOR_CONFIRMED }
+				);
+			}
+
+			if let Some((v1, v2)) = self.q_ar {
+				let c1 = color!(v1, conf);
+				let c2 = color!(v2, conf);
+				eprintln!(
+					"        AccurateRip: \x1b[{c1}m{:02}\x1b[0;2m+\x1b[0;{c2}m{:02}\x1b[0m",
+					u8::min(99, v1),
+					u8::min(99, v2),
+				);
+			}
+			if let Some(v1) = self.q_ctdb {
+				let c1 = color!(v1, u16::from(conf));
+				eprintln!(
+					"        CUETools DB: \x1b[{c1}m{:03}\x1b[0m",
+					u16::min(999, v1),
+				);
+			}
 		}
 
-		// Add CTDB, if any.
-		if let Some(v1) = ctdb {
-			let c1 = color!(v1, u16::from(conf));
-			eprintln!(
-				"        CUETools DB: \x1b[{c1}m{:03}\x1b[0m",
-				u16::min(999, v1),
-			);
-		}
-
-		// An extra new line to give some separation between this and the next
-		// operation.
+		// An extra line to give some separation between this task and the
+		// next.
 		eprintln!();
 	}
 }
 
 
-
-#[allow(clippy::cast_precision_loss)]
-/// # Print Summary Bar and Legend.
-fn print_bar(q_bad: usize, q_maybe: usize, q_likely: usize, q_confirmed: usize) {
-	let q_total = q_bad + q_maybe + q_likely + q_confirmed;
-	let b_total = QUALITY_BAR.len() as f64;
-	macro_rules! bar_slice {
-		($val:ident) => (
-			if $val == 0 { 0 }
-			else {
-				usize::max(1, (dactyl::int_div_float($val, q_total).unwrap_or(0.0) * b_total).floor() as usize)
-			}
-		);
-	}
-	let mut bars =[
-		bar_slice!(q_bad),
-		bar_slice!(q_maybe),
-		bar_slice!(q_likely),
-		bar_slice!(q_confirmed),
-	];
-
-	// Fix up rounding so we always have a full bar.
-	let b_len = bars.iter().copied().sum::<usize>();
-	let b_diff = b_len.abs_diff(QUALITY_BAR.len());
-
-	// Too big.
-	if b_len > QUALITY_BAR.len() {
-		let max = bars.iter().copied().max().unwrap();
-		for b in &mut bars {
-			if *b == max {
-				*b -= b_diff;
-				break;
-			}
-		}
-	}
-	// Too small.
-	else if 0 != b_diff {
-		let max = bars.iter().copied().max().unwrap();
-		for b in &mut bars {
-			if *b == max {
-				*b += b_diff;
-				break;
-			}
-		}
-	}
-
-	eprintln!(
-		"        \x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
-		&QUALITY_BAR[..bars[0]],
-		&QUALITY_BAR[..bars[1]],
-		&QUALITY_BAR[..bars[2]],
-		&QUALITY_BAR[..bars[3]],
-	);
-
-	let mut breakdown = Vec::with_capacity(4);
-	if q_bad != 0 { breakdown.push(format!("\x1b[{COLOR_BAD}m{q_bad}\x1b[0m")); }
-	if q_maybe != 0 { breakdown.push(format!("\x1b[{COLOR_MAYBE}m{q_maybe}\x1b[0m")); }
-	if q_likely != 0 { breakdown.push(format!("\x1b[{COLOR_LIKELY}m{q_likely}\x1b[0m")); }
-	if q_confirmed != 0 { breakdown.push(format!("\x1b[{COLOR_CONFIRMED}m{q_confirmed}\x1b[0m")); }
-
-	eprintln!("        {} \x1b[2msamples\x1b[0m", breakdown.join("\x1b[2m + \x1b[0m"));
-}
-
-#[inline]
-/// # Reset C2 Statuses.
-///
-/// Change all C2 statuses to `val`.
-fn reset_c2(set: &mut SectorC2s, val: bool) {
-	for c2 in set { *c2 = val; }
-}
 
 /// # Rippable Sectors.
 ///
@@ -475,17 +424,23 @@ fn rip_distance(max_sectors: i32, offset: ReadOffset) -> Range<i32> {
 	rng_start..rng_end
 }
 
-#[inline]
-/// # Rip Title Prefix.
+/// # Rip Title.
 ///
-/// Just for fun, the prefix used for the progress bar title during ripping
-/// changes a little from pass-to-pass.
-const fn rip_title_prefix(pass: u8) -> &'static str {
-	match pass {
-		0 => "Ripping",
-		1 => "Re-Ripping",
-		2 => "Re-Re-Ripping",
-		3 => "Re-Re-Re-Ripping",
-		_ => "Re-Re-Re-Etc.-Ripping",
+/// Return a description for the rip progress bar, drawing attention to
+/// direction and newness, with a little bit of periodic sass.
+const fn rip_title(pass: u8, new: bool, backwards: bool) -> &'static str {
+	match (! new) as u8 + pass {
+		0 => "Starting a new rip…",
+		1 =>
+			if backwards && pass == 0 { "Re-ripping the iffy bits, backwards, and in heels…" }
+			else { "Re-ripping the iffy bits…" },
+		5  => "Ripticulating splines…",
+		10 => "Reconnoitering the rip…",
+		15 => "Rip-a-dee-doo-dah, rip-a-dee-ay…",
+		20 => "Recovery is more of an art than a science, really…",
+		25 => "The quickest way is sometimes the longest…",
+		32 if new => "Pulling the rip cord…",
+		33 if ! new => "Pulling the rip cord…",
+		_ => "Re-re-ripping, et cetera, ad nauseam…",
 	}
 }

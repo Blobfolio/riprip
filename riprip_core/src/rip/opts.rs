@@ -2,31 +2,30 @@
 # Rip Rip Hooray: Ripping Options
 */
 
-
-
 use crate::ReadOffset;
 
 
 
 /// # FLAG: Rip Backwards.
-const FLAG_BACKWARDS: u8 =  0b0000_0001;
-
-/// # FLAG: C2 Support.
-const FLAG_C2: u8 =         0b0000_0010;
+const FLAG_BACKWARDS: u8 =    0b0000_0001;
 
 /// # FLAG: Cache Bust.
-const FLAG_CACHE_BUST: u8 = 0b0000_0100;
+const FLAG_CACHE_BUST: u8 =   0b0000_0010;
+
+/// # FLAG: C2 Error Pointers.
+const FLAG_C2: u8 =           0b0000_0100;
 
 /// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =        0b0000_1000;
+const FLAG_RAW: u8 =          0b0000_1000;
+
+/// # FLAG: Reset counts.
+const FLAG_RESET_COUNTS: u8 = 0b0001_0000;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =     0b0001_0000;
+const FLAG_RESUME: u8 =       0b0010_0000;
 
 /// # FLAG: Strict Mode.
-///
-/// If a sector contains any C2 errors, treat all samples as bad.
-const FLAG_STRICT: u8 =     0b0010_0000;
+const FLAG_STRICT: u8 =       0b0100_0000;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
@@ -80,7 +79,7 @@ impl Default for RipOptions {
 			offset: ReadOffset::default(),
 			confidence: 3,
 			cutoff: 2,
-			refine: 1,
+			refine: 0,
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
@@ -235,7 +234,7 @@ impl RipOptions {
 	/// AccurateRip and/or CUETools — or all samples meet the likeliness
 	/// threshold.
 	///
-	/// The default is `1`.
+	/// The default is `0`.
 	///
 	/// To give the drive a break, the maximum value is capped at `32`, but you
 	/// can manually rerun the program afterward as many times as needed. ;)
@@ -246,6 +245,17 @@ impl RipOptions {
 			..self
 		}
 	}
+
+	with_flag!(
+		with_reset_counts,
+		FLAG_RESET_COUNTS,
+		"# Reset Counts.",
+		"",
+		"When `true`, all previously-collected sample counts, downgrading all",
+		"likely values to maybe.",
+		"",
+		"The default is `false`.",
+	);
 
 	with_flag!(
 		with_resume,
@@ -300,6 +310,7 @@ impl RipOptions {
 	get_flag!(c2, FLAG_C2, "Leverage C2 Error Pointers");
 	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
 	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
+	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(strict, FLAG_STRICT, "Strict Mode");
 
@@ -357,10 +368,11 @@ impl Iterator for RipOptionsTracks {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		while self.pos < 99 {
+		while self.pos < 100 {
+			let idx = self.pos;
 			self.pos += 1;
-			if 0 != self.set & track_idx_to_bits(self.pos) {
-				return Some(self.pos);
+			if 0 != self.set & track_idx_to_bits(idx) {
+				return Some(idx);
 			}
 		}
 		None
@@ -370,7 +382,7 @@ impl Iterator for RipOptionsTracks {
 	///
 	/// There will never be more than 99 tracks.
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, Some(99_usize.saturating_sub(usize::from(self.pos))))
+		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
 	}
 }
 
@@ -378,15 +390,15 @@ impl Iterator for RipOptionsTracks {
 
 /// # Track Number to Bitflag.
 ///
-/// Redbook audio CDs can only have a maximum of 99 tracks, so we can represent
-/// all possible combinations using a single `u128` bitflag. Aside from being
-/// `Copy`, this saves us the trouble of having to sort/dedup some sort of
-/// vector-like structure.
+/// Redbook audio CDs can only have a maximum of 99 tracks — or 100 if we count
+/// the HTOA as #0 — so we can represent all possible combinations using a
+/// single `u128` bitflag. Aside from being `Copy`, this saves us the trouble
+/// of having to sort/dedup some sort of vector-like structure.
 ///
 /// This method converts a `u8` decimal into the equivalent flag. Out of range
 /// values are silently treated as zero.
 const fn track_idx_to_bits(idx: u8) -> u128 {
-	if 0 == idx || idx > 99 { 0 }
+	if 99 < idx { 0 }
 	else { 2_u128.pow(idx as u32) }
 }
 
@@ -401,15 +413,16 @@ mod test {
 		// Make sure our flags are unique.
 		let mut all = vec![
 			FLAG_BACKWARDS,
-			FLAG_C2,
 			FLAG_CACHE_BUST,
+			FLAG_C2,
 			FLAG_RAW,
+			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
 			FLAG_STRICT,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 6);
+		assert_eq!(all.len(), 7);
 	}
 
 	#[test]
@@ -465,6 +478,7 @@ mod test {
 		t_flags!("c2", with_c2, c2);
 		t_flags!("cache bust", with_cache_bust, cache_bust);
 		t_flags!("raw", with_raw, raw);
+		t_flags!("reset_counts", with_reset_counts, reset_counts);
 		t_flags!("resume", with_resume, resume);
 		t_flags!("strict", with_strict, strict);
 	}
@@ -498,16 +512,34 @@ mod test {
 		let mut opts = RipOptions::default();
 		assert!(! opts.has_tracks(), "The track list should be empty!");
 
+		// Make sure zero counts.
+		opts = opts.with_track(0);
+		assert!(opts.has_tracks(), "Zero should count!");
+
+		// Make sure 100 isn't allowed.
+		assert_eq!(track_idx_to_bits(100), 0, "100 shouldn't have a track flag.");
+
 		// Add all possible tracks.
 		for idx in 0..=u8::MAX { opts = opts.with_track(idx); }
 		assert!(opts.has_tracks(), "The track list should not be empty!");
 
 		// Pull them back.
 		let tracks = opts.tracks().collect::<Vec<u8>>();
-		assert_eq!(tracks.len(), 99, "Expected 99 tracks.");
+		assert_eq!(tracks.len(), 100, "Expected 100 tracks.");
 
 		// Make sure everything is where we expect it to be.
-		for (real, expected) in tracks.into_iter().zip(1..=99_u8) {
+		for (real, expected) in tracks.into_iter().zip(0..=99_u8) {
+			assert_eq!(real, expected, "Options track mismatch: {real} instead of {expected}.");
+		}
+
+		// Make sure this works with a somewhat random list.
+		let expected = [0, 5, 15];
+		opts = RipOptions::default();
+		assert!(! opts.has_tracks(), "The track list should be empty!");
+		for idx in expected { opts = opts.with_track(idx); }
+		let real = opts.tracks().collect::<Vec<u8>>();
+		assert_eq!(real.len(), expected.len(), "Expected {} tracks.", expected.len());
+		for (real, expected) in real.into_iter().zip(expected) {
 			assert_eq!(real, expected, "Options track mismatch: {real} instead of {expected}.");
 		}
 	}
