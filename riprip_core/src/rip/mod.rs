@@ -23,7 +23,6 @@ use crate::{
 	RipSamples,
 	SAMPLE_OVERREAD,
 };
-use dactyl::NiceFloat;
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -281,65 +280,11 @@ impl<'a> Rip<'a> {
 		let q_to = self.state.track_quality(self.opts.cutoff());
 		let track = self.state.track();
 
-		// Print a heading.
-		if q_to.is_confirmed() {
-			Msg::custom("Ripped", 10, &format!(
-				"Track #{} has been accurately ripped!",
-				track.number(),
-			))
-		}
-		else if q_to.is_bad() {
-			Msg::custom("Ripped", 4, &format!(
-				"Track #{} still needs a lot of work!",
-				track.number(),
-			))
-		}
-		else {
-			// Percentage(s) complete.
-			let p_lo = NiceFloat::from(q_to.percent_likely());
-			let p_hi = NiceFloat::from(q_to.percent_maybe());
-			let qualifier = if q_to.maybe() == 0 { "likely" } else { "maybe" };
-
-			// Show one percent if rounding makes both equivalent.
-			if
-				q_to.maybe() == 0 ||
-				q_to.likely() == 0 ||
-				p_lo.precise_str(3) == p_hi.precise_str(3)
-			{
-				// Omit the percentage entirely.
-				if p_hi.compact_str() == "100" {
-					Msg::custom("Ripped", 4, &format!(
-						"Track #{} is \x1b[2m({qualifier})\x1b[0m complete.",
-						track.number(),
-					))
-				}
-				// Show it in its full glory.
-				else {
-					Msg::custom("Ripped", 4, &format!(
-						"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% complete.",
-						track.number(),
-						p_hi.compact_str(),
-					))
-				}
-			}
-			// Drop the 100% percent and call it "at least".
-			else if p_hi.compact_str() == "100" {
-				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m({qualifier})\x1b[0m at least {}% complete.",
-					track.number(),
-					p_lo.precise_str(3),
-				))
-			}
-			// Show both!
-			else {
-				Msg::custom("Ripped", 4, &format!(
-					"Track #{} is \x1b[2m({qualifier})\x1b[0m {}% — {}% complete.",
-					track.number(),
-					p_lo.precise_str(3),
-					p_hi.precise_str(3),
-				))
-			}
-		}
+		Msg::custom(
+			"Ripped",
+			if q_to.is_confirmed() { 10 } else { 4 },
+			&q_to.summarize(track.number()),
+		)
 			.with_newline(true)
 			.eprint();
 

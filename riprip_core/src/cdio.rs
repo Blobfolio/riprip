@@ -448,7 +448,7 @@ impl LibcdioInstance {
 		blacklist: Range<i32>,
 		leadout: i32,
 	) {
-		// Slightly more than 4MiB; should be enough for any drive.
+		// Slightly more than 4MiB; should be enough for most drives.
 		let mut buf = vec![0; 1800 * usize::from(CD_DATA_SIZE)];
 
 		// Where can we read from without getting in the way?

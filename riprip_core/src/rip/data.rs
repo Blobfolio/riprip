@@ -547,6 +547,22 @@ impl RipSample {
 }
 
 impl RipSample {
+	/// # Competition.
+	///
+	/// Return the best count, and all the sum of the rest. The second value
+	/// will only be populated for maybes. A TBD value will return zero for
+	/// both.
+	pub(crate) fn contention(&self) -> (u8, u8) {
+		match self {
+			Self::Tbd => (0, 0),
+			Self::Maybe(s) => (
+				s[0].1,
+				s.iter().skip(1).fold(0_u8, |acc, (_, v)| acc.saturating_add(*v))
+			),
+			_ => (1, 0),
+		}
+	}
+
 	/*
 	/// # Is Bad?
 	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Bad(_)) }
@@ -561,19 +577,17 @@ impl RipSample {
 	/// # Is Likely?
 	///
 	/// A "maybe" is "likely" if it has been returned at least `cutoff` times
-	/// and the value has a super majority of all values returned for the
-	/// position, i.e. its count is 2/3 of the total.
+	/// and twice as much as any other competing value.
 	///
 	/// If this is called on `RipSample::Confirmed`, it will also return `true`.
 	pub(crate) fn is_likely(&self, cutoff: u8) -> bool {
 		match self {
 			Self::Tbd | Self::Bad(_) => false,
 			Self::Confirmed(_) => true,
-			Self::Maybe(set) => {
-				let total = set.iter()
-					.fold(0_u16, |acc, (_, v)| acc.saturating_add(u16::from(*v)));
-				cutoff <= set[0].1 && is_super_majority(set[0].1, total)
-			}
+			Self::Maybe(_) => {
+				let (a, b) = self.contention();
+				cutoff <= a && b.saturating_mul(2).min(254) < a
+			},
 		}
 	}
 }
@@ -657,28 +671,6 @@ impl RipSample {
 
 
 
-/// # Is Super Majority?
-///
-/// Returns true if the target value is at least 2/3 (rounded up) of the total.
-///
-/// TODO: use div_ceil once stable.
-const fn is_super_majority(target: u8, mut total: u16) -> bool {
-	if total < target as u16 { true } // This shouldn't happen.
-	else {
-		// Cleanly calculate 2/3 of total.
-		total = total.saturating_mul(2);
-		let div = total.wrapping_div(3);
-		let rem = total % 3;
-		total = div + (0 != rem) as u16;
-
-		// Cap the value at u8::MAX so we can safely cast.
-		if total > 255 { total = 255; }
-
-		// Compare!
-		total <= target as u16
-	}
-}
-
 /// # Track Range to Rip Range.
 fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
 	let rng = track.sector_range_normalized();
@@ -697,22 +689,6 @@ fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
 #[cfg(test)]
 mod test {
 	use super::*;
-
-	#[test]
-	fn t_is_super_majority() {
-		for (a, b, expected) in [
-			(1, 1, true),
-			(2, 2, true),
-			(2, 3, true),
-			(2, 4, false),
-			(3, 5, false),
-			(4, 6, true),
-		] {
-			assert_eq!(
-				is_super_majority(a, b),
-				expected);
-		}
-	}
 
 	#[test]
 	fn t_update() {
