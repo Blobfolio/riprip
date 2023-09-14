@@ -219,25 +219,17 @@ impl TrackQuality {
 		// Compare the start and end, if any, and pad entries in both lists
 		// to the maximum length when either is worth printing.
 		for ((a, b), color) in start.into_iter().zip(end).zip([COLOR_BAD, COLOR_MAYBE, COLOR_LIKELY, COLOR_CONFIRMED]) {
-			let len = usize::max(
-				a.as_ref().map_or(0, |v| v.len()),
-				b.as_ref().map_or(0, |v| v.len()),
-			);
-			if len != 0 {
+			if a.is_some() || b.is_some() {
+				let len = usize::max(
+					a.as_ref().map_or(1, |v| v.len()),
+					b.as_ref().map_or(1, |v| v.len()),
+				);
+
 				// Only include starts if there's at least one.
 				if start_any {
-					// The strikethrough adds some complication for the empty
-					// case…
-					if let Some(v) = a {
-						list1.push(format!("\x1b[2;9;{color}m{v:>len$}\x1b[0m"));
-					}
-					else {
-						list1.push(format!(
-							"{:>len$}\x1b[2;9;{color}m0\x1b[0m",
-							"",
-							len=len - 1,
-						));
-					}
+					let v = a.as_ref().map_or("0", |v| v.as_str());
+					let extra = " ".repeat(len - v.len());
+					list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
 				}
 				list2.push(format!(
 					"\x1b[{color}m{:>len$}\x1b[0m",
