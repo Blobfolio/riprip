@@ -78,6 +78,9 @@ pub enum RipRipError {
 	/// # State Save.
 	StateSave(u8),
 
+	/// # Subchannel Desync.
+	SubchannelDesync,
+
 	/// # Invalid/unsupported track format.
 	TrackFormat(u8),
 
@@ -145,6 +148,7 @@ impl fmt::Display for RipRipError {
 			Self::RipOverflow(n) => write!(f, "Track #{n} cannot be ripped on this system."),
 			Self::StateCorrupt(n) => write!(f, "The state data for track #{n} is corrupt."),
 			Self::StateSave(n) => write!(f, "Unable to save the state data for track #{n}."),
+			Self::SubchannelDesync => f.write_str("Subchannel desync."),
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),

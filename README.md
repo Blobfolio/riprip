@@ -23,6 +23,7 @@ Iteration is key. Individual Rip Rip rips take minutes intead of hours or days, 
 Beyond that, it supports all the good things:
 
 * C2 error pointers
+* Subchannel timecode synchronization
 * Drive read offset auto-detection
 * Drive read offset correction
 * [AccurateRip](http://accuraterip.com/) checksum verification

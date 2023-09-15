@@ -220,16 +220,11 @@ impl TrackQuality {
 	/// first one, only differences will be included, so if there are none,
 	/// it will be returned as `None`.
 	pub(super) fn legend(&self, start: &Self) -> (Option<String>, String) {
-		let mut start = start.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
+		let start = start.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
 		let end = self.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
 
-		// Clear the samey values.
-		for (a, b) in start.iter_mut().zip(end.iter()) {
-			if b.eq(a) { *a = None; }
-		}
-
-		// Do we have any start values?
-		let start_any = start.iter().any(Option::is_some);
+		// Do we have any start values different from the end?
+		let start_any = start.iter().zip(end.iter()).any(|(a, b)| a.is_some() && a != b);
 
 		// Hold the final, used values, which will probably be less than four.
 		let mut list1 = Vec::new();
@@ -246,9 +241,19 @@ impl TrackQuality {
 
 				// Only include starts if there's at least one.
 				if start_any {
-					let v = a.as_ref().map_or("0", |v| v.as_str());
-					let extra = " ".repeat(len - v.len());
-					list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
+					// If unchanged, don't cross it out.
+					if a == b {
+						list1.push(format!(
+							"\x1b[2;{color}m{:>len$}\x1b[0m",
+							a.as_ref().map_or("0", |v| v.as_str()),
+						));
+					}
+					// Otherwise strike!
+					else {
+						let v = a.as_ref().map_or("0", |v| v.as_str());
+						let extra = " ".repeat(len - v.len());
+						list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
+					}
 				}
 				list2.push(format!(
 					"\x1b[{color}m{:>len$}\x1b[0m",

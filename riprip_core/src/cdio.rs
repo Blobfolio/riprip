@@ -1,11 +1,15 @@
 /*!
 # Rip Rip Hooray: `libcdio` Wrappers
+
+Somewhat useful documentation:
+<https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
+	CD_DATA_SUBCHANNEL_SIZE,
 	CD_LEADIN,
 	CDTextKind,
 	DriveVendorModel,
@@ -386,23 +390,33 @@ impl LibcdioInstance {
 		buf: &mut [u8],
 		lsn: i32,
 	) -> Result<(), RipRipError> {
+		// Shortcut: we can't read negative, so just pretend everything's null
+		// and good.
+		if lsn < 0 {
+			for v in buf { *v = 0; }
+			return Ok(());
+		}
+
 		// The buffer and block size are equivalent for our purposes.
 		let block_size = u16::try_from(buf.len())
 			.map_err(|_| RipRipError::Bug("Invalid read buffer size."))?;
 
 		// We can infer whether or not C2 is desired based on the block size,
-		// and at the same time rule out wacky sizes.
+		// and at the same time rule out wacky sizes. We'll also take this
+		// opportunity to reset the buffer before the read.
 		let c2_too = match block_size {
-			CD_DATA_C2_SIZE => 1,
-			CD_DATA_SIZE => 0,
+			CD_DATA_C2_SIZE => {
+				let (a, b) = buf.split_at_mut(usize::from(CD_DATA_SIZE));
+				for v in a { *v = 0; } // Set all samples to null.
+				for v in b { *v = 1; } // Set all C2 to error.
+				1
+			},
+			CD_DATA_SIZE => {
+				for v in &mut *buf { *v = 0; } // Set all samples to null.
+				0
+			},
 			_ => return Err(RipRipError::Bug("Invalid read buffer size.")),
 		};
-
-		// Reset the buffer before beginning.
-		for v in &mut *buf { *v = 0; }
-
-		// We don't need to worry about reading negative ranges.
-		if lsn < 0 { return Ok(()); }
 
 		// We should, however, read anything else!
 		let res = unsafe {
@@ -430,6 +444,79 @@ impl LibcdioInstance {
 	}
 
 	#[allow(unsafe_code)]
+	#[allow(non_upper_case_globals)] // Not our globals.
+	/// # Read Raw & Verify Timecode.
+	///
+	/// Like `read_cd`, this reads a single sector of data into the buffer. But
+	/// it also pulls down the 16-byte formatted subchannel code, and checks to
+	/// see that it corresponds to the sector we expect it to.
+	///
+	/// ## Errors
+	///
+	/// In addition to the errors returned by `read_cd`, this will return an
+	/// error if the timing information can be read but does not match the
+	/// sector we're attempting to read.
+	pub(super) fn read_subchannel(
+		&self,
+		buf: &mut [u8],
+		lsn: i32,
+	) -> Result<(), RipRipError> {
+		// The buffer and block size are equivalent for our purposes.
+		if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
+			return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
+		}
+
+		// Reset the data.
+		for v in &mut *buf { *v = 0; }
+
+		// Shortcut: we can't read negative, so bail.
+		if lsn < 0 { return Ok(()); }
+
+		// We should, however, read anything else!
+		let res = unsafe {
+			libcdio_sys::mmc_read_cd(
+				self.as_ptr(),
+				buf.as_mut_ptr().cast(),
+				lsn,
+				1,      // Sector type: CDDA.
+				0,      // No random data manipulation thank you kindly.
+				0,      // No header syncing.
+				0,      // No headers.
+				1,      // YES audio block!
+				0,      // No EDC.
+				0,      // No C2.
+				2,      // Formatted Subchannel.
+				CD_DATA_SUBCHANNEL_SIZE,
+				1,      // One block at a time.
+			)
+		};
+		match res {
+			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadUnsupported),
+			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
+			_ => Err(RipRipError::CdRead(lsn)),
+		}?;
+
+		// We can only get timing information from ADR-1.
+		if 1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 {
+			// Confirm the subchannel LSN matches the LSN we requested.
+			let msf = libcdio_sys::msf_s {
+				m: buf[usize::from(CD_DATA_SIZE) + 7],
+				s: buf[usize::from(CD_DATA_SIZE) + 8],
+				f: buf[usize::from(CD_DATA_SIZE) + 9],
+			};
+			if lsn != unsafe { libcdio_sys::cdio_msf_to_lsn(&msf) } {
+				return Err(RipRipError::SubchannelDesync);
+			}
+		}
+
+		// Before we leave, reset the subchannel bits to zero.
+		for v in &mut buf[usize::from(CD_DATA_SIZE)..] { *v = 0; }
+
+		// As good as we can do!
+		Ok(())
+	}
+
+	#[allow(unsafe_code)]
 	/// # Cache Bust.
 	///
 	/// In lieu of any universal I/O command to clear the drive cache, we can
@@ -443,11 +530,7 @@ impl LibcdioInstance {
 	///
 	/// Thankfully we're never requesting the same sector back-to-back, so only
 	/// need to do this at the start of each rip pass.
-	pub(super) fn bust_cache(
-		&self,
-		blacklist: Range<i32>,
-		leadout: i32,
-	) {
+	pub(super) fn bust_cache(&self, blacklist: Range<i32>, leadout: i32) {
 		// Slightly more than 4MiB; should be enough for most drives.
 		let mut buf = vec![0; 1800 * usize::from(CD_DATA_SIZE)];
 
@@ -460,7 +543,8 @@ impl LibcdioInstance {
 			// Read the last 1800 sectors on the disc.
 			else { leadout - 1800 };
 
-		// We should, however, read anything else!
+		// As this is only a mitigation effort, we shouldn't worry too much
+		// about failure. If it works, great!, if not, oh well.
 		let _res = unsafe {
 			libcdio_sys::mmc_read_cd(
 				self.as_ptr(),

@@ -64,7 +64,7 @@ pub use drive::{
 };
 pub use error::RipRipError;
 pub(crate) use rip::{
-	c2::C2,
+	buf::RipBuffer,
 	data::{
 		RipSample,
 		RipSamples,
@@ -116,6 +116,9 @@ pub const SAMPLE_OVERREAD: u16 = SAMPLES_PER_SECTOR * 10;
 /// redundant.
 pub const CD_C2_SIZE: u16 = 294;
 
+/// # Size of (Formatted) Subchannel Block.
+pub const CD_SUBCHANNEL_SIZE: u16 = 16;
+
 /// # Size of data block.
 ///
 /// Data as in "audio data".
@@ -123,6 +126,9 @@ pub const CD_DATA_SIZE: u16 = BYTES_PER_SECTOR;
 
 /// # Combined size of data/c2.
 pub const CD_DATA_C2_SIZE: u16 = CD_DATA_SIZE + CD_C2_SIZE;
+
+/// # Combined size of data/subchannel.
+pub const CD_DATA_SUBCHANNEL_SIZE: u16 = CD_DATA_SIZE + CD_SUBCHANNEL_SIZE;
 
 /// # Number of lead-in sectors.
 ///

@@ -605,12 +605,12 @@ impl RipSample {
 	/// * If the value is already in the set, its count is incremented;
 	/// * Otherwise a new entry is added with a count of 1.
 	///
-	/// If the original sample is maybe and the new sample is bad _and_ that
-	/// sample is in the set, _decrease_ the count and/or remove the entry. If
-	/// the set is empty after that change, downgrade it to bad.
+	/// If the original sample is maybe and the new sample is bad but not
+	/// desynced, and that sample is in the set, _decrease_ the count and/or
+	/// remove the entry. If the set is empty afterward, downgrade it to bad.
 	///
 	/// If the original sample is confirmed, nothing changes.
-	pub(crate) fn update(&mut self, new: Sample, err: bool) {
+	pub(crate) fn update(&mut self, new: Sample, err: bool, desynced: bool) {
 		match self {
 			// Always update a TBD.
 			Self::Tbd | Self::Bad(_) =>
@@ -621,7 +621,7 @@ impl RipSample {
 			Self::Maybe(set) =>
 				// If the new sample is bad and in our set, *decrease* the
 				// count and/or remove the entry entirely.
-				if err {
+				if err && ! desynced {
 					let mut changed = false;
 					set.retain_mut(|(old, count)|
 						if new.eq(old) {
@@ -648,7 +648,7 @@ impl RipSample {
 					}
 				}
 				// Otherwise add or increment the set.
-				else {
+				else if ! err {
 					for old in &mut *set {
 						// Bump the count and re-sort if this value was already
 						// present.

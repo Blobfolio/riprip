@@ -2,7 +2,7 @@
 # Rip Rip Hooray: Ripping
 */
 
-pub(super) mod c2;
+pub(super) mod buf;
 pub(super) mod data;
 pub(super) mod iter;
 pub(super) mod opts;
@@ -10,19 +10,18 @@ mod quality;
 
 use cdtoc::Track;
 use crate::{
-	C2,
-	CD_DATA_C2_SIZE,
-	CD_DATA_SIZE,
 	chk_accuraterip,
 	chk_ctdb,
 	Disc,
 	KillSwitch,
 	ReadOffset,
+	RipBuffer,
 	RipOptions,
 	RipRipError,
 	RipSamples,
 	SAMPLE_OVERREAD,
 };
+use dactyl::NiceU32;
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -58,6 +57,7 @@ pub(crate) struct Rip<'a> {
 	opts: &'a RipOptions,
 	distance: ReadIter,
 	state: RipSamples,
+	q_desync: u32,
 	q_from: TrackQuality,
 	q_ar: Option<(u8, u8)>,
 	q_ctdb: Option<u16>,
@@ -83,6 +83,7 @@ impl<'a> Rip<'a> {
 			opts,
 			distance,
 			state,
+			q_desync: 0,
 			q_from,
 			q_ar: None,
 			q_ctdb: None,
@@ -97,23 +98,17 @@ impl<'a> Rip<'a> {
 	/// AccurateRip/CTDB like the result, or an error.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(PathBuf, bool), RipRipError> {
-		// Reset the counts before beginning?
-		if self.opts.reset_counts() { self.state.reset_counts(); }
-
+		// Rip the track or not.
 		let confirmed =
 			if killed.killed() { self.state.is_confirmed() }
 			else {
-				// Same operation two ways, one with C2 support, one without.
-				if self.opts.c2() {
-					let mut buf = [0_u8; CD_DATA_C2_SIZE as usize];
-					self._rip(&mut buf, progress, killed)
-				}
-				else {
-					let mut buf = [0_u8; CD_DATA_SIZE as usize];
-					self._rip(&mut buf, progress, killed)
-				}?
+				// Reset the counts before beginning?
+				if self.opts.reset_counts() { self.state.reset_counts(); }
+
+				self._rip(progress, killed)?
 			};
 
+		// Extract it!
 		self.state.save_track(self.opts.raw()).map(|k| (k, confirmed))
 	}
 
@@ -123,26 +118,36 @@ impl<'a> Rip<'a> {
 	)]
 	/// # Rip (For Real).
 	///
-	/// This method is separated out from the main one primarily because the
-	/// fixed data buffer has a variable size depending on whether or not C2
-	/// pointers are to be included. Creating those in the previous step allows
-	/// us to avoid conflicts with Rust's type checker.
+	/// This is the ripping workhorse. It loops through the desired number of
+	/// passes, (re)reading sectors that have room for improvement, checking
+	/// the resulting track against AccurateRip/CTDB, and updating the saved
+	/// state file.
 	///
 	/// Returns `true` if the rip has been confirmed, `false` if not.
-	fn _rip(&mut self, buf: &mut [u8], progress: &Progless, killed: &KillSwitch)
+	///
+	/// ## Errors
+	///
+	/// I/O errors other than general read errors are bubbled up.
+	fn _rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<bool, RipRipError> {
+		// Set up the buffer.
+		let mut buf = RipBuffer::default();
+		if self.opts.subchannel() { buf = buf.with_subchannel(); }
+		if self.opts.c2() { buf = buf.with_c2(self.opts.strict()); }
+
+		// A few other variables…
 		let offset = self.opts.offset();
 		let rip_rng = self.state.sector_rip_range();
 		let lsn_start = rip_rng.start;
 		let leadout = self.disc.toc().audio_leadout() as i32;
-		let mut c2 = C2::default();
-		let mut confirmed = self.state.is_confirmed();
 		let progress_label = format!("Track #{:02}", self.state.track().number());
+		let mut confirmed = self.state.is_confirmed();
 
 		// Onto the pass(es)!
 		for pass in 0..self.opts.passes() {
 			// Note the starting state.
 			let before = self.state.quick_hash();
+			self.q_desync = 0;
 
 			// Reset progress bar. (This won't fail.)
 			let _res = progress.reset((self.distance.len() as u32).saturating_add(1));
@@ -185,28 +190,33 @@ impl<'a> Rip<'a> {
 					continue;
 				}
 
-				// Otherwise we have to actually talk to the drive. Ug.
-				match self.disc.cdio().read_cd(buf, read_lsn) {
-					// Update the C2 data and, if in strict mode and there are
-					// any problems, mark everything bad.
-					Ok(()) =>
-						if ! c2.update(&buf[usize::from(CD_DATA_SIZE)..])? && self.opts.strict() {
-							c2.make_bad();
+				// Read it!
+				let desynced =
+					match buf.read_sector(self.disc.cdio(), read_lsn) {
+						// Good is good!
+						Ok(()) => false,
+						// Silently skip generic read errors.
+						Err(RipRipError::CdRead(_)) => {
+							progress.increment();
+							continue;
 						},
-					// Assume total C2 failure if there's a hard read error.
-					Err(RipRipError::CdRead(_)) => { c2.make_bad(); },
-					// Other kinds of errors are show-stoppers; abort!
-					Err(e) => return Err(e),
-				}
+						// Count up subcode desync but accept the data as bad.
+						Err(RipRipError::SubchannelDesync) => {
+							self.q_desync += 1;
+							true
+						},
+						// Abort for all other kinds of errors.
+						Err(e) => return Err(e),
+					};
 
 				// Patch the data, unless the user just aborted, as that will
 				// probably have messed up the data.
 				if ! killed.killed() {
 					for ((old, new), err) in state.iter_mut()
-						.zip(buf[..usize::from(CD_DATA_SIZE)].chunks_exact(4))
-						.zip(c2.sample_errors())
+						.zip(buf.samples())
+						.zip(buf.errors())
 					{
-						old.update(new.try_into().unwrap(), err);
+						old.update(new, err, desynced);
 					}
 				}
 
@@ -293,6 +303,15 @@ impl<'a> Rip<'a> {
 		let (legend_a, legend_b) = q_to.legend(&self.q_from);
 		if let Some(legend_a) = legend_a { eprintln!("        {legend_a}"); }
 		eprintln!("        {legend_b} \x1b[2msamples\x1b[0m");
+
+		// Mention subchannel errors, if any.
+		if ! q_to.is_confirmed() && self.q_desync != 0 {
+			eprintln!(
+				"        \x1b[91m{}\x1b[0;2m sector subchannel error{}\x1b[0m",
+				NiceU32::from(self.q_desync),
+				if self.q_desync == 1 { "" } else { "s" },
+			);
+		}
 
 		// Third-party verification?
 		if self.state.track().is_htoa() {

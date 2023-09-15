@@ -157,7 +157,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_raw(args.switch(b"--raw"))
 		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
-		.with_strict(args.switch(b"--strict"));
+		.with_strict(args.switch(b"--strict"))
+		.with_subchannel(! args.switch(b"--no-subchannel"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -229,6 +230,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	use oxford_join::OxfordJoin;
 
+	// Build up all the messy values.
 	let nice_tracks = Cow::Owned({
 		let mut last = u8::MAX;
 		let mut continuous = true;
@@ -257,17 +259,11 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		riprip_core::CACHE_BASE,
 		if opts.raw() { "pcm" } else { "wav" },
 	));
-	let cutoff = opts.cutoff();
-	let nice_verify = Cow::Owned(format!(
-		"{}{}AccurateRip/CTDB ({})",
-		match (opts.c2(), opts.strict()) {
-			(true, true) => "(Strict) Sector C2\x1b[2m;\x1b[0;1m ",
-			(true, false) => "Sample C2\x1b[2m;\x1b[0;1m ",
-			_ => "",
-		},
-		if 1 < cutoff { format!("Re-Read ({})\x1b[2m;\x1b[0;1m ", cutoff - 1) } else { String::new() },
-		opts.confidence(),
-	));
+	let nice_subchannel = Cow::Borrowed("Subchannel Sync");
+	let nice_c2 = Cow::Borrowed(
+		if opts.strict() { "C2 Error Pointers (Strict)" }
+		else { "C2 Error Pointers" }
+	);
 	let nice_passes = Cow::Owned(format!(
 		"{}{}",
 		opts.passes(),
@@ -277,11 +273,23 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		}
 		else { " (From Scratch)" },
 	));
+	let nice_reread =
+		if opts.cutoff() < 2 { Cow::Borrowed("Re-Read") }
+		else { Cow::Owned(format!("Re-Read ({})", opts.cutoff() - 1)) };
+	let nice_chk = Cow::Owned(format!(
+		"AccurateRip/CTDB (c. {}+)",
+		opts.confidence(),
+	));
 
+	// Combine the values with labels so we can at least somewhat cleanly
+	// display everything. Haha.
 	let set = [
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
-		("Verification:", nice_verify, true),
+		("Verification:", nice_chk, true),
+		("", nice_c2, opts.c2()),
+		("", nice_reread, 2 <= opts.cutoff()),
+		("", nice_subchannel, opts.subchannel()),
 		("Rip Passes:", nice_passes, true),
 		("Destination:", nice_output, true),
 		("Backwards:", yesno(opts.backwards()), opts.backwards()),
@@ -289,6 +297,7 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
+	// Print them!
 	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
 	for (k, v, enabled) in set {
 		if enabled {
@@ -381,13 +390,20 @@ WHEN ALL ELSE FAILS:
 DRIVE SETTINGS:
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
-        --no-c2       Disable/ignore C2 error pointer information when ripping,
-                      e.g. for drives that do not support the feature. (This
-                      flag is otherwise not recommended.)
+        --no-c2       C2 error pointers are used to help verify the accuracy of
+                      the returned data, but if your drive doesn't support the
+                      feature or implement it correctly, set this flag to
+                      disable/ignore them.
+        --no-subchannel
+                      Subchannel timecodes are used to verify the data is
+                      coming from the right place, but if your drive does not
+                      support the feature or the disc's subchannel data is
+                      corrupt, set this flag to disable the verification.
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive.
                       [default: auto or 0; range: ±5880]
+
 
 UNUSUAL SETTINGS:
         --confidence <NUM>

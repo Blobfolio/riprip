@@ -43,7 +43,7 @@ description = "Print help information."
 
 [[package.metadata.bashman.switches]]
 long = "--no-c2"
-description = "Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)"
+description = "C2 error pointers are used to help verify the accuracy of the returned data, but if your drive doesn't support the feature or implement it correctly, set this flag to disable/ignore them."
 
 [[package.metadata.bashman.switches]]
 long = "--no-cache-bust"
@@ -56,6 +56,10 @@ description = "Ignore any previous rip states; start over from scratch."
 [[package.metadata.bashman.switches]]
 long = "--no-rip"
 description = "Print the basic drive and disc information to STDERR and exit (without ripping anything)."
+
+[[package.metadata.bashman.switches]]
+long = "--no-subchannel"
+description = "Subchannel timecodes are used to verify the data is coming from the right place, but if your drive does not support the feature or the disc's subchannel data is corrupt, set this flag to disable the verification."
 
 [[package.metadata.bashman.switches]]
 long = "--no-summary"

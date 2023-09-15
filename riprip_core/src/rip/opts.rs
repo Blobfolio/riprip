@@ -27,8 +27,11 @@ const FLAG_RESUME: u8 =       0b0010_0000;
 /// # FLAG: Strict Mode.
 const FLAG_STRICT: u8 =       0b0100_0000;
 
+/// # FLAG: Subchannel.
+const FLAG_SUBCHANNEL: u8 =   0b1000_0000;
+
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
+const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME | FLAG_SUBCHANNEL;
 
 /// # Minimum Confidence.
 const CONFIDENCE_MIN: u8 = 3;
@@ -281,6 +284,17 @@ impl RipOptions {
 		"The default is `false`.",
 	);
 
+	with_flag!(
+		with_subchannel,
+		FLAG_SUBCHANNEL,
+		"# Verify Subchannel Sync.",
+		"",
+		"When `true`, subchannel data will be used to verify sector positioning",
+		"where possible, rejecting data if there's a mismatch.",
+		"",
+		"The default is `true`.",
+	);
+
 	#[must_use]
 	/// # Include Track.
 	///
@@ -313,6 +327,7 @@ impl RipOptions {
 	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(strict, FLAG_STRICT, "Strict Mode");
+	get_flag!(subchannel, FLAG_SUBCHANNEL, "Subchannel Sync");
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
@@ -419,10 +434,11 @@ mod test {
 			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
 			FLAG_STRICT,
+			FLAG_SUBCHANNEL,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 7);
+		assert_eq!(all.len(), 8);
 	}
 
 	#[test]
@@ -481,6 +497,7 @@ mod test {
 		t_flags!("reset_counts", with_reset_counts, reset_counts);
 		t_flags!("resume", with_resume, resume);
 		t_flags!("strict", with_strict, strict);
+		t_flags!("subchannel", with_subchannel, subchannel);
 	}
 
 	#[test]
