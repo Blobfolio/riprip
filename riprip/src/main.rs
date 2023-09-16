@@ -34,11 +34,7 @@ use argyle::{
 	FLAG_HELP,
 	FLAG_VERSION,
 };
-use dactyl::{
-	NiceElapsed,
-	NiceU8,
-	traits::BytesToUnsigned,
-};
+use dactyl::traits::BytesToUnsigned;
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -134,31 +130,24 @@ fn _main() -> Result<(), RipRipError> {
 	sigint(killed.inner(), Some(progress.clone()));
 
 	// Summarize.
-	rip_summary(&opts)?;
+	rip_summary(&disc, &opts)?;
 
 	// Rip and rip and rip!
-	let now = std::time::Instant::now();
 	disc.rip(&opts, &progress, &killed)?;
 
-	eprintln!();
 	if killed.killed() { Err(RipRipError::Killed) }
-	else {
-		Msg::success(format!("Finished in {}.", NiceElapsed::from(now))).eprint();
-		Ok(())
-	}
+	else { Ok(()) }
 }
 
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch(b"--backwards"))
-		.with_cache_bust(! args.switch(b"--no-cache-bust"))
-		.with_c2(! args.switch(b"--no-c2"))
-		.with_raw(args.switch(b"--raw"))
+		.with_c2(! args.switch(b"--no-c2"), args.switch(b"--c2-strict"))
+		.with_flip_flop(args.switch(b"--flip-flop"))
 		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
-		.with_strict(args.switch(b"--strict"))
-		.with_subchannel(! args.switch(b"--no-subchannel"));
+		.with_sync(args.switch2(b"--sync", b"--sync-strict"), args.switch(b"sync-strict"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -171,20 +160,41 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 
 	if let Some(v) = args.option(b"--confidence") {
 		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
-		opts = opts.with_cutoff(confidence);
+		opts = opts.with_confidence(confidence);
 	}
 
-	if let Some(v) = args.option(b"--cutoff") {
-		let cutoff = u8::btou(v).ok_or(RipRipError::CliParse("--cutoff"))?;
-		opts = opts.with_cutoff(cutoff);
+	if let Some(v) = args.option2(b"-p", b"--passes") {
+		let passes = u8::btou(v).ok_or(RipRipError::CliParse("-p/--passes"))?;
+		opts = opts.with_passes(passes);
 	}
 
-	if let Some(v) = args.option2(b"-r", b"--refine") {
-		let refine = u8::btou(v).ok_or(RipRipError::CliParse("-r/--refine"))?;
-		opts = opts.with_refine(refine);
+	// Rereads are kinda annoying.
+	if let Some(v) = args.option2(b"-r", b"--rereads") {
+		// Default.
+		let mut a = 2;
+		let mut b = 2;
+
+		// If there's a comma, there could be up to two values. Keep the
+		// default if either is omitted.
+		if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
+			let tmp = &v[..pos];
+			if ! tmp.is_empty() {
+				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+			}
+			let tmp = &v[pos + 1..];
+			if ! tmp.is_empty() {
+				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+			}
+		}
+		// A number by itself affects only the first part.
+		else {
+			a = u8::btou(v).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+		}
+
+		opts = opts.with_rereads(a, b);
 	}
 
-	// Parsing the tracks is slightly more involved. Haha.
+	// Tracks are also kinda annoying.
 	for v in args.option2_values(b"-t", b"--track", Some(b',')) {
 		let v = v.trim();
 		if v.is_empty() { continue; }
@@ -227,43 +237,22 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 /// # Rip Summary.
 ///
 /// Summarize and confirm the chosen settings before proceeding.
-fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
-	use oxford_join::OxfordJoin;
-
+fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
-	let nice_tracks = Cow::Owned({
-		let mut last = u8::MAX;
-		let mut continuous = true;
-		let tracks = opts.tracks()
-			.map(|n| {
-				if last != u8::MAX && last + 1 != n { continuous = false; }
-				last = n;
-				NiceU8::from(n)
-			})
-			.collect::<Vec<NiceU8>>();
-
-		let len = tracks.len();
-		if len == 1 { tracks[0].to_string() }
-		else if 2 < len && continuous {
-			format!("{}\x1b[2m..=\x1b[0;1m{}", tracks[0], tracks[len - 1])
-		}
-		else {
-			tracks.oxford_and()
-				.replace(',', "\x1b[2m,\x1b[0;1m")
-				.replace(" and ", "\x1b[2m and \x1b[0;1m")
-		}
-	});
-	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
-	let nice_output = Cow::Owned(format!(
-		"./{}/##.{}",
-		riprip_core::CACHE_BASE,
-		if opts.raw() { "pcm" } else { "wav" },
-	));
-	let nice_subchannel = Cow::Borrowed("Subchannel Sync");
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict() { "C2 Error Pointers (Strict)" }
+		if opts.c2_strict() { "C2 Error Pointers (Strict)" }
 		else { "C2 Error Pointers" }
 	);
+	let nice_chk = Cow::Owned(format!(
+		"AccurateRip/CTDB cf. {}+",
+		opts.confidence(),
+	));
+	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
+	let nice_output = Cow::Owned(format!(
+		"./{}/{}_\x1b[0;2m##\x1b[0;1m.wav",
+		riprip_core::CACHE_BASE,
+		disc.toc().cddb_id(),
+	));
 	let nice_passes = Cow::Owned(format!(
 		"{}{}",
 		opts.passes(),
@@ -273,13 +262,23 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		}
 		else { " (From Scratch)" },
 	));
-	let nice_reread =
-		if opts.cutoff() < 2 { Cow::Borrowed("Re-Read") }
-		else { Cow::Owned(format!("Re-Read ({})", opts.cutoff() - 1)) };
-	let nice_chk = Cow::Owned(format!(
-		"AccurateRip/CTDB (c. {}+)",
-		opts.confidence(),
-	));
+	let nice_read_order = Cow::Borrowed(
+		if opts.flip_flop() { "Alternate" }
+		else if opts.backwards() { "Backwards" }
+		else { "Normal" }
+	);
+	let (rr_a, rr_b) = opts.rereads();
+	let nice_rereads1 =
+		if rr_a == 1 { Cow::Borrowed("Re-Read Consistency") }
+		else { Cow::Owned(format!("Re-Read Consistency {rr_a}+")) };
+	let nice_rereads2 =
+		if rr_b == 1 { Cow::Borrowed("Re-Read Contention") }
+		else { Cow::Owned(format!("Re-Read Contention {rr_b}x")) };
+	let nice_sync = Cow::Borrowed(
+		if opts.sync_strict() { "Subchannel Sync (Strict)" }
+		else { "Subchannel Sync" }
+	);
+	let nice_tracks = Cow::Owned(rip_summary_tracks(opts));
 
 	// Combine the values with labels so we can at least somewhat cleanly
 	// display everything. Haha.
@@ -288,12 +287,12 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Verification:", nice_chk, true),
 		("", nice_c2, opts.c2()),
-		("", nice_reread, 2 <= opts.cutoff()),
-		("", nice_subchannel, opts.subchannel()),
+		("", nice_rereads1, 1 != rr_a),
+		("", nice_rereads2, 1 != rr_b),
+		("", nice_sync, opts.sync()),
 		("Rip Passes:", nice_passes, true),
+		("Read Order:", nice_read_order, true),
 		("Destination:", nice_output, true),
-		("Backwards:", yesno(opts.backwards()), opts.backwards()),
-		("Bust Cache:", yesno(opts.cache_bust()), opts.cache_bust()),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
@@ -302,6 +301,9 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	for (k, v, enabled) in set {
 		if enabled {
 			eprintln!("  {k:max_label$} \x1b[1m{v}\x1b[0m");
+		}
+		else if k.is_empty() {
+			eprintln!("  \x1b[2m{k:max_label$} \x1b[9m{v}\x1b[0m");
 		}
 		else {
 			eprintln!("  \x1b[2;9m{k:max_label$} {v}\x1b[0m");
@@ -319,6 +321,54 @@ fn rip_summary(opts: &RipOptions) -> Result<(), RipRipError> {
 	}
 }
 
+/// # Rip Summary Tracks.
+///
+/// Format the desired tracks into a compact string.
+///
+/// Note: this value assumes ASCII bold and clear codes will be appended to
+/// either end prior to print.
+fn rip_summary_tracks(opts: &RipOptions) -> String {
+	use oxford_join::OxfordJoin;
+
+	let mut set = Vec::new();
+	let mut from = u8::MAX;
+	let mut to = u8::MAX;
+
+	// Add the tracks, combining contiguous ranges.
+	for idx in opts.tracks() {
+		if from == u8::MAX {
+			from = idx;
+			to = idx;
+			continue;
+		}
+
+		if idx == to + 1 {
+			to += 1;
+			continue;
+		}
+
+		if from == to { set.push(from.to_string()); }
+		else { set.push(format!("{from}\x1b[0;2m..=\x1b[0;1m{to}")); }
+
+		from = u8::MAX;
+		to = u8::MAX;
+	}
+
+	// Add the last bits.
+	if from != u8::MAX {
+		if from == to { set.push(from.to_string()); }
+		else { set.push(format!("{from}\x1b[0;2m..=\x1b[0;1m{to}")); }
+	}
+
+	match set.len() {
+		1 => set.remove(0),
+		2 => set.join("\x1b[0;2m and \x1b[0;1m"),
+		_ => set.oxford_and()
+			.replace(',', "\x1b[0;2m,\x1b[0;1m")
+			.replace("\x1b[2m,\x1b[0;1m and ", "\x1b[0;2m, and \x1b[0;1m"),
+	}
+}
+
 /// # Hook Up CTRL+C.
 fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 	let _res = ctrlc::set_handler(move ||
@@ -326,13 +376,6 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 			if let Some(p) = &progress { p.sigint(); }
 		}
 	);
-}
-
-#[inline]
-/// # Bool to Yes/No Cow.
-const fn yesno(v: bool) -> Cow<'static, str> {
-	if v { Cow::Borrowed("Yes") }
-	else { Cow::Borrowed("No") }
 }
 
 #[cold]
@@ -353,39 +396,50 @@ USAGE:
     riprip [OPTIONS]
 
 BASIC SETTINGS:
-        --cutoff <NUM>
-                      Consider allegedly-good samples \"likely\" once the same
-                      value has been read at least <NUM> times, and twice as
-                      often as any competing values. Sectors containing only
-                      likely/confirmed samples are skipped during subsequent
-                      passes, so the lower the cutoff, the faster they'll go.
-                      Higher values are recommended when the data seems fishy.
-                      [default: 2; range: 1..=32]
-        --raw         Save ripped tracks in raw PCM format (instead of WAV).
-    -r, --refine <NUM>
-                      Automatically execute up to <NUM> additional rip passes
-                      for each track while any samples remain unread or
-                      unconfirmed. [default: 0; max: 32]
+    -r, --rereads <[ABS],[MUL]>
+                      Consider allegedly-good samples "likely" once the same
+                      value has been read at least <ABS> times, and <MUL> times
+                      more often than all competing values. You can omit a
+                      value on either side of the comma to use the default, or
+                      provide a number with no commas to only change <ABS>.
+                      Likely sectors are skipped on subsequent passes, so the
+                      lower the value(s), the faster those passes will go.
+                      [default: 2,2; range: 1..=20,1..=10]
+    -p, --passes <NUM>
+                      Automate re-ripping by executing up to <NUM> passes for
+                      each track while any samples remain unread or
+                      unconfirmed. [default: 1; max: 16]
     -t, --track <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
-                      own -t/--track (-t 2 -t 3). Include track 0 to rip the
-                      HTOA (if any). [default: the whole disc]
+                      own -t/--track (-t 2 -t 3). Track 0 can be used to rip
+                      the HTOA, if any. [default: the whole disc]
 
 WHEN ALL ELSE FAILS:
-        --backwards   Request sectors from the drive in reverse order, starting
-                      from the end of each track, and ending at the start.
-        --no-resume   Ignore any previous rip states; start over from scratch.
-        --reset-counts
-                      Reset all previously-collected sample counts, allowing
-                      their sectors to be re-read (provided --cutoff is at
-                      least two).
-        --strict      Treat C2 errors as an all-or-nothing proposition for the
+        --backwards   Reverse the sector read order when ripping, starting at
+                      end of each track, and ending at the start.
+        --c2-strict   Treat C2 errors as an all-or-nothing proposition for the
                       sector as a whole rather than judging each individual
                       sample on its own. This is most effective when set for
                       all rip passes (rather than being turned on after several
                       runs have already completed).
+        --flip-flop   Alternate the sector read order between passes, forwards
+                      then backwards then forwards then backwards… This has no
+                      effect unless -p/--passes is at least two.
+        --no-resume   Ignore any previous rip states; start over from scratch.
+        --reset-counts
+                      Reset all previously-collected sample counts, allowing
+                      their sectors to be re-read.
+        --sync        Confirm sector positioning with subchannel data (when
+                      available) to make sure the drive is actually reading
+                      from the right place, or require it be re-read on
+                      subsequent passes. Subchannel data is easily corrupted,
+                      so this will usually produce a lot of false positives,
+                      but can be useful in cases where disc rot rather than
+                      wear-and-tear is the sole cause of readability issues.
+        --sync-strict Same as --sync, but mark all affected samples as bad
+                      regardless of their C2 status.
 
 DRIVE SETTINGS:
     -d, --dev <PATH>  The device path for the optical drive containing the CD
@@ -394,25 +448,19 @@ DRIVE SETTINGS:
                       the returned data, but if your drive doesn't support the
                       feature or implement it correctly, set this flag to
                       disable/ignore them.
-        --no-subchannel
-                      Subchannel timecodes are used to verify the data is
-                      coming from the right place, but if your drive does not
-                      support the feature or the disc's subchannel data is
-                      corrupt, set this flag to disable the verification.
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive.
                       [default: auto or 0; range: ±5880]
 
-
 UNUSUAL SETTINGS:
         --confidence <NUM>
                       Consider a track accurately ripped — i.e. stop working on
                       it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. [default: 3; range: 3..=10]
-        --no-cache-bust
-                      Do not attempt to moot the optical drive cache before
-                      each rip pass.
+                      confidence of at least <NUM>. Raise this value if you
+                      personally fucked up the database(s) with prior bad rips,
+                      otherwise the default should be fine. Haha.
+                      [default: 3; range: 3..=10]
 
 MISCELLANEOUS:
     -h, --help        Print help information and exit.

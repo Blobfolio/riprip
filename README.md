@@ -98,10 +98,9 @@ Simply re-run Rip Rip. It will pick up from where it left off, (re)reading any s
 # Refine the original rip.
 riprip
 
-# You can also automate a certain number of extra passes by using --refine.
-# The following, for example, will run through each track up to 5
-# (1 + 4 extra) times.
-riprip --refine 4
+# If you plan to re-rip several times, you can automate the process with the
+# -p/--passes option:
+riprip --passes 3
 ```
 
 As before, if problem tracks remain after the re-rip, open the cue sheet in CUETools, etc. 

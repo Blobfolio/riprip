@@ -2,7 +2,13 @@
 # Rip Rip Hooray: Quality Counts
 */
 
-use crate::RipSample;
+use crate::{
+	COLOR_BAD,
+	COLOR_CONFIRMED,
+	COLOR_LIKELY,
+	COLOR_MAYBE,
+	RipSample,
+};
 use dactyl::{
 	NiceFloat,
 	NiceU32,
@@ -11,11 +17,9 @@ use dactyl::{
 		SaturatingFrom,
 	},
 };
-use super::{
-	COLOR_BAD,
-	COLOR_CONFIRMED,
-	COLOR_LIKELY,
-	COLOR_MAYBE,
+use std::{
+	borrow::Cow,
+	ops::Add,
 };
 
 
@@ -39,9 +43,24 @@ pub(super) struct TrackQuality {
 	contentious: u32,
 }
 
+impl Add for TrackQuality {
+	type Output = Self;
+	fn add(self, other: Self) -> Self::Output {
+		Self {
+			bad: self.bad + other.bad,
+			maybe: self.maybe + other.maybe,
+			likely: self.likely + other.likely,
+			confirmed: self.confirmed + other.confirmed,
+			contentious: self.contentious + other.contentious,
+		}
+	}
+}
+
 impl TrackQuality {
-	/// # New.
-	pub(super) fn new(src: &[RipSample], cutoff: u8) -> Self {
+	/// # From Slice.
+	///
+	/// Count up all the different statuses in a given track slice.
+	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Self {
 		// This should never happen.
 		if src.is_empty() {
 			return Self {
@@ -63,8 +82,11 @@ impl TrackQuality {
 			match v {
 				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
 				RipSample::Confirmed(_) => { confirmed += 1; },
-				RipSample::Maybe(set) => {
-					if v.is_likely(cutoff) { likely += 1; }
+				RipSample::Maybe(_) =>
+					if v.is_likely(rereads) { likely += 1; }
+					else { maybe += 1; },
+				RipSample::Contentious(set) => {
+					if v.is_likely(rereads) { likely += 1; }
 					else { maybe += 1; }
 					if 1 < set.len() { contentious += 1; }
 				},
@@ -78,7 +100,7 @@ impl TrackQuality {
 impl TrackQuality {
 	/*
 	/// # Bad.
-	pub(super) const fn bad(&self) -> usize { self.bad }
+	pub(super) const fn bad(&self) -> u32 { self.bad }
 	*/
 
 	/// # Maybe.
@@ -272,21 +294,21 @@ impl TrackQuality {
 	/// # Summary.
 	///
 	/// Summarize the state of the track rip in one line.
-	pub(crate) fn summarize(&self, idx: u8) -> String {
+	pub(crate) fn summarize(&self) -> Cow<'static, str> {
 		// Perfect!
 		if self.is_confirmed() {
-			format!("Track #{idx} has been accurately ripped!")
+			Cow::Borrowed("All data has been accurately recovered!")
 		}
 		// Likely but maybe also not.
 		else if self.is_likely() {
 			if self.contentious == 0 {
-				format!("Track #{idx} is likely complete!")
+				Cow::Borrowed("Recovery is likely complete!")
 			}
 			else {
-				format!(
-					"Track #{idx} is likely complete, but {} contention.",
+				Cow::Owned(format!(
+					"Recovery is likely complete, but {} contention.",
 					self.contentious.nice_inflect("sample has", "samples have"),
-				)
+				))
 			}
 		}
 		// The progress is probably more granular.
@@ -301,26 +323,26 @@ impl TrackQuality {
 			}
 
 			match (low, high) {
-				(None, None) => format!("Track #{idx} still needs a lot of work!"),
+				(None, None) => Cow::Borrowed("The road to recovery may be a long one."),
 				(Some(p), None) | (None, Some(p)) => {
 					let qualifier =
 						if self.maybe() < self.likely() { "likely" }
 						else { "maybe" };
-					format!(
-						"Track #{idx} is \x1b[2m({qualifier})\x1b[0m {}{}complete.",
+					Cow::Owned(format!(
+						"Recovery is \x1b[2m({qualifier})\x1b[0m {}{}complete.",
 						if p.compact_str() == "100" { "" } else { p.compact_str() },
 						if p.compact_str() == "100" { "" } else { "% " },
-					)
+					))
 				},
-				(Some(p1), Some(p2)) if p2.precise_str(3) == "100.000" => format!(
-					"Track #{idx} is \x1b[2m(likely)\x1b[0m at least {}% complete.",
+				(Some(p1), Some(p2)) if p2.precise_str(3) == "100.000" => Cow::Owned(format!(
+					"Recovery is \x1b[2m(likely)\x1b[0m at least {}% complete.",
 					p1.compact_str(),
-				),
-				(Some(p1), Some(p2)) => format!(
-					"Track #{idx} is \x1b[2m(roughly)\x1b[0m {}% – {}%s complete.",
+				)),
+				(Some(p1), Some(p2)) => Cow::Owned(format!(
+					"Recovery is \x1b[2m(roughly)\x1b[0m {}% – {}%s complete.",
 					p1.precise_str(3),
 					p2.precise_str(3),
-				),
+				)),
 			}
 		}
 	}

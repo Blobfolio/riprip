@@ -63,6 +63,9 @@ pub enum RipRipError {
 	/// # Unable to get leadout.
 	Leadout,
 
+	/// # Noop.
+	Noop,
+
 	/// # Unable to obtain the number of tracks.
 	NumTracks,
 
@@ -70,7 +73,7 @@ pub enum RipRipError {
 	ReadOffset,
 
 	/// # Numbers can't be converted to the necessary types.
-	RipOverflow(u8),
+	RipOverflow,
 
 	/// # State Corruption.
 	StateCorrupt(u8),
@@ -143,9 +146,10 @@ impl fmt::Display for RipRipError {
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
 			Self::Killed => f.write_str("User abort."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
+			Self::Noop => f.write_str("There's nothing to do!"),
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
-			Self::RipOverflow(n) => write!(f, "Track #{n} cannot be ripped on this system."),
+			Self::RipOverflow => f.write_str("The numbers are too big for this system architecture."),
 			Self::StateCorrupt(n) => write!(f, "The state data for track #{n} is corrupt."),
 			Self::StateSave(n) => write!(f, "Unable to save the state data for track #{n}."),
 			Self::SubchannelDesync => f.write_str("Subchannel desync."),

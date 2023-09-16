@@ -130,19 +130,17 @@ pub(crate) fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError
 /// # Track Path.
 ///
 /// Return the file path to save the exported track to. To keep things
-/// predictable, this is simply the two-digit track number with the format's
-/// extension tacked onto the end.
+/// predictable, this is simply the CDDB ID and two-digit track number.
 ///
 /// ## Errors
 ///
 /// This will return an error if there are problems determining the cache
 /// location.
-pub(crate) fn track_path(toc: &Toc, track: Track, raw: bool) -> Result<PathBuf, RipRipError> {
+pub(crate) fn track_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
 	cache_path(format!(
-		"{}__{:02}.{}",
+		"{}__{:02}.wav",
 		toc.cddb_id(),
 		track.number(),
-		if raw { "pcm" } else { "wav" }
 	))
 }
 

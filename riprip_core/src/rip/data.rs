@@ -13,13 +13,13 @@ use crate::{
 	ReadOffset,
 	RipRipError,
 	Sample,
+	SAMPLE_OVERREAD,
 	SAMPLES_PER_SECTOR,
 	state_path,
 	track_path,
 	WAVE_SPEC,
 };
 use dactyl::traits::SaturatingFrom;
-use fyi_msg::Msg;
 use hound::WavWriter;
 use serde::{
 	de,
@@ -40,10 +40,7 @@ use std::{
 	ops::Range,
 	path::PathBuf,
 };
-use super::{
-	SAMPLE_OVERREAD,
-	TrackQuality,
-};
+use super::TrackQuality;
 
 
 
@@ -66,7 +63,7 @@ use super::{
 ///
 /// This structure gets saved to disk _en masse_ in a zstd-compressed binary
 /// format after each rip pass so operations can be resumed at a later date.
-pub(crate) struct RipSamples {
+pub(crate) struct RipState {
 	toc: Toc,
 	track: Track,
 	rip_rng: Range<i32>,
@@ -74,17 +71,17 @@ pub(crate) struct RipSamples {
 	new: bool,
 }
 
-impl<'de> Deserialize<'de> for RipSamples {
+impl<'de> Deserialize<'de> for RipState {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where D: de::Deserializer<'de> {
 		const FIELDS: &[&str] = &["toc", "track", "data"];
-		struct RipSamplesVisitor;
+		struct RipStateVisitor;
 
-		impl<'de> de::Visitor<'de> for RipSamplesVisitor {
-			type Value = RipSamples;
+		impl<'de> de::Visitor<'de> for RipStateVisitor {
+			type Value = RipState;
 
 			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-				formatter.write_str("struct RipSamples")
+				formatter.write_str("struct RipState")
 			}
 
 			// Bincode is sequence-driven, so this is all we need.
@@ -112,7 +109,7 @@ impl<'de> Deserialize<'de> for RipSamples {
 					.filter(|d: &Vec<RipSample>| d.len() == rip_rng.len())
 					.ok_or_else(|| de::Error::invalid_length(2, &self))?;
 
-				Ok(RipSamples {
+				Ok(RipState {
 					toc,
 					track,
 					rip_rng,
@@ -122,14 +119,14 @@ impl<'de> Deserialize<'de> for RipSamples {
             }
 		}
 
-		deserializer.deserialize_struct("RipSamples", FIELDS, RipSamplesVisitor)
+		deserializer.deserialize_struct("RipState", FIELDS, RipStateVisitor)
 	}
 }
 
-impl Serialize for RipSamples {
+impl Serialize for RipState {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where S: ser::Serializer {
-		let mut state = serializer.serialize_struct("RipSamples", 3)?;
+		let mut state = serializer.serialize_struct("RipState", 3)?;
 
 		state.serialize_field("toc", &self.toc)?;
 		state.serialize_field("track", &self.track.number())?;
@@ -139,7 +136,7 @@ impl Serialize for RipSamples {
 	}
 }
 
-impl RipSamples {
+impl RipState {
 	/// # New.
 	///
 	/// Resume or initialize a new data collection for the given track.
@@ -153,21 +150,13 @@ impl RipSamples {
 	/// This will return an error if the numbers can't fit in the necessary
 	/// integer types, the cache is invalid, or the cache is corrupt and the
 	/// user opts not to start over.
-	pub(crate) fn from_track(toc: &Toc, track: Track, resume: bool)
+	pub(crate) fn from_track(toc: &Toc, track: Track, resume: bool, reset_counts: bool)
 	-> Result<Self, RipRipError> {
-		let idx = track.number();
-
 		// Should we pick up where we left off?
 		if resume {
-			match Self::from_file(toc, track) {
-				Ok(None) => {},
+			match Self::from_file(toc, track, reset_counts) {
+				Ok(None) | Err(RipRipError::StateCorrupt(_)) => {},
 				Ok(Some(out)) => return Ok(out),
-				Err(RipRipError::StateCorrupt(idx)) => {
-					Msg::warning(RipRipError::StateCorrupt(idx).to_string()).eprint();
-					if ! fyi_msg::confirm!(yes: "Do you want to start over?") {
-						return Err(RipRipError::Killed);
-					}
-				},
 				Err(e) => return Err(e),
 			}
 		}
@@ -175,28 +164,28 @@ impl RipSamples {
 		// Pad the LSN range by 10 sectors on either end and convert to
 		// samples.
 		let rip_rng = track_rng_to_rip_range(track)
-			.ok_or(RipRipError::RipOverflow(idx))?;
+			.ok_or(RipRipError::RipOverflow)?;
 
 		// The total length we might be ripping.
 		let len = usize::try_from(rip_rng.end - rip_rng.start)
-			.map_err(|_| RipRipError::RipOverflow(idx))?;
+			.map_err(|_| RipRipError::RipOverflow)?;
 
 		// We should also make sure the rip range in bytes fits i32, u32, and
 		// usize. By testing for all three now, we can lazy-cast elsewhere.
 		(rip_rng.end - rip_rng.start).checked_mul(i32::from(BYTES_PER_SAMPLE))
 			.and_then(|n| u32::try_from(n).ok())
 			.and_then(|n| usize::try_from(n).ok())
-			.ok_or(RipRipError::RipOverflow(idx))?;
+			.ok_or(RipRipError::RipOverflow)?;
 
 		// The leadout needs to fit i32 in various places, so let's check for
 		// that now too.
 		let leadout = i32::try_from(toc.audio_leadout()).ok()
 			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-			.ok_or(RipRipError::RipOverflow(idx))?;
+			.ok_or(RipRipError::RipOverflow)?;
 
 		// If only there were a ::try_with_capacity()!
 		let mut data = Vec::new();
-		data.try_reserve(len).map_err(|_| RipRipError::RipOverflow(idx))?;
+		data.try_reserve(len).map_err(|_| RipRipError::RipOverflow)?;
 
 		// Prepopulate the entries for each .
 		for v in rip_rng.clone() {
@@ -227,16 +216,24 @@ impl RipSamples {
 	/// This will return an error if the cache location cannot be determined,
 	/// the cache exists and cannot be deserialized, or the data is in someway
 	/// nonsensical.
-	pub(crate) fn from_file(toc: &Toc, track: Track) -> Result<Option<Self>, RipRipError> {
+	fn from_file(toc: &Toc, track: Track, reset_counts: bool)
+	-> Result<Option<Self>, RipRipError> {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
 			// Read -> decompress -> deserialize.
-			let out: Self = zstd::stream::Decoder::new(file).ok()
+			let mut out: Self = zstd::stream::Decoder::new(file).ok()
 				.and_then(|dec| bincode::deserialize_from(BufReader::new(dec)).ok())
 				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
 
 			// Return the instance if it matches the info we're expecting.
-			if out.toc.eq(toc) && out.track == track { Ok(Some(out)) }
+			if out.toc.eq(toc) && out.track == track {
+				// Reset the counts?
+				if reset_counts {
+					out.reset_counts();
+					let _res = out.save_state();
+				}
+				Ok(Some(out))
+			}
 			else {
 				Err(RipRipError::StateCorrupt(track.number()))
 			}
@@ -245,7 +242,7 @@ impl RipSamples {
 	}
 }
 
-impl RipSamples {
+impl RipState {
 	/// # Confirm Track.
 	///
 	/// Mark all track samples as confirmed.
@@ -266,8 +263,12 @@ impl RipSamples {
 	/// Drop all maybe counts to one so their sectors can be reread.
 	pub(crate) fn reset_counts(&mut self) {
 		for v in &mut self.data {
-			if let RipSample::Maybe(set) = v {
-				for (_, count) in &mut *set { *count = 1; }
+			match v {
+				RipSample::Maybe((_, count)) => { *count = 1; },
+				RipSample::Contentious(set) => {
+					for (_, count, _) in &mut *set { *count = 1; }
+				},
+				_ => {},
 			}
 		}
 	}
@@ -310,69 +311,44 @@ impl RipSamples {
 
 	/// # Save Track.
 	///
-	/// Write the best-available copy of the track to either raw PCM or WAV
-	/// format. The output path is returned for reference.
-	///
-	/// Note: the only difference between the two formats is WAV files contain
-	/// a 44-byte header. Everything after those 44 bytes exactly matches the
-	/// equivalent raw output.
+	/// Write the best-available copy of the track to WAV format, and return
+	/// the path for reference.
 	///
 	/// ## Errors
 	///
 	/// This will bubble up any I/O-related errors encountered, but should be
 	/// fine.
-	pub(crate) fn save_track(&self, raw: bool) -> Result<PathBuf, RipRipError> {
-		use std::io::Write;
-
-		let dst = track_path(&self.toc, self.track, raw)?;
+	pub(crate) fn save_track(&self) -> Result<PathBuf, RipRipError> {
+		let dst = track_path(&self.toc, self.track)?;
 		let samples = self.track_slice();
 		let mut writer = CacheWriter::new(&dst)?;
+		let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC)
+			.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
-		// Raw is relatively easy; we just collect the samples in order. That
-		// said, writing just four bytes at a time would be terrible; we'll
-		// chunk it instead.
-		if raw {
-			let buf1 = writer.writer();
-			let mut buf = [0_u8; 16_384 * 4]; // 64 KiB.
-			for chunk in samples.chunks(16_384) {
-				let len = chunk.len() * 4; // The length of _this_ chunk.
-				for (b, s) in buf.chunks_exact_mut(4).zip(chunk) {
-					b.copy_from_slice(s.as_slice());
-				}
-				buf1.write_all(&buf[..len])
-					.and_then(|_| buf1.flush())
-					.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+		// In CD contexts, a sample is general one L+R pair. In other
+		// contexts, like hound, L and R are each their own sample. (We
+		// need to double our internal count to match.)
+		{
+			let mut wav_writer = wav.get_i16_writer(u32::saturating_from(samples.len()) * 2);
+			for sample in samples {
+				let sample = sample.as_array();
+				wav_writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
+				wav_writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
 			}
+			wav_writer.flush().map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 		}
-		// Wavs on the other hand have to be _built_. Ug.
-		else {
-			let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC)
-				.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
-			// In CD contexts, a sample is general one L+R pair. In other
-			// contexts, like hound, L and R are each their own sample. (We
-			// need to double our internal count to match.)
-			{
-				let mut wav_writer = wav.get_i16_writer(u32::saturating_from(samples.len()) * 2);
-				for sample in samples {
-					let sample = sample.as_array();
-					wav_writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
-					wav_writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
-				}
-				wav_writer.flush().map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
-			}
-
-			wav.flush().ok()
-				.and_then(|_| wav.finalize().ok())
-				.ok_or_else(|| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
-		}
+		// Finish up the wav.
+		wav.flush().ok()
+			.and_then(|_| wav.finalize().ok())
+			.ok_or_else(|| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
 		// Save the file.
 		writer.finish().map(|_| dst)
 	}
 }
 
-impl RipSamples {
+impl RipState {
 	/// # Inner Track Range.
 	///
 	/// Return the range of `self.data` representing the actual track, i.e.
@@ -397,7 +373,7 @@ impl RipSamples {
 	}
 }
 
-impl RipSamples {
+impl RipState {
 	/// # Mutable Offset Sector.
 	///
 	/// Return the mutable data corresponding to LSN at the provided offset,
@@ -428,6 +404,11 @@ impl RipSamples {
 		self.rip_rng.end.wrapping_div(SAMPLES_PER_SECTOR as i32)
 	}
 
+	/// # Table of Contents.
+	///
+	/// Return the Table of Contents.
+	pub(crate) const fn toc(&self) -> &Toc { &self.toc }
+
 	/// # Track.
 	///
 	/// Return a copy of the `Track` object.
@@ -437,8 +418,8 @@ impl RipSamples {
 	///
 	/// Add up the bad, maybe, likely, and confirmed samples within the track
 	/// range.
-	pub(super) fn track_quality(&self, cutoff: u8) -> TrackQuality {
-		TrackQuality::new(self.track_slice(), cutoff)
+	pub(super) fn track_quality(&self, rereads: (u8, u8)) -> TrackQuality {
+		TrackQuality::new(self.track_slice(), rereads)
 	}
 
 	/// # Track Slice.
@@ -451,12 +432,13 @@ impl RipSamples {
 	}
 }
 
-impl RipSamples {
+impl RipState {
 	/// # Is New?
 	///
 	/// Returns `true` if the data was not seeded from a previous state.
 	pub(crate) const fn is_new(&self) -> bool { self.new }
 
+	/*
 	/// # Is Confirmed?
 	///
 	/// Returns `true` if the track has been independently confirmed by
@@ -473,7 +455,7 @@ impl RipSamples {
 	///
 	/// Returns true if all of the samples in the rippable range are likely or
 	/// better.
-	pub(crate) fn is_likely(&self, offset: ReadOffset, cutoff: u8) -> bool {
+	pub(crate) fn is_likely(&self, offset: ReadOffset, rereads: (u8, u8)) -> bool {
 		// We'll be missing bits at the beginning or end depending on the
 		// offset.
 		let samples_abs = usize::from(offset.samples_abs());
@@ -483,8 +465,9 @@ impl RipSamples {
 			if offset.is_negative() { &self.data[samples_abs..] }
 			else { &self.data[..len - samples_abs] };
 
-		slice.iter().all(|v| v.is_likely(cutoff))
+		slice.iter().all(|v| v.is_likely(rereads))
 	}
+	*/
 
 	/// # Quick Hash.
 	///
@@ -512,9 +495,11 @@ pub(crate) enum RipSample {
 	/// Samples that came down with C2 or read errors.
 	Bad(Sample),
 
-	/// Allegedly good samples sorted by popularity. (The first entry in the
-	/// vec will always be the "best guess".)
-	Maybe(Vec<(Sample, u8)>),
+	/// Allegedly good sample, uncontested.
+	Maybe((Sample, u8)),
+
+	/// Like `Maybe`, but contested and/or desynched.
+	Contentious(Vec<(Sample, u8, bool)>),
 
 	/// Samples in the leadin/leadout — that we can't access and thus have to
 	/// assume are null — or ones that have been independently verified by
@@ -529,8 +514,8 @@ impl RipSample {
 	pub(crate) fn as_array(&self) -> Sample {
 		match self {
 			Self::Tbd => NULL_SAMPLE,
-			Self::Bad(s) | Self::Confirmed(s) => *s,
-			Self::Maybe(s) => s[0].0,
+			Self::Bad(s) | Self::Confirmed(s) | Self::Maybe((s, _)) => *s,
+			Self::Contentious(s) => s.first().map_or(NULL_SAMPLE, |s| s.0),
 		}
 	}
 
@@ -540,35 +525,19 @@ impl RipSample {
 	pub(crate) fn as_slice(&self) -> &[u8] {
 		match self {
 			Self::Tbd => NULL_SAMPLE.as_slice(),
-			Self::Bad(s) | Self::Confirmed(s) => s.as_slice(),
-			Self::Maybe(s) => s[0].0.as_slice(),
+			Self::Bad(s) | Self::Confirmed(s) | Self::Maybe((s, _)) => s.as_slice(),
+			Self::Contentious(s) => s.first().map_or_else(|| NULL_SAMPLE.as_slice(), |s| s.0.as_slice()),
 		}
 	}
 }
 
 impl RipSample {
-	/// # Competition.
-	///
-	/// Return the best count, and all the sum of the rest. The second value
-	/// will only be populated for maybes. A TBD value will return zero for
-	/// both.
-	pub(crate) fn contention(&self) -> (u8, u8) {
-		match self {
-			Self::Tbd => (0, 0),
-			Self::Maybe(s) => (
-				s[0].1,
-				s.iter().skip(1).fold(0_u8, |acc, (_, v)| acc.saturating_add(*v))
-			),
-			_ => (1, 0),
-		}
-	}
-
 	/*
 	/// # Is Bad?
 	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Bad(_)) }
 
 	/// # Is Maybe?
-	pub(crate) const fn is_maybe(&self) -> bool { matches!(self, Self::Maybe(_)) }
+	pub(crate) const fn is_maybe(&self) -> bool { matches!(self, Self::Contentious(_)) }
 	*/
 
 	/// # Is Confirmed?
@@ -580,14 +549,21 @@ impl RipSample {
 	/// and twice as much as any other competing value.
 	///
 	/// If this is called on `RipSample::Confirmed`, it will also return `true`.
-	pub(crate) fn is_likely(&self, cutoff: u8) -> bool {
+	pub(crate) fn is_likely(&self, rereads: (u8, u8)) -> bool {
 		match self {
 			Self::Tbd | Self::Bad(_) => false,
 			Self::Confirmed(_) => true,
-			Self::Maybe(_) => {
-				let (a, b) = self.contention();
-				cutoff <= a && b.saturating_mul(2).min(254) < a
-			},
+			Self::Maybe((_, count)) => rereads.0 <= *count,
+			Self::Contentious(set) =>
+				if set.len() < 2 { false }
+				else {
+					rereads.0 <= set[0].1 &&
+					set.iter()
+						.skip(1)
+						.fold(0_u8, |acc, (_, v, _)| acc.saturating_add(*v))
+						.saturating_mul(rereads.1)
+						.min(254) < set[0].1
+				},
 		}
 	}
 }
@@ -595,38 +571,112 @@ impl RipSample {
 impl RipSample {
 	/// # Update Sample.
 	///
-	/// If there was no original sample, the new one replaces it.
+	/// See `update_bad` for what happens if there's a C2 error. Otherwise,
+	/// this method changes things as follows:
 	///
-	/// If the original sample is bad:
-	/// * If the new sample is good, the bad becomes a maybe;
-	/// * If the new sample is also bad, it replaces the original;
+	/// TBD and Bad samples are simply replaced.
 	///
-	/// If the original sample is maybe and the new sample is good:
-	/// * If the value is already in the set, its count is incremented;
-	/// * Otherwise a new entry is added with a count of 1.
+	/// Maybe samples are incremented if the new value matches, or converted
+	/// to Contentious if different.
 	///
-	/// If the original sample is maybe and the new sample is bad but not
-	/// desynced, and that sample is in the set, _decrease_ the count and/or
-	/// remove the entry. If the set is empty afterward, downgrade it to bad.
+	/// Contentious values are incremented if the new value matches, or the
+	/// new value is added to the end of the list. (If the only reason for
+	/// contention was a sync error and that is fixed by the new read, it is
+	/// changed to Maybe.)
 	///
-	/// If the original sample is confirmed, nothing changes.
-	pub(crate) fn update(&mut self, new: Sample, err: bool, desynced: bool) {
+	/// Confirmed stay the same.
+	pub(crate) fn update(&mut self, new: Sample, err_c2: bool, err_sync: bool) {
+		// Send bad samples to a different method to halve the onslaught of
+		// conditional handling. Haha.
+		if err_c2 {
+			return self.update_bad(new, err_sync);
+		}
+
 		match self {
 			// Always update a TBD.
 			Self::Tbd | Self::Bad(_) =>
-				if err { *self = Self::Bad(new); }
-				else { *self = Self::Maybe(vec![(new, 1)]); },
+				if err_sync { *self = Self::Contentious(vec![(new, 1, false)]); }
+				else { *self = Self::Maybe((new, 1)); },
 
-			// Maybe change a maybe.
-			Self::Maybe(set) =>
-				// If the new sample is bad and in our set, *decrease* the
-				// count and/or remove the entry entirely.
-				if err && ! desynced {
+			// Simple Maybes.
+			Self::Maybe((old, count)) =>
+				// Bump non-error matches.
+				if new.eq(old) { *count = count.saturating_add(1); }
+				// Switch to complex type if this is a good but different
+				// sample.
+				else {
+					*self = Self::Contentious(vec![
+						(*old, *count, true),
+						(new, 1, ! err_sync),
+					]);
+				},
+
+			// Annoying Vector Maybes.
+			Self::Contentious(set) => {
+				let mut found = true;
+				for old in &mut *set {
+					// Bump the count and re-sort if this value was already
+					// present.
+					if new == old.0 {
+						old.1 = old.1.saturating_add(1);
+						old.2 = old.2 || ! err_sync;
+						found = true;
+						break;
+					}
+				}
+
+				// The sort order or type might need to change.
+				if found {
+					// Simplify.
+					if set.len() == 1 {
+						if set[0].2 {
+							*self = Self::Maybe((set[0].0, set[0].1));
+						}
+					}
+					// Re-Sort.
+					else {
+						set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+					}
+				}
+				// Otherwise add it new.
+				else { set.push((new, 1, ! err_sync)); }
+			},
+
+			// Leave confirmed samples alone.
+			Self::Confirmed(_) => {},
+		}
+	}
+
+	/// # Update New Bad Sample.
+	///
+	/// TBD and Bad samples are simply replaced.
+	///
+	/// Maybe and Contentious are decremented/downgraded if the value matches
+	/// and there is no sync weirdness.
+	///
+	/// Confirmed stay the same.
+	fn update_bad(&mut self, new: Sample, err_sync: bool) {
+		match self {
+			// Always update a TBD.
+			Self::Tbd | Self::Bad(_) => {
+				*self = Self::Bad(new);
+			},
+
+			// Simple Maybes.
+			Self::Maybe((old, count)) =>
+				if ! err_sync && new.eq(old) {
+					if *count == 1 { *self = Self::Bad(new); }
+					else { *count -= 1; }
+				},
+
+			// Annoying Vector Maybes.
+			Self::Contentious(set) =>
+				if ! err_sync {
 					let mut changed = false;
-					set.retain_mut(|(old, count)|
+					set.retain_mut(|(old, count, _)|
 						if new.eq(old) {
 							changed = true;
-							if 1.eq(count) { false }
+							if *count == 1 { false }
 							else {
 								*count -= 1;
 								true
@@ -636,31 +686,20 @@ impl RipSample {
 					);
 
 					if changed {
-						// If our set is empty now, downgrade to bad.
-						if set.is_empty() {
-							*self = Self::Bad(new);
+						let len = set.len();
+						// Bad.
+						if len == 0 { *self = Self::Bad(new); }
+						// Simplify.
+						else if len == 1 {
+							if set[0].2 {
+								*self = Self::Maybe((set[0].0, set[0].1));
+							}
 						}
-						// Otherwise give it a re-sort in case the change
-						// affected something.
+						// Re-Sort.
 						else {
 							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 						}
 					}
-				}
-				// Otherwise add or increment the set.
-				else if ! err {
-					for old in &mut *set {
-						// Bump the count and re-sort if this value was already
-						// present.
-						if new == old.0 {
-							old.1 = old.1.saturating_add(1);
-							set.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-							return;
-						}
-					}
-
-					// Otherwise add it fresh.
-					set.push((new, 1));
 				},
 
 			// Leave confirmed samples alone.
@@ -694,53 +733,48 @@ mod test {
 	fn t_update() {
 		// Start with TBD.
 		let mut sample = RipSample::Tbd;
-		sample.update(NULL_SAMPLE, true);
+		sample.update(NULL_SAMPLE, true, false);
 		assert!(matches!(sample, RipSample::Bad(NULL_SAMPLE)));
 
-		// TBD + Bad = Bad.
-		sample.update(NULL_SAMPLE, false);
-		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[(NULL_SAMPLE, 1)]);
-		}
-
 		// Bad + Good = Maybe.
-		sample.update(NULL_SAMPLE, false);
-		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[(NULL_SAMPLE, 2)]);
-		}
+		sample.update(NULL_SAMPLE, false, false);
+		assert!(matches!(sample, RipSample::Maybe((NULL_SAMPLE, 1))));
+
+		// Maybe + Bad = no change.
+		sample.update([1, 1, 1, 1], true, false);
+		assert!(matches!(sample, RipSample::Maybe((NULL_SAMPLE, 1))));
 
 		// Maybe + Good = ++
-		sample.update([1, 1, 1, 1], false);
+		sample.update(NULL_SAMPLE, false, false);
+		assert!(matches!(sample, RipSample::Maybe((NULL_SAMPLE, 2))));
+
+		// Maybe + Good (different) = Contentious
+		sample.update([1, 1, 1, 1], false, false);
 		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+			let RipSample::Contentious(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2, true), ([1, 1, 1, 1], 1, true)]);
 		}
 
-		// Maybe + Bad (different) = no change
-		sample.update([1, 2, 1, 2], true);
+		// Contentious + Bad (different) = no change
+		sample.update([1, 2, 1, 2], true, false);
 		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[(NULL_SAMPLE, 2), ([1, 1, 1, 1], 1)]);
+			let RipSample::Contentious(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 2, true), ([1, 1, 1, 1], 1, true)]);
 		}
 
-		// Maybe + Bad (existing) = --
-		sample.update(NULL_SAMPLE, true);
+		// Contentious + Bad (existing) = --
+		sample.update(NULL_SAMPLE, true, false);
 		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[(NULL_SAMPLE, 1), ([1, 1, 1, 1], 1)]);
+			let RipSample::Contentious(ref set) = sample else { panic!("Sample should be maybe!"); };
+			assert_eq!(set, &[(NULL_SAMPLE, 1, true), ([1, 1, 1, 1], 1, true)]);
 		}
 
-		// Maybe + Bad (existing) = --
-		sample.update(NULL_SAMPLE, true);
-		{
-			let RipSample::Maybe(ref set) = sample else { panic!("Sample should be maybe!"); };
-			assert_eq!(set, &[([1, 1, 1, 1], 1)]);
-		}
+		// Contentious + Bad (existing) = -- = Maybe
+		sample.update(NULL_SAMPLE, true, false);
+		assert!(matches!(sample, RipSample::Maybe(([1, 1, 1, 1], 1))));
 
 		// Maybe + Bad (existing) = -- = empty = Bad.
-		sample.update([1, 1, 1, 1], true);
+		sample.update([1, 1, 1, 1], true, false);
 		assert!(matches!(sample, RipSample::Bad([1, 1, 1, 1])));
 	}
 }

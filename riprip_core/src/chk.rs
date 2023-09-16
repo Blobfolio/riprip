@@ -18,7 +18,15 @@ use cdtoc::{
 };
 use std::{
 	path::Path,
-	sync::OnceLock,
+	sync::{
+		Arc,
+		atomic::{
+			AtomicU16,
+			Ordering::Relaxed,
+		},
+		Mutex,
+		OnceLock,
+	},
 	time::Duration,
 };
 use ureq::{
@@ -218,54 +226,81 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		else { end.extend_from_slice(sample.as_slice()); }
 	}
 
-	// Shift and crunch and shift and crunch and shift and crunch…
+	// Check the zero shift first.
 	let mut confidence = 0;
-	for shift in 0..=CTDB_WIGGLE_SAMPLES {
-		// We're stepping in samples, but working in bytes.
-		let shift = shift * usize::from(BYTES_PER_SAMPLE);
+	let mut crc = Crc::new();
+	crc.update(&start[CTDB_WIGGLE + ignore_first..]);
+	crc.combine(&middle);
+	crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last]);
 
-		// Let's try for a negative match first, shifting the data into the
-		// end of the previous track.
-		let mut crc = Crc::new();
-		crc.update(&start[CTDB_WIGGLE + ignore_first - shift..]);
-		crc.combine(&middle);
-		// The max shift won't include any end.
-		if shift < CTDB_WIGGLE {
-			crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last - shift]);
-		}
-
-		// Check it!
-		if let Some(v) = chk.remove(&crc.finalize()) {
-			confidence += v;
-			if chk.is_empty() {
-				return Some(if confidence < 2 { 0 } else { confidence });
-			}
-		}
-
-		// Now let's check for a positive offset match, bleeding into the
-		// next track.
-		if shift != 0 {
-			let mut crc = Crc::new();
-			// The max shift won't include any start.
-			if shift < CTDB_WIGGLE {
-				crc.update(&start[CTDB_WIGGLE + ignore_first + shift..]);
-			}
-			crc.combine(&middle);
-			crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last + shift]);
-
-			// Check it!
-			if let Some(v) = chk.remove(&crc.finalize()) {
-				confidence += v;
-				if chk.is_empty() {
-					return Some(if confidence < 2 { 0 } else { confidence });
-				}
-			}
+	// Check it!
+	if let Some(v) = chk.remove(&crc.finalize()) {
+		confidence += v;
+		if chk.is_empty() {
+			return Some(if confidence < 2 { 0 } else { confidence });
 		}
 	}
+
+	// Using two threads — one for each direction — strikes a good balance
+	// between performance and complexity. We do have to rewrap our variables,
+	// though, to maintain mutability across threads.
+	let chk = Arc::new(Mutex::new(chk));
+	let confidence = AtomicU16::new(confidence);
+	std::thread::scope(|s| {
+		// Negative offsets shift into the previous track.
+		s.spawn(|| {
+			for shift in 1..=CTDB_WIGGLE_SAMPLES {
+				// We're stepping in samples, but working in bytes.
+				let shift = shift * usize::from(BYTES_PER_SAMPLE);
+				let mut crc = Crc::new();
+				crc.update(&start[CTDB_WIGGLE + ignore_first - shift..]);
+				crc.combine(&middle);
+				// The max shift won't include any end.
+				if shift < CTDB_WIGGLE {
+					crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last - shift]);
+				}
+
+				// Check it!
+				if let Ok(mut tmp) = chk.lock() {
+					if tmp.is_empty() { break; }
+					else if let Some(v) = tmp.remove(&crc.finalize()) {
+						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+						confidence.fetch_add(v, Relaxed);
+					}
+				}
+			}
+		});
+
+		// Positive offsets shift into the next track.
+		s.spawn(|| {
+			for shift in 1..=CTDB_WIGGLE_SAMPLES {
+				// We're stepping in samples, but working in bytes.
+				let shift = shift * usize::from(BYTES_PER_SAMPLE);
+
+				let mut crc = Crc::new();
+				// The max shift won't include any start.
+				if shift < CTDB_WIGGLE {
+					crc.update(&start[CTDB_WIGGLE + ignore_first + shift..]);
+				}
+				crc.combine(&middle);
+				crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last + shift]);
+
+				// Check it!
+				if let Ok(mut tmp) = chk.lock() {
+					if tmp.is_empty() { break; }
+					else if let Some(v) = tmp.remove(&crc.finalize()) {
+						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+						confidence.fetch_add(v, Relaxed);
+					}
+				}
+			}
+		});
+	});
 
 	// As mentioned at the start, we shouldn't be confident in confidences less
 	// than two, so to avoid confusion, we'll treat them as equivalent to no
 	// matches at all.
+	let confidence = confidence.into_inner();
 	Some(if confidence < 2 { 0 } else { confidence })
 }
 
