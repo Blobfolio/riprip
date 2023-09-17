@@ -57,7 +57,6 @@ pub(crate) struct Ripper<'a> {
 	opts: RipOptions,
 	tracks: BTreeMap<u8, RipEntry>,
 	sectors: u32,
-	buf: RipBuffer,
 }
 
 impl<'a> Ripper<'a> {
@@ -95,17 +94,12 @@ impl<'a> Ripper<'a> {
 			});
 		}
 
-		let buf = RipBuffer::default()
-			.with_c2(opts.c2(), opts.c2_strict())
-			.with_sync(opts.sync(), opts.sync_strict());
-
 		Ok(Self {
 			now: Instant::now(),
 			disc,
 			opts,
 			tracks,
 			sectors: total_sectors,
-			buf,
 		})
 	}
 
@@ -121,6 +115,7 @@ impl<'a> Ripper<'a> {
 		let toc = self.disc.toc();
 		let leadout = toc.audio_leadout() as i32;
 		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
+		let mut buf = RipBuffer::default();
 
 		// Load the first track's state.
 		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
@@ -184,7 +179,7 @@ impl<'a> Ripper<'a> {
 					)
 				);
 				entry.rip(
-					&mut self.buf,
+					&mut buf,
 					self.disc.cdio(),
 					&mut state,
 					&self.opts,
@@ -323,18 +318,17 @@ impl RipEntry {
 			}
 
 			// Read and patch!
-			match buf.read_sector(cdio, read_lsn) {
+			match buf.read_sector(cdio, read_lsn, opts) {
 				// Good is good!
 				Ok(()) => if ! killed.killed() {
 					// Patch the data, unless the user just aborted, as that
 					// will probably have messed up the data.
-					let sync_err = buf.sync_error();
 					for (old, (new, c2_err)) in sector.iter_mut().zip(buf.samples()) {
-						old.update(new, c2_err, sync_err);
+						old.update(new, c2_err);
 					}
 				},
 				// Silently skip generic read errors.
-				Err(RipRipError::CdRead(_)) => {},
+				Err(RipRipError::CdRead(_) | RipRipError::SubchannelDesync) => {},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
 			}

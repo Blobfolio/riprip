@@ -143,11 +143,11 @@ fn _main() -> Result<(), RipRipError> {
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch(b"--backwards"))
-		.with_c2(! args.switch(b"--no-c2"), args.switch(b"--c2-strict"))
 		.with_flip_flop(args.switch(b"--flip-flop"))
 		.with_reset_counts(args.switch(b"--reset-counts"))
 		.with_resume(! args.switch(b"--no-resume"))
-		.with_sync(args.switch2(b"--sync", b"--sync-strict"), args.switch(b"sync-strict"));
+		.with_strict_c2(args.switch2(b"--c2-strict", b"--strict-c2"))
+		.with_sync(args.switch(b"--sync"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -240,8 +240,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.c2_strict() { "C2 Error Pointers (Strict)" }
-		else { "C2 Error Pointers" }
+		if opts.strict_c2() { "C2 Error Pointers (Sector)" }
+		else { "C2 Error Pointers (Sample)" }
 	);
 	let nice_chk = Cow::Owned(format!(
 		"AccurateRip/CTDB cf. {}+",
@@ -274,10 +274,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	let nice_rereads2 =
 		if rr_b == 1 { Cow::Borrowed("Re-Read Contention") }
 		else { Cow::Owned(format!("Re-Read Contention {rr_b}x")) };
-	let nice_sync = Cow::Borrowed(
-		if opts.sync_strict() { "Subchannel Sync (Strict)" }
-		else { "Subchannel Sync" }
-	);
+	let nice_sync = Cow::Borrowed("Subchannel Sync");
 	let nice_tracks = Cow::Owned(rip_summary_tracks(opts));
 
 	// Combine the values with labels so we can at least somewhat cleanly
@@ -286,7 +283,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
 		("Verification:", nice_chk, true),
-		("", nice_c2, opts.c2()),
+		("", nice_c2, true),
 		("", nice_rereads1, 1 != rr_a),
 		("", nice_rereads2, 1 != rr_b),
 		("", nice_sync, opts.sync()),
@@ -397,13 +394,13 @@ USAGE:
 
 BASIC SETTINGS:
     -r, --rereads <[ABS],[MUL]>
-                      Consider allegedly-good samples "likely" once the same
-                      value has been read at least <ABS> times, and <MUL> times
-                      more often than all competing values. You can omit a
-                      value on either side of the comma to use the default, or
-                      provide a number with no commas to only change <ABS>.
-                      Likely sectors are skipped on subsequent passes, so the
-                      lower the value(s), the faster those passes will go.
+                      Re-read sectors on subsequent passes until A) they have
+                      been independently verified with AccurateRip or CUETools;
+                      or B) the same allegedly-good values have been read at
+                      least <ABS> times, and <MUL> times more often than any
+                      contradictory "good" values. The value may omit the
+                      number on either side of the comma to keep the default,
+                      or be a single number to alter only the <ABS>.
                       [default: 2,2; range: 1..=20,1..=10]
     -p, --passes <NUM>
                       Automate re-ripping by executing up to <NUM> passes for
@@ -417,37 +414,24 @@ BASIC SETTINGS:
                       the HTOA, if any. [default: the whole disc]
 
 WHEN ALL ELSE FAILS:
-        --backwards   Reverse the sector read order when ripping, starting at
-                      end of each track, and ending at the start.
-        --c2-strict   Treat C2 errors as an all-or-nothing proposition for the
-                      sector as a whole rather than judging each individual
-                      sample on its own. This is most effective when set for
-                      all rip passes (rather than being turned on after several
-                      runs have already completed).
+        --backwards   Reverse the sector read order when ripping a track,
+                      starting at end, and ending at the start.
         --flip-flop   Alternate the sector read order between passes, forwards
                       then backwards then forwards then backwards… This has no
                       effect unless -p/--passes is at least two.
-        --no-resume   Ignore any previous rip states; start over from scratch.
+        --no-resume   Ignore any previous rip states, starting over from
+                      scratch.
         --reset-counts
                       Reset all previously-collected sample counts, allowing
-                      their sectors to be re-read.
-        --sync        Confirm sector positioning with subchannel data (when
-                      available) to make sure the drive is actually reading
-                      from the right place, or require it be re-read on
-                      subsequent passes. Subchannel data is easily corrupted,
-                      so this will usually produce a lot of false positives,
-                      but can be useful in cases where disc rot rather than
-                      wear-and-tear is the sole cause of readability issues.
-        --sync-strict Same as --sync, but mark all affected samples as bad
-                      regardless of their C2 status.
+                      their sectors to be re-read/re-confirmed.
+        --strict-c2   Consider C2 errors an all-or-nothing proposition for the
+                      sector as a whole, marking all samples bad if any of them
+                      are bad. This is most effective when applied consistently
+                      from the initial rip and onward.
 
 DRIVE SETTINGS:
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
-        --no-c2       C2 error pointers are used to help verify the accuracy of
-                      the returned data, but if your drive doesn't support the
-                      feature or implement it correctly, set this flag to
-                      disable/ignore them.
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive.
@@ -461,6 +445,12 @@ UNUSUAL SETTINGS:
                       personally fucked up the database(s) with prior bad rips,
                       otherwise the default should be fine. Haha.
                       [default: 3; range: 3..=10]
+        --sync        Confirm sector positioning with subchannel data (when
+                      available) to make sure the drive is actually reading
+                      from the right place, and ignore the data if not. This is
+                      prone to false-positives — subchannel data is easily
+                      corrupted — so only recommended when disc rot, rather
+                      than wear-and-tear, is the sole cause of your woes.
 
 MISCELLANEOUS:
     -h, --help        Print help information and exit.

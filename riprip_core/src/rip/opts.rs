@@ -10,29 +10,23 @@ use super::track_idx_to_bits;
 /// # FLAG: Read Backwards.
 const FLAG_BACKWARDS: u8 =    0b0000_0001;
 
-/// # FLAG: C2 Error Pointers.
-const FLAG_C2: u8 =           0b0000_0010;
-
 /// # FLAG: Flip Flop.
-const FLAG_FLIP_FLOP: u8 =    0b0000_0100;
+const FLAG_FLIP_FLOP: u8 =    0b0000_0010;
 
 /// # FLAG: Reset counts.
-const FLAG_RESET_COUNTS: u8 = 0b0000_1000;
+const FLAG_RESET_COUNTS: u8 = 0b0000_0100;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =       0b0001_0000;
+const FLAG_RESUME: u8 =       0b0000_1000;
 
 /// # FLAG: Strict C2 Mode.
-const FLAG_STRICT_C2: u8 =    0b0010_0000 | FLAG_C2;
-
-/// # FLAG: Strict Sync.
-const FLAG_STRICT_SYNC: u8 =  0b0100_0000 | FLAG_SYNC;
+const FLAG_STRICT_C2: u8 =    0b0001_0000;
 
 /// # FLAG: Subchannel Sync.
-const FLAG_SYNC: u8 =         0b1000_0000;
+const FLAG_SYNC: u8 =         0b0010_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_RESUME;
+const FLAG_DEFAULT: u8 = FLAG_RESUME;
 
 /// # Minimum Confidence.
 const CONFIDENCE_MIN: u8 = 3;
@@ -125,34 +119,6 @@ impl RipOptions {
 		"",
 		"The default is `false`.",
 	);
-
-	#[must_use]
-	/// # C2 Error Pointers.
-	///
-	/// Toggle whether or not C2 error pointer data should be used to help
-	/// verify the accuracy of data being returned from the drive.
-	///
-	/// When `strict`, errors are applied to the sector as a whole; if any
-	/// sample is bad, _all_ samples are considered bad.
-	///
-	/// Nonstrict C2 is enabled by default. It should only ever be disabled if
-	/// the drive doesn't support the feature, or completely mishandles it.
-	pub const fn with_c2(self, c2: bool, strict: bool) -> Self {
-		let flags =
-			if c2 {
-				if strict { self.flags | FLAG_STRICT_C2 }
-				else {
-					let flags = self.flags & ! FLAG_STRICT_C2;
-					flags | FLAG_C2
-				}
-			}
-			else { self.flags & ! FLAG_STRICT_C2 };
-
-		Self {
-			flags,
-			..self
-		}
-	}
 
 	#[must_use]
 	/// # Confirmation Confidence.
@@ -294,36 +260,32 @@ impl RipOptions {
 		"The default is `true`.",
 	);
 
-	#[must_use]
-	/// # Subchannel Sync.
-	///
-	/// Toggle whether or not to verify subchannel timecodes for each sector
-	/// read (when possible).
-	///
-	/// Subchannel data has no error correction capabilities so this can
-	/// produce false positives.
-	///
-	/// When `strict`, sectors are marked bad anytime there's a sync failure.
-	///
-	/// This is disabled by default, but is recommended particularly for media
-	/// with early onset "disc rot" and is otherwised unblemished, as drives
-	/// can really struggle reading from the right place in such cases.
-	pub const fn with_sync(self, sync: bool, strict: bool) -> Self {
-		let flags =
-			if sync {
-				if strict { self.flags | FLAG_STRICT_SYNC }
-				else {
-					let flags = self.flags & ! FLAG_STRICT_SYNC;
-					flags | FLAG_SYNC
-				}
-			}
-			else { self.flags & ! FLAG_STRICT_SYNC };
+	with_flag!(
+		with_strict_c2,
+		FLAG_STRICT_C2,
+		"# Strict C2 (Sector).",
+		"",
+		"When `true`, C2 errors are an all-or-nothing proposition for the sector",
+		"as a whole. If any sample is bad, all samples are bad.",
+		"",
+		"The default is `false`.",
+	);
 
-		Self {
-			flags,
-			..self
-		}
-	}
+	with_flag!(
+		with_sync,
+		FLAG_SYNC,
+		"# Require Subchannel Sync.",
+		"",
+		"When `true`, sector data will only be accepted if the subchannel",
+		"timecode matches the requested LSN; if there's a desync, data will be",
+		"ignored and tried again on subsequent passes.",
+		"",
+		"Subchannel data is easily corrupted, so this is only potentially",
+		"useful in cases where disc rot, rather than wear-and-tear, is the sole",
+		"cause of readability issues.",
+		"",
+		"The default is `false`.",
+	);
 
 	#[must_use]
 	/// # Include Track.
@@ -367,13 +329,11 @@ macro_rules! get_flag {
 /// # Getters.
 impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
-	get_flag!(c2, FLAG_C2, "Leverage C2 Error Pointers");
-	get_flag!(c2_strict, FLAG_STRICT_C2, "Strict C2 Error Pointers");
+	get_flag!(strict_c2, FLAG_STRICT_C2, "Strict C2 Error Pointers");
 	get_flag!(flip_flop, FLAG_FLIP_FLOP, "Alternate Rip Read Order");
 	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(sync, FLAG_SYNC, "Subchannel Sync");
-	get_flag!(sync_strict, FLAG_STRICT_SYNC, "Strict Subchannel Sync");
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
@@ -452,43 +412,18 @@ mod test {
 		// Make sure our flags are unique.
 		let mut all = vec![
 			FLAG_BACKWARDS,
-			FLAG_C2,
 			FLAG_FLIP_FLOP,
 			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
 			FLAG_STRICT_C2,
-			FLAG_STRICT_SYNC,
 			FLAG_SYNC,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 8);
+		assert_eq!(all.len(), 6);
 
-		// Make sure they each have the expected number of ones.
-		assert!(
-			all.iter().all(|&v|
-				// These two include their non-strict counterparts.
-				if v == FLAG_STRICT_C2 || v == FLAG_STRICT_SYNC {
-					v.count_ones() == 2
-				}
-				// Everything else should have just one bit.
-				else { v.count_ones() == 1 }
-			)
-		)
-	}
-
-	#[test]
-	fn t_rip_options_c2() {
-		for (a, b) in [
-			(false, false),
-			(false, true),
-			(true, false),
-			(true, true),
-		] {
-			let opts = RipOptions::default().with_c2(a, b);
-			assert_eq!(opts.c2(), a);
-			assert_eq!(opts.c2_strict(), a && b);
-		}
+		// Also make sure each is only one bit.
+		assert!(all.iter().all(|&v| v.count_ones() == 1));
 	}
 
 	#[test]
@@ -528,6 +463,8 @@ mod test {
 		t_flags!("flip_flop", with_flip_flop, flip_flop);
 		t_flags!("reset_counts", with_reset_counts, reset_counts);
 		t_flags!("resume", with_resume, resume);
+		t_flags!("strict_c2", with_strict_c2, strict_c2);
+		t_flags!("sync", with_sync, sync);
 	}
 
 	#[test]
@@ -568,20 +505,6 @@ mod test {
 		assert_eq!(opts.rereads(), (1, 1));
 		let opts = RipOptions::default().with_rereads(64, 64);
 		assert_eq!(opts.rereads(), (REREADS_ABS_MAX, REREADS_REL_MAX));
-	}
-
-	#[test]
-	fn t_rip_options_sync() {
-		for (a, b) in [
-			(false, false),
-			(false, true),
-			(true, false),
-			(true, true),
-		] {
-			let opts = RipOptions::default().with_sync(a, b);
-			assert_eq!(opts.sync(), a);
-			assert_eq!(opts.sync_strict(), a && b);
-		}
 	}
 
 	#[test]

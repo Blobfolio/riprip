@@ -410,10 +410,10 @@ impl LibcdioInstance {
 		// strategy. If it doesn't work, oh well.
 		let mut buf = [0_u8; NUM_BLOCKS as usize * CD_DATA_SIZE as usize];
 		for i in 0..CHUNKS {
-			let _res = self._read_cd(
+			let _res = self.read_cd(
 				&mut buf,
 				lsn + i * i32::from(NUM_BLOCKS),
-				0,
+				false,
 				0,
 				CD_DATA_SIZE,
 				u32::from(NUM_BLOCKS),
@@ -421,57 +421,42 @@ impl LibcdioInstance {
 		}
 	}
 
-	/// # Read Raw.
+	/// # Read Data + C2.
 	///
-	/// This attempts to read a single audio sector — and maybe C2 data — to
-	/// the provided buffer. The buffer size is used to determine which mode is
-	/// being requested.
+	/// Read a single sector's worth of data and C2 error pointer information
+	/// into the buffer.
 	///
 	/// ## Errors
 	///
-	/// This will return an error if the buffer is insufficient, the read
-	/// operation is unsupported, or the disc is too messed up to be read.
-	pub(super) fn read_cd(
+	/// This will return an error if the read operation is unsupported or
+	/// otherwise fails.
+	pub(super) fn read_cd_c2(
 		&self,
-		buf: &mut [u8],
+		buf: &mut [u8; CD_DATA_C2_SIZE as usize],
 		lsn: i32,
 	) -> Result<(), RipRipError> {
-		// Shortcut: we can't read negative, so just pretend everything's null
-		// and good.
+		// We can't read negative, so assume everything is good and null.
 		if lsn < 0 {
 			for v in buf { *v = 0; }
 			return Ok(());
 		}
 
-		// The buffer and block size are equivalent for our purposes.
-		let block_size = u16::try_from(buf.len())
-			.map_err(|_| RipRipError::Bug("Invalid read buffer size."))?;
-
-		// We can infer whether or not C2 is desired based on the block size,
-		// and at the same time rule out wacky sizes. We'll also take this
-		// opportunity to reset the buffer before the read.
-		let c2_too = match block_size {
-			CD_DATA_C2_SIZE => 1,
-			CD_DATA_SIZE => 0,
-			_ => return Err(RipRipError::Bug("Invalid read buffer size.")),
-		};
-
 		// Read it!
-		self._read_cd(buf, lsn, c2_too, 0, block_size, 1)
+		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE, 1)
 	}
 
 	#[allow(unsafe_code)]
-	/// # Read Raw & Verify Timecode.
+	/// # Read Data + Subchannel
 	///
-	/// Like `read_cd`, this reads a single sector of data into the buffer. But
-	/// it also pulls down the 16-byte formatted subchannel code, and checks to
-	/// see that it corresponds to the sector we expect it to.
+	/// Read a single sector's worth of data and formatted 16-byte subchannel
+	/// information into the buffer. The subchannel data will be parsed to
+	/// confirm the timecode matches up with the LSN, where possible, and
+	/// trigger a sync error if that fails.
 	///
 	/// ## Errors
 	///
-	/// In addition to the errors returned by `read_cd`, this will return an
-	/// error if the timing information can be read but does not match the
-	/// sector we're attempting to read.
+	/// This will return an error if the read operation is unsupported or
+	/// otherwise fails, or if the timecode does not match the LSN.
 	pub(super) fn read_subchannel(
 		&self,
 		buf: &mut [u8],
@@ -482,14 +467,14 @@ impl LibcdioInstance {
 			return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
 		}
 
-		// Reset the data.
-		for v in &mut *buf { *v = 0; }
-
-		// Shortcut: we can't read negative, so bail.
-		if lsn < 0 { return Ok(()); }
+		// We can't read negative, so assume everything is good and null.
+		if lsn < 0 {
+			for v in &mut *buf { *v = 0; }
+			return Ok(());
+		}
 
 		// Read it!
-		self._read_cd(buf, lsn, 0, 2, CD_DATA_SUBCHANNEL_SIZE, 1)?;
+		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE, 1)?;
 
 		// We can only get timing information from ADR-1.
 		if 1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 {
@@ -504,15 +489,13 @@ impl LibcdioInstance {
 			}
 		}
 
-		// Before we leave, reset the subchannel bits to zero.
-		for v in &mut buf[usize::from(CD_DATA_SIZE)..] { *v = 0; }
-
 		// As good as we can do!
 		Ok(())
 	}
 
 	#[allow(unsafe_code)]
 	#[allow(non_upper_case_globals)] // Not our globals.
+	#[inline]
 	/// # Execute Read Command.
 	///
 	/// This private method executes the million-argument MMC read command with
@@ -522,11 +505,11 @@ impl LibcdioInstance {
 	///
 	/// This will return an error if the read fails, but provides no other
 	/// sanity checks.
-	fn _read_cd(
+	fn read_cd(
 		&self,
 		buf: &mut [u8],
 		lsn: i32,
-		c2: u8,
+		c2: bool,
 		sub: u8,
 		block_size: u16,
 		blocks: u32
@@ -536,16 +519,16 @@ impl LibcdioInstance {
 				self.as_ptr(),
 				buf.as_mut_ptr().cast(),
 				lsn,
-				1,          // Sector type: CDDA.
-				0,          // No random data manipulation thank you kindly.
-				0,          // No header syncing.
-				0,          // No headers.
-				1,          // YES audio block!
-				0,          // No EDC.
-				c2,         // C2 or no C2?
-				sub,        // Subchannel? What kind?
-				block_size, // Block size (varies by data requested).
-				blocks,     // Total number of blocks to read.
+				1,            // Sector type: CDDA.
+				0,            // No random data manipulation thank you kindly.
+				0,            // No header syncing.
+				0,            // No headers.
+				1,            // YES audio block!
+				0,            // No EDC.
+				u8::from(c2), // C2 or no C2?
+				sub,          // Subchannel? What kind?
+				block_size,   // Block size (varies by data requested).
+				blocks,       // Total number of blocks to read.
 			)
 		};
 

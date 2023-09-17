@@ -14,11 +14,6 @@ use std::cmp::Ordering;
 
 
 
-/// # Sync Flag.
-const SYNCHED: u8 = 0b1000_0000;
-
-
-
 #[derive(Debug, Clone, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// # Rip Sample.
 ///
@@ -100,12 +95,10 @@ impl RipSample {
 		match self {
 			Self::Tbd | Self::Bad(_) => false,
 			Self::Confirmed(_) => true,
-			Self::Maybe(s) =>
-				s.is_synched() &&
-				{
-					let (a, b) = s.contention();
-					rereads.0 <= a && b.saturating_mul(rereads.1).min(126) < a
-				},
+			Self::Maybe(s) => {
+				let (a, b) = s.contention();
+				rereads.0 <= a && b.saturating_mul(rereads.1).min(254) < a
+			},
 		}
 	}
 }
@@ -126,21 +119,19 @@ impl RipSample {
 	/// changed to Maybe.)
 	///
 	/// Confirmed stay the same.
-	pub(crate) fn update(&mut self, new: Sample, err_c2: bool, err_sync: bool) {
+	pub(crate) fn update(&mut self, new: Sample, err_c2: bool) {
 		// Send bad samples to a different method to halve the onslaught of
 		// conditional handling. Haha.
-		if err_c2 {
-			return self.update_bad(new, err_sync);
-		}
+		if err_c2 { return self.update_bad(new); }
 
 		match self {
 			// Always update a TBD.
 			Self::Tbd | Self::Bad(_) => {
-				*self = Self::Maybe(ContentiousSample::new(new, err_sync));
+				*self = Self::Maybe(ContentiousSample::new(new));
 			},
 
 			// Simple Maybes.
-			Self::Maybe(s) => { s.add_good(new, err_sync); },
+			Self::Maybe(s) => { s.add_good(new); },
 
 			// Leave confirmed samples alone.
 			Self::Confirmed(_) => {},
@@ -155,20 +146,15 @@ impl RipSample {
 	/// sync weirdness.
 	///
 	/// Confirmed stay the same.
-	fn update_bad(&mut self, new: Sample, err_sync: bool) {
+	fn update_bad(&mut self, new: Sample) {
 		match self {
 			// Always update a TBD.
-			Self::Tbd | Self::Bad(_) => {
-				*self = Self::Bad(new);
-			},
+			Self::Tbd | Self::Bad(_) => { *self = Self::Bad(new); },
 
 			// Simple Maybes.
-			Self::Maybe(s) =>
-				if ! err_sync {
-					if let Some(boo) = s.add_bad(new) {
-						*self = boo;
-					}
-				},
+			Self::Maybe(s) => if let Some(boo) = s.add_bad(new) {
+				*self = boo;
+			},
 
 			// Leave confirmed samples alone.
 			Self::Confirmed(_) => {},
@@ -196,11 +182,9 @@ pub(crate) enum ContentiousSample {
 }
 
 impl ContentiousSample {
+	#[inline]
 	/// # New.
-	const fn new(new: Sample, err_sync: bool) -> Self {
-		let count = join_count_sync(1, ! err_sync);
-		Self::Maybe1((new, count))
-	}
+	const fn new(new: Sample) -> Self { Self::Maybe1((new, 1)) }
 }
 
 impl ContentiousSample {
@@ -229,47 +213,24 @@ impl ContentiousSample {
 	/// Return the first (best) total, and the total of all the rest.
 	const fn contention(&self) -> (u8, u8) {
 		match self {
-			Self::Maybe1((_, c)) => {
-				(*c & ! SYNCHED, 0)
-			},
-			Self::Maybe2(set) => {
-				(
-					set[0].1 & ! SYNCHED,
-					set[1].1 & ! SYNCHED,
-				)
-			},
-			Self::Maybe3(set) => {
-				(
-					set[0].1 & ! SYNCHED,
-					(set[1].1 & ! SYNCHED).saturating_add(set[2].1 & ! SYNCHED),
-				)
-			},
-			Self::Maybe4((set, other)) => {
-				let other = other.saturating_add(set[1].1 & ! SYNCHED)
-					.saturating_add(set[2].1 & ! SYNCHED)
-					.saturating_add(set[3].1 & ! SYNCHED);
-				(
-					set[0].1 & ! SYNCHED,
-					other,
-				)
-			},
+			Self::Maybe1((_, c)) => (*c, 0),
+			Self::Maybe2(set) => (set[0].1, set[1].1),
+			Self::Maybe3(set) => (
+				set[0].1,
+				set[1].1.saturating_add(set[2].1),
+			),
+			Self::Maybe4((set, other)) => (
+				set[0].1,
+				other.saturating_add(set[1].1)
+					.saturating_add(set[2].1)
+					.saturating_add(set[3].1),
+			),
 		}
-	}
-
-	/// # Is Synched?
-	const fn is_synched(&self) -> bool {
-		let raw = match self {
-			Self::Maybe1((_, c)) => *c,
-			Self::Maybe2(set) => set[0].1,
-			Self::Maybe3(set) => set[0].1,
-			Self::Maybe4((set, _)) => set[0].1,
-		};
-		SYNCHED == raw & SYNCHED
 	}
 }
 
 impl ContentiousSample {
-	#[allow(clippy::too_many_lines)] // That's why we're stopping at four. Haha.
+	#[allow(clippy::cognitive_complexity)]
 	/// # Add (Bad) Sample.
 	///
 	/// If the value already exists, the count is _decreased_. If it reaches
@@ -279,122 +240,108 @@ impl ContentiousSample {
 	/// with a count of zero).
 	fn add_bad(&mut self, new: Sample) -> Option<RipSample> {
 		match self {
-			Self::Maybe1((old, data)) =>
+			Self::Maybe1((old, count)) =>
 				if new.eq(old) {
-					let (count, sync) = split_count_sync(*data);
 					// We can't drop the only entry; go bad!
-					if count == 1 { return Some(RipSample::Bad(new)); }
-					*data = join_count_sync(count - 1, sync);
+					if *count == 1 { return Some(RipSample::Bad(new)); }
+					*count -= 1;
 				},
-			Self::Maybe2([(old1, data1), (old2, data2)]) =>
+			Self::Maybe2([(old1, count1), (old2, count2)]) =>
 				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
 					// Drop, keeping 2.
-					if count == 1 {
-						*self = Self::Maybe1((*old2, *data2));
-					}
-					// Decrement and resort.
+					if *count1 == 1 { *self = Self::Maybe1((*old2, *count2)); }
+					// Decrement and maybe resort.
 					else {
-						*data1 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count1 -= 1;
+						if *count1 < *count2 { self.sort(); }
 					}
 				}
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
 					// Drop, keeping 1.
-					if count == 1 {
-						*self = Self::Maybe1((*old1, *data1));
-					}
+					if *count2 == 1 { *self = Self::Maybe1((*old1, *count1)); }
 					// Decrement.
-					else { *data2 = join_count_sync(count - 1, sync); }
+					else { *count2 -= 1; }
 				},
-			Self::Maybe3([(old1, data1), (old2, data2), (old3, data3)]) =>
+			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) =>
 				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
 					// Drop, keeping 2,3.
-					if count == 1 {
-						*self = Self::Maybe2([(*old2, *data2), (*old3, *data3)]);
+					if *count1 == 1 {
+						*self = Self::Maybe2([(*old2, *count2), (*old3, *count3)]);
 					}
-					// Decrement and resort.
+					// Decrement and maybe resort.
 					else {
-						*data1 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count1 -= 1;
+						if *count1 < *count2 { self.sort(); }
 					}
 				}
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
 					// Drop, keeping 1,3.
-					if count == 1 {
-						*self = Self::Maybe2([(*old1, *data1), (*old3, *data3)]);
+					if *count2 == 1 {
+						*self = Self::Maybe2([(*old1, *count1), (*old3, *count3)]);
 					}
-					// Decrement and resort.
+					// Decrement and maybe resort.
 					else {
-						*data2 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count2 -= 1;
+						if *count2 < *count3 { self.sort(); }
 					}
 				}
 				else if new.eq(old3) {
-					let (count, sync) = split_count_sync(*data3);
 					// Drop, keeping 1,2.
-					if count == 1 {
-						*self = Self::Maybe2([(*old1, *data1), (*old2, *data2)]);
+					if *count3 == 1 {
+						*self = Self::Maybe2([(*old1, *count1), (*old2, *count2)]);
 					}
 					// Decrement.
-					else { *data3 = join_count_sync(count - 1, sync); }
+					else { *count3 -= 1; }
 				},
-			Self::Maybe4(([(old1, data1), (old2, data2), (old3, data3), (old4, data4)], _)) =>
+			Self::Maybe4(([(old1, count1), (old2, count2), (old3, count3), (old4, count4)], _)) =>
 				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
 					// Drop, keeping 2,3,4.
-					if count == 1 {
+					if *count1 == 1 {
 						*self = Self::Maybe3([
-							(*old2, *data2), (*old3, *data3), (*old4, *data4),
+							(*old2, *count2), (*old3, *count3), (*old4, *count4),
 						]);
 					}
-					// Decrement and resort.
+					// Decrement and maybe resort.
 					else {
-						*data1 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count1 -= 1;
+						if *count1 < *count2 { self.sort(); }
 					}
 				}
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
 					// Drop, keeping 1,3,4.
-					if count == 1 {
+					if *count2 == 1 {
 						*self = Self::Maybe3([
-							(*old1, *data1), (*old3, *data3), (*old4, *data4),
+							(*old1, *count1), (*old3, *count3), (*old4, *count4),
 						]);
 					}
-					// Decrement and resort.
+					// Decrement and maybe resort.
 					else {
-						*data2 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count2 -= 1;
+						if *count2 < *count3 { self.sort(); }
 					}
 				}
 				else if new.eq(old3) {
-					let (count, sync) = split_count_sync(*data3);
 					// Drop, keeping 1,2,4.
-					if count == 1 {
+					if *count3 == 1 {
 						*self = Self::Maybe3([
-							(*old1, *data1), (*old2, *data2), (*old4, *data4),
+							(*old1, *count1), (*old2, *count2), (*old4, *count4),
 						]);
 					}
-					// Decrement and resort.
+					// Decrement and maybe resort.
 					else {
-						*data3 = join_count_sync(count - 1, sync);
-						self.sort();
+						*count3 -= 1;
+						if *count3 < *count4 { self.sort(); }
 					}
 				}
 				else if new.eq(old4) {
-					let (count, sync) = split_count_sync(*data4);
 					// Drop, keeping 1,2,3.
-					if count == 1 {
+					if *count4 == 1 {
 						*self = Self::Maybe3([
-							(*old1, *data1), (*old2, *data2), (*old3, *data3),
+							(*old1, *count1), (*old2, *count2), (*old3, *count3),
 						]);
 					}
 					// Decrement.
-					else { *data4 = join_count_sync(count - 1, sync); }
+					else { *count4 -= 1; }
 				},
 		}
 
@@ -409,99 +356,70 @@ impl ContentiousSample {
 	///
 	/// If the value is different, it will be added, unless we're already a
 	/// Maybe4, in which case we'll just bump the "other" count.
-	fn add_good(&mut self, new: Sample, err_sync: bool) {
+	fn add_good(&mut self, new: Sample) {
 		match self {
-			Self::Maybe1((old, data)) =>
+			Self::Maybe1((old, count)) =>
 				// Bump the count.
-				if new.eq(old) {
-					let (count, sync) = split_count_sync(*data);
-					*data = join_count_sync(count + 1, sync || ! err_sync);
-				}
+				if new.eq(old) { *count = count.saturating_add(1); }
 				// Move to Maybe2.
 				else {
-					*self = Self::Maybe2([
-						(*old, *data),
-						(new, join_count_sync(1, ! err_sync)),
-					]);
+					*self = Self::Maybe2([(*old, *count), (new, 1)]);
 				},
-			Self::Maybe2([(old1, data1), (old2, data2)]) =>
+			Self::Maybe2([(old1, count1), (old2, count2)]) =>
 				// Bump the count.
-				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
-					*data1 = join_count_sync(count + 1, sync || ! err_sync);
-				}
-				// Bump and maybe resort.
+				if new.eq(old1) { *count1 = count1.saturating_add(1); }
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
-					*data2 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count2 = count2.saturating_add(1);
+					if *count2 > *count1 { self.sort(); }
 				}
 				// Move to Maybe3.
 				else {
 					*self = Self::Maybe3([
-						(*old1, *data1),
-						(*old2, *data2),
-						(new, join_count_sync(1, ! err_sync)),
+						(*old1, *count1),
+						(*old2, *count2),
+						(new, 1),
 					]);
 				},
-			Self::Maybe3([(old1, data1), (old2, data2), (old3, data3)]) =>
+			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) =>
 				// Bump the count.
-				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
-					*data1 = join_count_sync(count + 1, sync || ! err_sync);
-				}
-				// Bump and maybe resort.
+				if new.eq(old1) { *count1 = count1.saturating_add(1); }
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
-					*data2 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count2 = count2.saturating_add(1);
+					if *count2 > *count1 { self.sort(); }
 				}
-				// Bump and maybe resort.
 				else if new.eq(old3) {
-					let (count, sync) = split_count_sync(*data3);
-					*data3 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count3 = count3.saturating_add(1);
+					if *count3 > *count2 { self.sort(); }
 				}
 				// Move to Maybe4.
 				else {
 					*self = Self::Maybe4((
 						[
-							(*old1, *data1),
-							(*old2, *data2),
-							(*old3, *data3),
-							(new, join_count_sync(1, ! err_sync)),
+							(*old1, *count1),
+							(*old2, *count2),
+							(*old3, *count3),
+							(new, 1),
 						],
 						0
 					));
 				},
-			Self::Maybe4(([(old1, data1), (old2, data2), (old3, data3), (old4, data4)], other)) =>
+			Self::Maybe4(([(old1, count1), (old2, count2), (old3, count3), (old4, count4)], other)) =>
 				// Bump the count.
-				if new.eq(old1) {
-					let (count, sync) = split_count_sync(*data1);
-					*data1 = join_count_sync(count + 1, sync || ! err_sync);
-				}
-				// Bump and maybe resort.
+				if new.eq(old1) { *count1 = count1.saturating_add(1); }
 				else if new.eq(old2) {
-					let (count, sync) = split_count_sync(*data2);
-					*data2 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count2 = count2.saturating_add(1);
+					if *count2 > *count1 { self.sort(); }
 				}
-				// Bump and maybe resort.
 				else if new.eq(old3) {
-					let (count, sync) = split_count_sync(*data3);
-					*data3 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count3 = count3.saturating_add(1);
+					if *count3 > *count2 { self.sort(); }
 				}
-				// Bump and maybe resort.
 				else if new.eq(old4) {
-					let (count, sync) = split_count_sync(*data4);
-					*data4 = join_count_sync(count + 1, sync || ! err_sync);
-					self.sort();
+					*count4 = count4.saturating_add(1);
+					if *count4 > *count3 { self.sort(); }
 				}
-				// Increment other, unless there was a sync issue.
-				else if ! err_sync {
-					*other = other.saturating_add(1);
-				},
+				// Increment other.
+				else { *other = other.saturating_add(1); },
 		}
 	}
 
@@ -510,39 +428,21 @@ impl ContentiousSample {
 	/// Drop all counts back to one.
 	pub(crate) fn reset_counts(&mut self) {
 		match self {
-			Self::Maybe1((_, data1)) => {
-				let sync = SYNCHED == *data1 & SYNCHED;
-				*data1 = join_count_sync(1, sync);
-			},
+			Self::Maybe1((_, count1)) => { *count1 = 1; },
 			Self::Maybe2(set) => {
-				let sync = SYNCHED == set[0].1 & SYNCHED;
-				set[0].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[1].1 & SYNCHED;
-				set[1].1 = join_count_sync(1, sync);
+				set[0].1 = 1;
+				set[1].1 = 1;
 			},
 			Self::Maybe3(set) => {
-				let sync = SYNCHED == set[0].1 & SYNCHED;
-				set[0].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[1].1 & SYNCHED;
-				set[1].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[2].1 & SYNCHED;
-				set[2].1 = join_count_sync(1, sync);
+				set[0].1 = 1;
+				set[1].1 = 1;
+				set[2].1 = 1;
 			},
 			Self::Maybe4((set, other)) => {
-				let sync = SYNCHED == set[0].1 & SYNCHED;
-				set[0].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[1].1 & SYNCHED;
-				set[1].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[2].1 & SYNCHED;
-				set[2].1 = join_count_sync(1, sync);
-
-				let sync = SYNCHED == set[3].1 & SYNCHED;
-				set[3].1 = join_count_sync(1, sync);
+				set[0].1 = 1;
+				set[1].1 = 1;
+				set[2].1 = 1;
+				set[3].1 = 1;
 
 				*other = 0;
 			},
@@ -553,50 +453,21 @@ impl ContentiousSample {
 	fn sort(&mut self) {
 		match self {
 			Self::Maybe1(_) => {},
-			Self::Maybe2(set) => { set.sort_unstable_by(sort_sample_count_sync); },
-			Self::Maybe3(set) => { set.sort_unstable_by(sort_sample_count_sync); },
-			Self::Maybe4((set, _)) => { set.sort_unstable_by(sort_sample_count_sync); },
+			Self::Maybe2(set) => { set.sort_unstable_by(sort_sample_count); },
+			Self::Maybe3(set) => { set.sort_unstable_by(sort_sample_count); },
+			Self::Maybe4((set, _)) => { set.sort_unstable_by(sort_sample_count); },
 		}
 	}
 }
 
 
 
-/// # Merge Count/Sync.
-///
-/// We group our counts and sync together to save space. This method merges the
-/// separate values into one for storage.
-const fn join_count_sync(mut count: u8, sync: bool) -> u8 {
-	// We can't store counts higher than this.
-	if 127 < count { count = 127; }
-
-	if sync { count | SYNCHED }
-	else { count }
-}
-
 #[allow(clippy::trivially_copy_pass_by_ref)] // This is a callback.
+#[inline]
 /// # Sort Sample Count Tuple.
 ///
-/// Order by highest count, then sync.
-fn sort_sample_count_sync(a: &(Sample, u8), b: &(Sample, u8)) -> Ordering {
-	let (a_count, a_sync) = split_count_sync(a.1);
-	let (b_count, b_sync) = split_count_sync(b.1);
-	match b_count.cmp(&a_count) {
-		Ordering::Equal => b_sync.cmp(&a_sync),
-		cmp => cmp,
-	}
-}
-
-/// # Split Count/Sync.
-///
-/// We group our counts and sync together to save space. This method splits and
-/// returns the separate values.
-const fn split_count_sync(raw: u8) -> (u8, bool) {
-	let sync = SYNCHED == raw & SYNCHED;
-	let count = raw & ! SYNCHED;
-	(count, sync)
-}
-
+/// Order by highest count.
+fn sort_sample_count(a: &(Sample, u8), b: &(Sample, u8)) -> Ordering { b.1.cmp(&a.1) }
 
 
 
@@ -605,122 +476,108 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn t_join_split() {
-		for i in 0..=127_u8 {
-			for j in [true, false] {
-				let joined = join_count_sync(i, j);
-				assert_eq!(
-					split_count_sync(joined),
-					(i, j),
-					"Join/split wrong with {i} {j}.",
-				);
-			}
-		}
-	}
-
-	#[test]
 	fn t_update() {
 		// Start with TBD.
 		let mut sample = RipSample::Tbd;
-		sample.update(NULL_SAMPLE, true, false);
+		sample.update(NULL_SAMPLE, true);
 		assert_eq!(sample, RipSample::Bad(NULL_SAMPLE));
 
 		// Bad + Good = Maybe.
-		sample.update(NULL_SAMPLE, false, false);
+		sample.update(NULL_SAMPLE, false);
 		assert_eq!(
 			sample,
-			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1 | SYNCHED)))
+			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1)))
 		);
 
 		// Maybe + Bad = no change.
-		sample.update([1, 1, 1, 1], true, false);
+		sample.update([1, 1, 1, 1], true);
 		assert_eq!(
 			sample,
-			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1 | SYNCHED)))
+			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1)))
 		);
 
 		// Maybe + Good = ++
-		sample.update(NULL_SAMPLE, false, false);
+		sample.update(NULL_SAMPLE, false);
 		assert_eq!(
 			sample,
-			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 2 | SYNCHED)))
+			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 2)))
 		);
 
 		// Maybe + Good (different) = Contentious
-		sample.update([1, 1, 1, 1], false, false);
+		sample.update([1, 1, 1, 1], false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
-				(NULL_SAMPLE, 2 | SYNCHED),
-				([1, 1, 1, 1], 1 | SYNCHED),
+				(NULL_SAMPLE, 2),
+				([1, 1, 1, 1], 1),
 			]))
 		);
 
 		// Contentious + Bad (different) = no change
-		sample.update([1, 2, 1, 2], true, false);
+		sample.update([1, 2, 1, 2], true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
-				(NULL_SAMPLE, 2 | SYNCHED),
-				([1, 1, 1, 1], 1 | SYNCHED),
+				(NULL_SAMPLE, 2),
+				([1, 1, 1, 1], 1),
 			]))
 		);
 
 		// Bump the second.
-		sample.update([1, 1, 1, 1], false, false);
+		sample.update([1, 1, 1, 1], false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
-				(NULL_SAMPLE, 2 | SYNCHED),
-				([1, 1, 1, 1], 2 | SYNCHED),
+				(NULL_SAMPLE, 2),
+				([1, 1, 1, 1], 2),
 			]))
 		);
 
 		// Second takes the lead!
-		sample.update([1, 1, 1, 1], false, false);
+		sample.update([1, 1, 1, 1], false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
-				([1, 1, 1, 1], 3 | SYNCHED),
-				(NULL_SAMPLE, 2 | SYNCHED),
+				([1, 1, 1, 1], 3),
+				(NULL_SAMPLE, 2),
 			]))
 		);
 
 		// Contentious + Bad (existing) = --
-		sample.update(NULL_SAMPLE, true, false);
+		sample.update(NULL_SAMPLE, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
-				([1, 1, 1, 1], 3 | SYNCHED),
-				(NULL_SAMPLE, 1 | SYNCHED),
+				([1, 1, 1, 1], 3),
+				(NULL_SAMPLE, 1),
 			]))
 		);
 
 		// Contentious + Bad (existing) = -- = Maybe
-		sample.update(NULL_SAMPLE, true, false);
+		sample.update(NULL_SAMPLE, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
-				([1, 1, 1, 1], 3 | SYNCHED),
+				([1, 1, 1, 1], 3),
 			))
 		);
 
 		// Maybe + Bad (existing) = -- = empty = Bad.
-		sample.update([1, 1, 1, 1], true, false);
+		sample.update([1, 1, 1, 1], true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
-				([1, 1, 1, 1], 2 | SYNCHED),
+				([1, 1, 1, 1], 2),
 			))
 		);
-		sample.update([1, 1, 1, 1], true, false);
+		sample.update([1, 1, 1, 1], true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
-				([1, 1, 1, 1], 1 | SYNCHED),
+				([1, 1, 1, 1], 1),
 			))
 		);
-		sample.update([1, 1, 1, 1], true, false);
+		sample.update([1, 1, 1, 1], true);
 		assert_eq!(sample, RipSample::Bad([1, 1, 1, 1]));
 	}
 }
