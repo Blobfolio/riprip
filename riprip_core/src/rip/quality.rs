@@ -82,13 +82,11 @@ impl TrackQuality {
 			match v {
 				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
 				RipSample::Confirmed(_) => { confirmed += 1; },
-				RipSample::Maybe(_) =>
-					if v.is_likely(rereads) { likely += 1; }
-					else { maybe += 1; },
-				RipSample::Contentious(set) => {
+				RipSample::Maybe(_) => {
 					if v.is_likely(rereads) { likely += 1; }
 					else { maybe += 1; }
-					if 1 < set.len() { contentious += 1; }
+
+					if v.is_contentious() { contentious += 1; }
 				},
 			}
 		}

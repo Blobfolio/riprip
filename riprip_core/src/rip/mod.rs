@@ -7,6 +7,7 @@ pub(super) mod data;
 mod iter;
 pub(super) mod opts;
 mod quality;
+pub(super) mod sample;
 
 
 use cdtoc::{

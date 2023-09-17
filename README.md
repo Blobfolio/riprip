@@ -79,33 +79,52 @@ riprip --help
 
 First things first, rip the entire disc and see what happens!
 
-With no arguments, Rip Rip Hooray! will simply rip the entire disc, including the HTOA (if any). Each track will be saved to its own WAV file, and a cue sheet will be generated for the collection.
+Because Rip Rip Hooray! is optimized for _recovery_ rather than quick, efficient transfers, you may want to use a traditional — but _accuate_ — CD ripper for the first pass, like [fre:ac](https://github.com/enzo1982/freac/) or [EAC](https://www.exactaudiocopy.de/). Just be sure to disable their advanced error recovery features, or you'll be in for a very long ride. Haha.
+
+From there, re-rip the problem tracks with Rip Rip Hooray!:
 
 ```bash
-# Rip everything, one pass per track.
+# Say you need 2, 3, 4 and 10. Use the -t/--track argument.
+riprip -t 2-4,10
+
+# Equivalent alternatives:
+# -t 2,3,4,10
+# -t 2 -t 3 -t 4 -t 10
+```
+
+If you'd rather stick with one program, that's fine too. Rip Rip Hooray! will rip an entire disc, including the HTOA (if any), by default, and give you a helpful cue sheet too:
+
+```bash
+# Rip the whole disc!
 riprip
 ```
 
-Audio CD rips cannot be _directly_ verified, but they can be _statistically_ verified. Rip Rip automatically checks each track after each pass to see if there are sufficient matches in the AccurateRip and CUETools databases. If there are, it will call the rip **GOOD** and move on.
+Whether you're ripping a few tracks or all tracks, Rip Rip Hooray! will check them against both the [AccurateRip](http://accuraterip.com/) and [CUETools](http://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they make things go faster too.
 
-If there are any non-confirmed (problem) tracks remaining after the first pass, open the cue sheet with [CUETools](http://cue.tools/wiki/CUETools) to see if automatic repair is possible. If it is, great! CUETools will fix everything up and give you a perfect copy of each track. (You can also use CUETools to fill in metadata, convert formats, etc.)
+If any tracks _don't_ verify the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip Hooray! recovered. If you used Rip Rip Hooray! for everything, just open the cue sheet it generated.
 
-If problems remain, don't worry; _iterate_!
+If automatic repair works, great! You're done!
 
-Simply re-run Rip Rip. It will pick up from where it left off, (re)reading any sectors that have room for improvement (and skipping the rest).
+If not, don't worry; _iterate!_
+
+Simply re-run Rip Rip Hooray!. It will pick up from where it left off, (re)reading any sectors that have room for improvement, skipping the rest.
 
 ```bash
 # Refine the original rip.
 riprip
 
-# If you plan to re-rip several times, you can automate the process with the
-# -p/--passes option:
+# If ripping specific tracks, stay specific.
+riprip -t 2-4,10
+```
+
+You can do this as many or as few times as needed. If you know you'll need several passes to get the data good enough for CUETools, you can automate that with the `-p`/`--passes` option, like:
+
+```bash
+# Run through each track up to three times, if needed.
 riprip --passes 3
 ```
 
-As before, if problem tracks remain after the re-rip, open the cue sheet in CUETools, etc. 
-
-Rinse and repeat until all tracks have been confirmed, or your drive has read everything it possibly can.
+If problem tracks remain, recheck the refined album rip with CUETools repair. If it's not there yet, rinse and repeat until everything is perfect, or the drive has clearly read everything it's ever going to read.
 
 Good luck!
 

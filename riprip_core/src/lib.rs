@@ -65,10 +65,8 @@ pub use drive::{
 pub use error::RipRipError;
 pub(crate) use rip::{
 	buf::RipBuffer,
-	data::{
-		RipSample,
-		RipState,
-	},
+	data::RipState,
+	sample::RipSample,
 	Ripper,
 };
 pub use rip::opts::RipOptions;
