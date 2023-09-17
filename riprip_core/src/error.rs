@@ -150,7 +150,7 @@ impl fmt::Display for RipRipError {
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
 			Self::RipOverflow => f.write_str("The numbers are too big for this system architecture."),
-			Self::StateCorrupt(n) => write!(f, "The state data for track #{n} is corrupt."),
+			Self::StateCorrupt(n) => write!(f, "The state data for track #{n} is corrupt; rerip this track with --no-resume to start over."),
 			Self::StateSave(n) => write!(f, "Unable to save the state data for track #{n}."),
 			Self::SubchannelDesync => f.write_str("Subchannel desync."),
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),

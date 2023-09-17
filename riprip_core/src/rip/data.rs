@@ -155,7 +155,7 @@ impl RipState {
 		// Should we pick up where we left off?
 		if resume {
 			match Self::from_file(toc, track, reset_counts) {
-				Ok(None) | Err(RipRipError::StateCorrupt(_)) => {},
+				Ok(None) => {},
 				Ok(Some(out)) => return Ok(out),
 				Err(e) => return Err(e),
 			}
