@@ -273,29 +273,31 @@ impl Disc {
 					if conf {
 						if idx == 0 { Cow::Borrowed("            \x1b[0;93m*\x1b[0m") }
 						else { fmt_ar(ar) }
-					} else { Cow::Borrowed("") },
+					} else { Cow::Borrowed("            \x1b[0;91mx\x1b[0m") },
 					if conf {
 						if idx == 0 { Cow::Borrowed("         \x1b[0;93m*\x1b[0m") }
 						else { fmt_ctdb(ctdb) }
-					} else { Cow::Borrowed("") },
+					} else { Cow::Borrowed("         \x1b[0;91mx\x1b[0m") },
 				);
 			}
 
-			if conf {
-				eprintln!(
-					"  {}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{COLOR_CONFIRMED}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
-					" ".repeat(col1),
-				);
+			// Add confirmation column headers.
+			eprintln!(
+				"  {}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
+				" ".repeat(col1),
+				if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
+			);
+
+			// Mention that the HTOA can't be verified but is probably okay.
+			if htoa_likely {
+				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,");
+				eprintln!("  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m");
 			}
-			if htoa_any {
-				if htoa_likely {
-					eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,");
-					eprintln!("  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m");
-				}
-				else {
-					eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB");
-					eprintln!("  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
-				}
+			// Mention that the HTOA can't be verified and should be reripped
+			// to increase certainty.
+			else if htoa_any {
+				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB");
+				eprintln!("  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
 			}
 
 			// An extra line break for separation.
