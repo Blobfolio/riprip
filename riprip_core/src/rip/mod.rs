@@ -127,8 +127,11 @@ impl<'a> Ripper<'a> {
 			self.opts.reset_counts(), // Only true on the first pass.
 		)?;
 
+		// Cache bust selectively; only bother if we're reading the same track
+		// two times in a row.
+		let mut last_read_track = first_track.track.number();
+
 		for pass in 1..=self.opts.passes() {
-			let mut busted = false;
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
@@ -157,8 +160,7 @@ impl<'a> Ripper<'a> {
 				}
 
 				// Cache bust!
-				if ! busted && ! entry.q2.map_or(false, |q| q.is_likely()) {
-					busted = true;
+				if last_read_track == entry.track.number() {
 					set_progress_title(
 						progress,
 						entry.track.number(),
@@ -178,14 +180,18 @@ impl<'a> Ripper<'a> {
 						if self.opts.backwards() { ", backwards, and in heels" } else { "" },
 					)
 				);
-				entry.rip(
+				if entry.rip(
 					&mut buf,
 					self.disc.cdio(),
 					&mut state,
 					&self.opts,
 					progress,
 					killed,
-				)?;
+				)? {
+					// Note that we attempted to read at least one sector for
+					// this track.
+					last_read_track = entry.track.number();
+				}
 			}
 
 			// Flip the read order for next time?
@@ -285,6 +291,9 @@ impl RipEntry {
 	/// In addition to the basic ripping, this will also update the quality
 	/// variables, verify the track, and resave the state, if applicable.
 	///
+	/// This will return `true` if any read requests were made (regardless of
+	/// success), `false` otherwise.
+	///
 	/// ## Errors
 	///
 	/// This will bubble up any errors encountered.
@@ -297,7 +306,8 @@ impl RipEntry {
 		progress: &Progless,
 		killed: &KillSwitch,
 	)
-	-> Result<(), RipRipError> {
+	-> Result<bool, RipRipError> {
+		let mut any_read = false;
 		let before = state.quick_hash();
 		let rip_rng = state.sector_rip_range();
 		let lsn_start = rip_rng.start;
@@ -318,6 +328,7 @@ impl RipEntry {
 			}
 
 			// Read and patch!
+			any_read = true;
 			match buf.read_sector(cdio, read_lsn, opts) {
 				// Good is good!
 				Ok(()) => if ! killed.killed() {
@@ -343,7 +354,8 @@ impl RipEntry {
 		}
 
 		// Save the state if we changed any data.
-		if before != state.quick_hash() {
+		let changed = before != state.quick_hash();
+		if changed {
 			// Resave the state.
 			set_progress_title(
 				progress,
@@ -355,9 +367,11 @@ impl RipEntry {
 
 		// Don't forget to extract the track. Do this after every pass
 		// in case people want to fuck with CUETools immediately.
-		self.dst.replace(state.save_track()?);
+		if self.dst.is_none() || changed {
+			self.dst.replace(state.save_track()?);
+		}
 
-		Ok(())
+		Ok(any_read)
 	}
 
 	/// # Skippable?
