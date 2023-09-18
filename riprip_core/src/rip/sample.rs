@@ -60,10 +60,10 @@ impl RipSample {
 }
 
 impl RipSample {
-	/*
 	/// # Is Bad?
-	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Bad(_)) }
+	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Tbd | Self::Bad(_)) }
 
+	/*
 	/// # Is Maybe?
 	pub(crate) const fn is_maybe(&self) -> bool { matches!(self, Self::Contentious(_)) }
 	*/
@@ -100,6 +100,14 @@ impl RipSample {
 				rereads.0 <= a && b.saturating_mul(rereads.1).min(254) < a
 			},
 		}
+	}
+
+	/// # Is Wishywashy.
+	///
+	/// Returns true if the data is so inconsistent as to exceed the maximum
+	/// contention slots.
+	pub(crate) const fn is_wishywashy(&self) -> bool {
+		matches!(self, Self::Maybe(ContentiousSample::Maybe4((_, other))) if *other != 0)
 	}
 }
 

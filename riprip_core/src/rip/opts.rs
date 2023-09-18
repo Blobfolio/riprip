@@ -3,6 +3,7 @@
 */
 
 use crate::ReadOffset;
+use std::ops::RangeInclusive;
 use super::track_idx_to_bits;
 
 
@@ -24,6 +25,9 @@ const FLAG_STRICT_C2: u8 =    0b0001_0000;
 
 /// # FLAG: Subchannel Sync.
 const FLAG_SYNC: u8 =         0b0010_0000;
+
+/// # FLAG: Verbose.
+const FLAG_VERBOSE: u8 =      0b0100_0000;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_RESUME;
@@ -314,6 +318,17 @@ impl RipOptions {
 			}
 		}
 	}
+
+	with_flag!(
+		with_verbose,
+		FLAG_VERBOSE,
+		"# Verbose (Log) Mode.",
+		"",
+		"When `true`, detailed sector quality issues will be printed to STDOUT",
+		"so they can be piped to a file for review.",
+		"",
+		"The default is `false`.",
+	);
 }
 
 
@@ -334,6 +349,7 @@ impl RipOptions {
 	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(sync, FLAG_SYNC, "Subchannel Sync");
+	get_flag!(verbose, FLAG_VERBOSE, "Verbose (Log) Mode");
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
@@ -365,8 +381,62 @@ impl RipOptions {
 			pos: 0,
 		}
 	}
+
+	#[must_use]
+	/// # Tracks.
+	///
+	/// Return an iterator over the included track indices, collapsed into
+	/// inclusive ranges.
+	pub const fn tracks_rng(&self) -> RipOptionsTracksRng {
+		RipOptionsTracksRng {
+			set: self.tracks,
+			pos: 0,
+		}
+	}
 }
 
+#[cfg(feature = "bin")]
+/// # Misc.
+impl RipOptions {
+	#[must_use]
+	/// # CLI String.
+	///
+	/// Convert the options back into a list of arguments in CLI format. This
+	/// code isn't super pretty, but it's pretty straightforward.
+	pub fn cli(&self) -> String {
+		use std::borrow::Cow;
+
+		// The entries will be variable, so toss them into a vec first.
+		let mut opts = Vec::new();
+
+		// All the easy stuff.
+		if self.backwards() { opts.push(Cow::Borrowed("--backwards")); }
+		opts.push(Cow::Owned(format!("--confidence={}", self.confidence())));
+		if self.flip_flop() { opts.push(Cow::Borrowed("--flip-flop")); }
+		if ! self.resume() { opts.push(Cow::Borrowed("--no-resume")); }
+		let offset = self.offset().samples();
+		if offset != 0 { opts.push(Cow::Owned(format!("-o{offset}"))); }
+		opts.push(Cow::Owned(format!("-p{}", self.passes())));
+		let rr = self.rereads();
+		opts.push(Cow::Owned(format!("-r{},{}", rr.0, rr.1)));
+		if self.reset_counts() { opts.push(Cow::Borrowed("--reset-counts")); }
+		if self.strict_c2() { opts.push(Cow::Borrowed("--strict-c2")); }
+		if self.sync() { opts.push(Cow::Borrowed("--sync")); }
+
+		// The tracks should be condensed.
+		opts.push(Cow::Owned(format!(
+			"-t{}",
+			self.tracks_rng().map(|rng| {
+				let (a, b) = rng.into_inner();
+				if a == b { a.to_string() }
+				else { format!("{a}-{b}") }
+			}).collect::<Vec<String>>().join(",")
+		)));
+
+		// Done!
+		opts.join(" ")
+	}
+}
 
 
 #[derive(Debug, Clone)]
@@ -403,6 +473,54 @@ impl Iterator for RipOptionsTracks {
 
 
 
+#[derive(Debug, Clone)]
+/// # Rip Option Tracks (As Range).
+///
+/// Like [`RipOptionsTracks`], but results are returned as ranges instead of
+/// individual numbers. Useful for compact display, I suppose.
+pub struct RipOptionsTracksRng {
+	set: u128,
+	pos: u8,
+}
+
+impl Iterator for RipOptionsTracksRng {
+	type Item = RangeInclusive<u8>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let mut from = u8::MAX;
+		let mut to = u8::MAX;
+
+		while self.pos < 100 {
+			let idx = self.pos;
+			if 0 != self.set & track_idx_to_bits(idx) {
+				if from == u8::MAX {
+					from = idx;
+					to = idx;
+				}
+				else if to + 1 == idx {
+					to = idx;
+				}
+				else {
+					return Some(from..=to);
+				}
+			}
+			self.pos += 1;
+		}
+
+		if from == u8::MAX { None }
+		else { Some(from..=to) }
+	}
+
+	/// # Size Hint.
+	///
+	/// There will never be more than 99 tracks.
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
+	}
+}
+
+
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -417,10 +535,11 @@ mod test {
 			FLAG_RESUME,
 			FLAG_STRICT_C2,
 			FLAG_SYNC,
+			FLAG_VERBOSE,
 		];
 		all.sort_unstable();
 		all.dedup();
-		assert_eq!(all.len(), 6);
+		assert_eq!(all.len(), 7);
 
 		// Also make sure each is only one bit.
 		assert!(all.iter().all(|&v| v.count_ones() == 1));
@@ -465,6 +584,7 @@ mod test {
 		t_flags!("resume", with_resume, resume);
 		t_flags!("strict_c2", with_strict_c2, strict_c2);
 		t_flags!("sync", with_sync, sync);
+		t_flags!("verbose", with_verbose, verbose);
 	}
 
 	#[test]
@@ -555,5 +675,25 @@ mod test {
 		// Remove the rest.
 		opts = opts.without_track(5).without_track(15);
 		assert!(! opts.has_tracks(), "Options tracks should be empty!");
+	}
+
+	#[test]
+	fn t_track_rng() {
+		let mut opts = RipOptions::default();
+		for i in [1, 2, 3, 6, 10, 11] { opts = opts.with_track(i); }
+
+		let mut rng = opts.tracks_rng();
+		assert_eq!(rng.next(), Some(1..=3));
+		assert_eq!(rng.next(), Some(6..=6));
+		assert_eq!(rng.next(), Some(10..=11));
+		assert_eq!(rng.next(), None);
+
+		opts = RipOptions::default();
+		assert_eq!(opts.tracks_rng().next(), None);
+
+		opts = opts.with_track(4);
+		rng = opts.tracks_rng();
+		assert_eq!(rng.next(), Some(4..=4));
+		assert_eq!(rng.next(), None);
 	}
 }

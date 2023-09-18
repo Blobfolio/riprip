@@ -132,6 +132,9 @@ fn _main() -> Result<(), RipRipError> {
 	// Summarize.
 	rip_summary(&disc, &opts)?;
 
+	// Log header.
+	if opts.verbose() { log_header(&disc, &opts); }
+
 	// Rip and rip and rip!
 	disc.rip(&opts, &progress, &killed)?;
 
@@ -139,15 +142,51 @@ fn _main() -> Result<(), RipRipError> {
 	else { Ok(()) }
 }
 
+/// # Log Header.
+///
+/// Print a few basic setup details for the log. Only applies when -v/--verbose
+/// is set, and we're ripping something.
+fn log_header(disc: &Disc, opts: &RipOptions) {
+	use std::io::Write;
+
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
+
+	// Program version.
+	let _res = writeln!(&mut handle, concat!("##\n## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "\n##"));
+	let _res = writeln!(&mut handle, "## CLI:   {}", opts.cli());
+
+	// Drive.
+	if let Some(v) = disc.drive_vendor_model() {
+		let _res = writeln!(&mut handle, "## Drive: {v}");
+	}
+
+	let _res = writeln!(&mut handle, "## Disc:  {}", disc.toc().cddb_id());
+
+	// Column Headers, kinda.
+	let _res = writeln!(
+		&mut handle,
+		r"##
+## Sectors with outstanding problems are listed in the order in which they're
+## read. Each line contains the following, separated by two spaces:
+##   * Unix timestamp        (10 digits)
+##   * Track number          (02 digits)
+##   * Logical sector number (06 digits)
+##   * Text description");
+
+	let _res = handle.flush();
+}
+
 /// # Parse Rip Options.
 fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
 	let mut opts = RipOptions::default()
-		.with_backwards(args.switch(b"--backwards"))
+		.with_backwards(args.switch2(b"--backwards", b"--backward"))
 		.with_flip_flop(args.switch(b"--flip-flop"))
-		.with_reset_counts(args.switch(b"--reset-counts"))
+		.with_reset_counts(args.switch2(b"--reset-counts", b"--reset-count"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict_c2(args.switch2(b"--c2-strict", b"--strict-c2"))
-		.with_sync(args.switch(b"--sync"));
+		.with_sync(args.switch(b"--sync"))
+		.with_verbose(args.switch2(b"-v", b"--verbose"));
 
 	if let Some(v) = args.option2(b"-o", b"--offset") {
 		let v = ReadOffset::try_from(v)
@@ -163,13 +202,13 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		opts = opts.with_confidence(confidence);
 	}
 
-	if let Some(v) = args.option2(b"-p", b"--passes") {
+	if let Some(v) = args.option2(b"-p", b"--passes").or_else(|| args.option(b"--pass")) {
 		let passes = u8::btou(v).ok_or(RipRipError::CliParse("-p/--passes"))?;
 		opts = opts.with_passes(passes);
 	}
 
 	// Rereads are kinda annoying.
-	if let Some(v) = args.option2(b"-r", b"--rereads") {
+	if let Some(v) = args.option2(b"-r", b"--rereads").or_else(|| args.option(b"--reread")) {
 		// Default.
 		let mut a = 2;
 		let mut b = 2;
@@ -195,7 +234,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	}
 
 	// Tracks are also kinda annoying.
-	for v in args.option2_values(b"-t", b"--track", Some(b',')) {
+	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
 		let v = v.trim();
 		if v.is_empty() { continue; }
 
@@ -204,21 +243,21 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 			// Split.
 			let a = v[..pos].trim();
 			let b = v[pos + 1..].trim();
-			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--track")); }
+			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--tracks")); }
 
 			// Decode.
-			let a = u8::btou(a).ok_or(RipRipError::CliParse("-t/--track"))?;
-			let b = u8::btou(b).ok_or(RipRipError::CliParse("-t/--track"))?;
+			let a = u8::btou(a).ok_or(RipRipError::CliParse("-t/--tracks"))?;
+			let b = u8::btou(b).ok_or(RipRipError::CliParse("-t/--tracks"))?;
 
 			// Add them all!
 			if a <= b {
 				for idx in a..=b { opts = opts.with_track(idx); }
 			}
-			else { return Err(RipRipError::CliParse("-t/--track")); }
+			else { return Err(RipRipError::CliParse("-t/--tracks")); }
 		}
 		// Otherwise it should be a single index.
 		else {
-			let v = u8::btou(v).ok_or(RipRipError::CliParse("-t/--track"))?;
+			let v = u8::btou(v).ok_or(RipRipError::CliParse("-t/--tracks"))?;
 			opts = opts.with_track(v);
 		}
 	}
@@ -276,6 +315,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		else { Cow::Owned(format!("Re-Read Contention {rr_b}x")) };
 	let nice_sync = Cow::Borrowed("Subchannel Sync");
 	let nice_tracks = Cow::Owned(rip_summary_tracks(opts));
+	let nice_verbose = Cow::Borrowed(if opts.verbose() { "Yes" } else { "No" });
 
 	// Combine the values with labels so we can at least somewhat cleanly
 	// display everything. Haha.
@@ -289,6 +329,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		("", nice_sync, opts.sync()),
 		("Rip Passes:", nice_passes, true),
 		("Read Order:", nice_read_order, true),
+		("Verbose:", nice_verbose, opts.verbose()),
 		("Destination:", nice_output, true),
 	];
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
@@ -308,7 +349,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	}
 
 	// One last chance to bail!
-	if Msg::plain("\x1b[1;38;5;199m…Hooray?\x1b[0m").prompt_with_default(true) {
+	if Msg::plain("\x1b[1;38;5;199m…Hooray?\x1b[0m").eprompt_with_default(true) {
 		eprintln!("\n");
 		Ok(())
 	}
@@ -327,35 +368,13 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 fn rip_summary_tracks(opts: &RipOptions) -> String {
 	use oxford_join::OxfordJoin;
 
-	let mut set = Vec::new();
-	let mut from = u8::MAX;
-	let mut to = u8::MAX;
-
-	// Add the tracks, combining contiguous ranges.
-	for idx in opts.tracks() {
-		if from == u8::MAX {
-			from = idx;
-			to = idx;
-			continue;
-		}
-
-		if idx == to + 1 {
-			to += 1;
-			continue;
-		}
-
-		if from == to { set.push(from.to_string()); }
-		else { set.push(format!("{from}\x1b[0;2m..=\x1b[0;1m{to}")); }
-
-		from = u8::MAX;
-		to = u8::MAX;
-	}
-
-	// Add the last bits.
-	if from != u8::MAX {
-		if from == to { set.push(from.to_string()); }
-		else { set.push(format!("{from}\x1b[0;2m..=\x1b[0;1m{to}")); }
-	}
+	let mut set = opts.tracks_rng()
+		.map(|rng| {
+			let (a, b) = rng.into_inner();
+			if a == b { a.to_string() }
+			else { format!("{a}\x1b[0;2m..=\x1b[0;1m{b}") }
+		})
+		.collect::<Vec<_>>();
 
 	match set.len() {
 		1 => set.remove(0),
@@ -406,7 +425,7 @@ BASIC SETTINGS:
                       Automate re-ripping by executing up to <NUM> passes for
                       each track while any samples remain unread or
                       unconfirmed. [default: 1; max: 16]
-    -t, --track <NUM(s),RNG>
+    -t, --tracks <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
                       disc). Multiple tracks can be separated by commas (2,3),
                       specified as an inclusive range (2-3), and/or given their
@@ -453,8 +472,11 @@ UNUSUAL SETTINGS:
                       than wear-and-tear, is the sole cause of your woes.
 
 MISCELLANEOUS:
-    -h, --help        Print help information and exit.
-    -V, --version     Print version information and exit.
+    -h, --help        Print help information to STDOUT and exit.
+    -v, --verbose     Print detailed sector quality information to STDOUT, so
+                      it can e.g. be piped to a file for review, like:
+                      riprip -v > issues.log
+    -V, --version     Print version information to STDOUT and exit.
         --no-rip      Print the basic drive and disc information to STDERR and
                       exit (without ripping anything).
         --no-summary  Skip the drive and disc summary and jump straight to

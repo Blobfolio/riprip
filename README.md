@@ -90,7 +90,7 @@ Because Rip Rip Hooray! is optimized for _recovery_ rather than quick, efficient
 From there, re-rip the problem tracks with Rip Rip Hooray!:
 
 ```bash
-# Say you need 2, 3, 4 and 10. Use the -t/--track argument.
+# Say you need 2, 3, 4 and 10. Use the -t/--tracks argument.
 riprip -t 2-4,10
 
 # Equivalent alternatives:

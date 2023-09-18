@@ -43,7 +43,7 @@ description = "Alternate the sector read order between passes, forwards then bac
 [[package.metadata.bashman.switches]]
 short = "-h"
 long = "--help"
-description = "Print help information."
+description = "Print help information to STDOUT and exit."
 
 [[package.metadata.bashman.switches]]
 long = "--no-resume"
@@ -70,9 +70,14 @@ long = "sync"
 description = "Confirm sector positioning with subchannel data (when available) to make sure the drive is actually reading from the right place, and ignore the data if not. This is prone to false-positives — subchannel data is easily corrupted — so only recommended when disc rot, rather than wear-and-tear, is the sole cause of your woes."
 
 [[package.metadata.bashman.switches]]
+short = "-v"
+long = "--verbose"
+description = "Print detailed sector quality information to STDOUT, so it can e.g. be piped to a file for review, like: riprip -v > issues.log"
+
+[[package.metadata.bashman.switches]]
 short = "-V"
 long = "--version"
-description = "Print program version."
+description = "Print version information to STDOUT and exit."
 
 [[package.metadata.bashman.options]]
 long = "--confidence"
@@ -106,7 +111,7 @@ description = "Re-read sectors on subsequent passes until A) they have been inde
 
 [[package.metadata.bashman.options]]
 short = "-t"
-long = "--track"
+long = "--tracks"
 label = "<NUM>"
 description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). Track 0 can be used to rip the HTOA, if any. [default: the whole disc]"
 duplicate = true

@@ -132,6 +132,10 @@ impl<'a> Ripper<'a> {
 		let mut last_read_track = first_track.track.number();
 
 		for pass in 1..=self.opts.passes() {
+			if self.opts.verbose() {
+				progress.push_msg(Msg::plain(format!("##\n## Pass {pass}.\n##")), false);
+			}
+
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
@@ -339,9 +343,50 @@ impl RipEntry {
 					}
 				},
 				// Silently skip generic read errors.
-				Err(RipRipError::CdRead(_) | RipRipError::SubchannelDesync) => {},
+				Err(RipRipError::CdRead(_)) => if opts.verbose() {
+					log_line(
+						self.track,
+						read_lsn,
+						"Read error.",
+						progress,
+					);
+				},
+				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
+					log_line(
+						self.track,
+						read_lsn,
+						"Subchannel desync (or corruption).",
+						progress,
+					);
+				},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
+			}
+
+			// Count up the issues for this sector.
+			if opts.verbose() {
+				let mut total_bad = 0;
+				let mut total_wishy = 0;
+				for v in sector {
+					if v.is_bad() { total_bad += 1; }
+					else if v.is_wishywashy() { total_wishy += 1; }
+				}
+				if total_bad != 0 {
+					log_line(
+						self.track,
+						read_lsn,
+						format!("{total_bad:03}/588 samples are bad."),
+						progress,
+					);
+				}
+				if total_wishy != 0 {
+					log_line(
+						self.track,
+						read_lsn,
+						format!("{total_wishy:03}/588 samples are very inconsistent."),
+						progress,
+					);
+				}
 			}
 
 			progress.increment();
@@ -429,6 +474,17 @@ impl RipEntry {
 }
 
 
+
+/// # Generate Log Line for Verbosity.
+fn log_line<S>(track: Track, lsn: i32, msg: S, progress: &Progless)
+where S: AsRef<str> {
+	progress.push_msg(Msg::plain(format!(
+		"{:10}  {:02}  {lsn:06}  {}",
+		utc2k::unixtime(),
+		track.number(),
+		msg.as_ref().trim(),
+	)), false);
+}
 
 /// # Prune Invalid Tracks.
 fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {
