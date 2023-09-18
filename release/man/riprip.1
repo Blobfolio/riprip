@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.0.9" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.1.0" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.0.9.
+Rip Rip Hooray! \- Manual page for riprip v0.1.0.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -9,19 +9,16 @@ riprip [FLAGS] [OPTIONS]
 .SS FLAGS:
 .TP
 \fB\-\-backwards\fR
-Request sectors from the drive in reverse order, starting from the end of each track, and ending at the start.
+Reverse the sector read order when ripping a track, starting at end, and ending at the start.
+.TP
+\fB\-\-flip\-flop\fR
+Alternate the sector read order between passes, forwards then backwards then forwards then backwards… This has no effect unless \-p/\-\-passes is at least two.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
-Print help information.
-.TP
-\fB\-\-no\-c2\fR
-Disable/ignore C2 error pointer information when ripping, e.g. for drives that do not support the feature. (This flag is otherwise not recommended.)
-.TP
-\fB\-\-no\-cache\-bust\fR
-Do not attempt to moot the optical drive cache before each rip pass.
+Print help information to STDOUT and exit.
 .TP
 \fB\-\-no\-resume\fR
-Ignore any previous rip states; start over from scratch.
+Ignore any previous rip states, starting over from scratch.
 .TP
 \fB\-\-no\-rip\fR
 Print the basic drive and disc information to STDERR and exit (without ripping anything).
@@ -29,24 +26,24 @@ Print the basic drive and disc information to STDERR and exit (without ripping a
 \fB\-\-no\-summary\fR
 Skip the drive and disc summary and jump straight to ripping.
 .TP
-\fB\-\-raw\fR
-Save ripped tracks in raw PCM format (instead of WAV).
-.TP
 \fB\-\-reset\-counts\fR
-Reset all previously\-collected sample counts, allowing their sectors to be re\-read (provided \-\-cutoff is at least two).
+Reset all previously\-collected sample counts, allowing their sectors to be re\-read/re\-confirmed.
 .TP
-\fB\-\-strict\fR
-Treat C2 errors as an all\-or\-nothing proposition for the sector as a whole rather than judging each individual sample on its own. This is most effective when set for all rip passes (rather than being turned on after several runs have already completed).
+\fB\-\-strict\-c2\fR
+Consider C2 errors an all\-or\-nothing proposition for the sector as a whole, marking all samples bad if any of them are bad. This is most effective when applied consistently from the initial rip and onward.
+.TP
+\fBsync\fR
+Confirm sector positioning with subchannel data (when available) to make sure the drive is actually reading from the right place, and ignore the data if not. This is prone to false\-positives — subchannel data is easily corrupted — so only recommended when disc rot, rather than wear\-and\-tear, is the sole cause of your woes.
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Print detailed sector quality information to STDOUT, so it can e.g. be piped to a file for review, like: riprip \-v > issues.log
 .TP
 \fB\-V\fR, \fB\-\-version\fR
-Print program version.
+Print version information to STDOUT and exit.
 .SS OPTIONS:
 .TP
 \fB\-\-confidence\fR <NUM>
 Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]
-.TP
-\fB\-\-cutoff\fR <NUM>
-Consider allegedly\-good samples 'likely' once the same value has been read at least <NUM> times and twice as often as any competing values. Sectors containing only likely/confirmed samples are skipped during subsequent passes, so the lower the cutoff, the faster they'll go. Higher values are recommended for wishywashy drives. [default: 2; range: 1..=32]
 .TP
 \fB\-d\fR, \fB\-\-dev\fR <PATH>
 The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]
@@ -54,8 +51,11 @@ The device path for the optical drive containing the CD of interest, like /dev/c
 \fB\-o\fR, \fB\-\-offset\fR <SAMPLES>
 The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]
 .TP
-\fB\-r\fR, \fB\-\-refine\fR <NUM>
-Automatically execute up to <NUM> additional rip passes for each track while any samples remain unread or unconfirmed. [default: 0; max: 32]
+\fB\-p\fR, \fB\-\-passes\fR <NUM>
+Automate re\-ripping by executing up to <NUM> passes for each track while any samples remain unread or unconfirmed. [default: 1; max: 16]
 .TP
-\fB\-t\fR, \fB\-\-track\fR <NUM>
-Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2\-3), and/or given their own \-t/\-\-track (\-t 2 \-t 3). Include track 0 to rip the HTOA (if any). [default: the whole disc]
+\fB\-r\fR, \fB\-\-rereads\fR <[ABS],[MUL]>
+Re\-read sectors on subsequent passes until A) they have been independently verified with AccurateRip or CUETools; or B) the same allegedly\-good values have been read at least <ABS> times, and <MUL> times more often than any contradictory 'good' values. The value may omit the number on either side of the comma to keep the default, or be a single number to alter only the <ABS>. [default: 2,2; range: 1..=20,1..=10]
+.TP
+\fB\-t\fR, \fB\-\-tracks\fR <NUM>
+Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2\-3), and/or given their own \-t/\-\-track (\-t 2 \-t 3). Track 0 can be used to rip the HTOA, if any. [default: the whole disc]
