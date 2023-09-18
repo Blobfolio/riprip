@@ -5,24 +5,26 @@ _basher___riprip() {
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
 	[[ " ${COMP_LINE} " =~ " --backwards " ]] || opts+=("--backwards")
+	[[ " ${COMP_LINE} " =~ " --flip-flop " ]] || opts+=("--flip-flop")
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
 	fi
-	[[ " ${COMP_LINE} " =~ " --no-c2 " ]] || opts+=("--no-c2")
-	[[ " ${COMP_LINE} " =~ " --no-cache-bust " ]] || opts+=("--no-cache-bust")
 	[[ " ${COMP_LINE} " =~ " --no-resume " ]] || opts+=("--no-resume")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")
-	[[ " ${COMP_LINE} " =~ " --raw " ]] || opts+=("--raw")
 	[[ " ${COMP_LINE} " =~ " --reset-counts " ]] || opts+=("--reset-counts")
-	[[ " ${COMP_LINE} " =~ " --strict " ]] || opts+=("--strict")
+	[[ " ${COMP_LINE} " =~ " --strict-c2 " ]] || opts+=("--strict-c2")
+	[[ " ${COMP_LINE} " =~ " sync " ]] || opts+=("sync")
+	if [[ ! " ${COMP_LINE} " =~ " -v " ]] && [[ ! " ${COMP_LINE} " =~ " --verbose " ]]; then
+		opts+=("-v")
+		opts+=("--verbose")
+	fi
 	if [[ ! " ${COMP_LINE} " =~ " -V " ]] && [[ ! " ${COMP_LINE} " =~ " --version " ]]; then
 		opts+=("-V")
 		opts+=("--version")
 	fi
 	[[ " ${COMP_LINE} " =~ " --confidence " ]] || opts+=("--confidence")
-	[[ " ${COMP_LINE} " =~ " --cutoff " ]] || opts+=("--cutoff")
 	if [[ ! " ${COMP_LINE} " =~ " -d " ]] && [[ ! " ${COMP_LINE} " =~ " --dev " ]]; then
 		opts+=("-d")
 		opts+=("--dev")
@@ -31,12 +33,16 @@ _basher___riprip() {
 		opts+=("-o")
 		opts+=("--offset")
 	fi
-	if [[ ! " ${COMP_LINE} " =~ " -r " ]] && [[ ! " ${COMP_LINE} " =~ " --refine " ]]; then
+	if [[ ! " ${COMP_LINE} " =~ " -p " ]] && [[ ! " ${COMP_LINE} " =~ " --passes " ]]; then
+		opts+=("-p")
+		opts+=("--passes")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -r " ]] && [[ ! " ${COMP_LINE} " =~ " --rereads " ]]; then
 		opts+=("-r")
-		opts+=("--refine")
+		opts+=("--rereads")
 	fi
 	opts+=("-t")
-	opts+=("--track")
+	opts+=("--tracks")
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

@@ -3,32 +3,34 @@
 */
 
 use crate::ReadOffset;
+use std::ops::RangeInclusive;
+use super::track_idx_to_bits;
 
 
 
-/// # FLAG: Rip Backwards.
+/// # FLAG: Read Backwards.
 const FLAG_BACKWARDS: u8 =    0b0000_0001;
 
-/// # FLAG: Cache Bust.
-const FLAG_CACHE_BUST: u8 =   0b0000_0010;
-
-/// # FLAG: C2 Error Pointers.
-const FLAG_C2: u8 =           0b0000_0100;
-
-/// # FLAG: RAW PCM (instead of WAV).
-const FLAG_RAW: u8 =          0b0000_1000;
+/// # FLAG: Flip Flop.
+const FLAG_FLIP_FLOP: u8 =    0b0000_0010;
 
 /// # FLAG: Reset counts.
-const FLAG_RESET_COUNTS: u8 = 0b0001_0000;
+const FLAG_RESET_COUNTS: u8 = 0b0000_0100;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =       0b0010_0000;
+const FLAG_RESUME: u8 =       0b0000_1000;
 
-/// # FLAG: Strict Mode.
-const FLAG_STRICT: u8 =       0b0100_0000;
+/// # FLAG: Strict C2 Mode.
+const FLAG_STRICT_C2: u8 =    0b0001_0000;
+
+/// # FLAG: Subchannel Sync.
+const FLAG_SYNC: u8 =         0b0010_0000;
+
+/// # FLAG: Verbose.
+const FLAG_VERBOSE: u8 =      0b0100_0000;
 
 /// # FLAG: Default.
-const FLAG_DEFAULT: u8 = FLAG_C2 | FLAG_CACHE_BUST | FLAG_RESUME;
+const FLAG_DEFAULT: u8 = FLAG_RESUME;
 
 /// # Minimum Confidence.
 const CONFIDENCE_MIN: u8 = 3;
@@ -36,11 +38,14 @@ const CONFIDENCE_MIN: u8 = 3;
 /// # Maximum Confidence.
 const CONFIDENCE_MAX: u8 = 10;
 
-/// # Maximum Likely Level.
-const CUTOFF_MAX: u8 = 32;
-
 /// # Maximum Refine Passes.
-const REFINE_MAX: u8 = 32;
+const PASSES_MAX: u8 = 16;
+
+/// # Reread Absolute Max.
+const REREADS_ABS_MAX: u8 = 20;
+
+/// # Reread Multiplier Max.
+const REREADS_REL_MAX: u8 = 10;
 
 
 
@@ -56,19 +61,20 @@ const REFINE_MAX: u8 = 32;
 /// use riprip_core::RipOptions;
 ///
 /// let opts = RipOptions::default()
-///     .with_refine(3)
+///     .with_passes(3)
 ///     .with_track(3) // Order doesn't matter.
 ///     .with_track(2)
+///     .with_track(2) // Duplication doesn't matter.
 ///     .with_track(15);
 ///
-/// assert_eq!(opts.refine(), 3);
+/// assert_eq!(opts.passes(), 3);
 /// assert_eq!(opts.tracks().collect::<Vec<u8>>(), &[2, 3, 15]);
 /// ```
 pub struct RipOptions {
 	offset: ReadOffset,
 	confidence: u8,
-	cutoff: u8,
-	refine: u8,
+	rereads: (u8, u8),
+	passes: u8,
 	flags: u8,
 	tracks: u128,
 }
@@ -78,8 +84,8 @@ impl Default for RipOptions {
 		Self {
 			offset: ReadOffset::default(),
 			confidence: 3,
-			cutoff: 2,
-			refine: 0,
+			rereads: (2, 2),
+			passes: 1,
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
@@ -112,32 +118,10 @@ impl RipOptions {
 		FLAG_BACKWARDS,
 		"# Rip Backwards.",
 		"",
-		"When `true`, read sectors in reverse order.",
+		"When `true`, track sectors will be read last to first instead of the",
+		"usual way.",
 		"",
 		"The default is `false`.",
-	);
-
-	with_flag!(
-		with_c2,
-		FLAG_C2,
-		"# Leverage C2 Error Pointers.",
-		"",
-		"This should only be disabled when absolutely necessary, otherwise",
-		"the data accuracy will suffer.",
-		"",
-		"The default is `true`.",
-	);
-
-	with_flag!(
-		with_cache_bust,
-		FLAG_CACHE_BUST,
-		"# Bust Cache Between Passes.",
-		"",
-		"To ensure the drive actually _reads_ the data being requested,",
-		"Rip Rip Hooray! will attempt to flush the cache at the start of",
-		"each rip pass (*not* after every single read, as other rippers do).",
-		"",
-		"The default is `true`.",
 	);
 
 	#[must_use]
@@ -165,36 +149,16 @@ impl RipOptions {
 		}
 	}
 
-	#[must_use]
-	/// # Likeliness Cutoff.
-	///
-	/// Drives may return different values for a given sample from read-to-read
-	/// due to… issues, but at a certain point it becomes necessary to call good
-	/// enough "Good Enough".
-	///
-	/// When a given value is returned this many times, and twice as often as
-	/// all competing values, Rip Rip Hooray! won't try to re-read it any more.
-	///
-	/// The lower the setting, the less work there will be to do on subsequent
-	/// passes; the higher the setting, the better the rip will be able to cope
-	/// with drive wishywashiness.
-	///
-	/// This also has no _practical_ effect unless all samples in a given
-	/// sector are likely/confirmed; if any require re-reading, the sector as a
-	/// whole will still need to be reread.
-	///
-	/// The value can be adjusted from run-to-run as needed.
-	///
-	/// The default is `2`, which is a reasonable starting point. Values are
-	/// capped automatically to `1..=32`.
-	pub const fn with_cutoff(self, mut cutoff: u8) -> Self {
-		if cutoff == 0 { cutoff = 1; }
-		else if CUTOFF_MAX < cutoff { cutoff = CUTOFF_MAX; }
-		Self {
-			cutoff,
-			..self
-		}
-	}
+	with_flag!(
+		with_flip_flop,
+		FLAG_FLIP_FLOP,
+		"# Alternate Rip Read Order.",
+		"",
+		"When `true`, the sector read order will alternate between passes,",
+		"flipping from forward to backward to forward to backward…",
+		"",
+		"The default is `false`.",
+	);
 
 	#[must_use]
 	/// # Read Offset.
@@ -212,36 +176,67 @@ impl RipOptions {
 		}
 	}
 
-	with_flag!(
-		with_raw,
-		FLAG_RAW,
-		"# Output Raw PCM.",
-		"",
-		"When `true`, tracks will be saved in raw PCM format. When `false`,",
-		"they'll be saved as WAV files.",
-		"",
-		"The default is `false`.",
-	);
+	#[must_use]
+	/// # Number of Passes.
+	///
+	/// Rip Rip rips are indefinitely iterable, but that iteration can also be
+	/// automated by using this method to set more than the usual number of
+	/// passes.
+	///
+	/// The behaviors are the same whether secondary passes occur due to this
+	/// setting or manually re-running the program.
+	///
+	/// Passes don't re-rip data unnecessarily, so this setting will have no
+	/// effect on tracks that contain nothing but likely/confirmed samples.
+	///
+	/// The default is `1`.
+	///
+	/// Values are capped to `1..=16`, but the program can be manually re-run
+	/// if even more passes are needed. ;)
+	pub const fn with_passes(self, mut passes: u8) -> Self {
+		if 0 == passes { passes = 1; }
+		else if PASSES_MAX < passes { passes = PASSES_MAX; }
+		Self {
+			passes,
+			..self
+		}
+	}
 
 	#[must_use]
-	/// # Automated Refinement.
+	/// # Likeliness Re-Read Cutoff.
 	///
-	/// Rip Rip rips are indefinitely resumable, but if know it'll take
-	/// multiple passes to capture the data, you can use this option to
-	/// automate re-ripping up to this many times for each track.
+	/// Drives may return different values for a given sample from read-to-read
+	/// due to… issues, but at a certain point it becomes necessary to call good
+	/// enough "Good Enough".
 	///
-	/// The process will stop early if the track rip is verifiable — matches
-	/// AccurateRip and/or CUETools — or all samples meet the likeliness
-	/// threshold.
+	/// There are two components to re-read qualification: an absolute total
+	/// relative multiplier.
 	///
-	/// The default is `0`.
+	/// The absolute total is simply the number of times a given value has been
+	/// returned for a given sample. An `abs` of two means we need to see the
+	/// same value at least twice.
 	///
-	/// To give the drive a break, the maximum value is capped at `32`, but you
-	/// can manually rerun the program afterward as many times as needed. ;)
-	pub const fn with_refine(self, mut refine: u8) -> Self {
-		if REFINE_MAX < refine { refine = REFINE_MAX; }
+	/// The relative multiplier helps lessen contention with competing values.
+	/// The leading value must have appeared more than `rel` times as often as
+	/// any contradictory values. A `rel` of two means the total of the leading
+	/// value must be more than twice that of the combined total of any other
+	/// random crap returned by the drive.
+	///
+	/// When all samples in a sector meet this criteria, that sector is skipped
+	/// during re-ripping.
+	///
+	/// The default is `2`/`2`.
+	///
+	/// Values are capped to `1..=20` and `1..=10` respectively.
+	pub const fn with_rereads(self, mut abs: u8, mut rel: u8) -> Self {
+		if abs == 0 { abs = 1; }
+		else if REREADS_ABS_MAX < abs { abs = REREADS_ABS_MAX; }
+
+		if rel == 0 { rel = 1; }
+		else if REREADS_REL_MAX < rel { rel = REREADS_REL_MAX; }
+
 		Self {
-			refine,
+			rereads: (abs, rel),
 			..self
 		}
 	}
@@ -251,8 +246,8 @@ impl RipOptions {
 		FLAG_RESET_COUNTS,
 		"# Reset Counts.",
 		"",
-		"When `true`, all previously-collected sample counts, downgrading all",
-		"likely values to maybe.",
+		"When `true`, reset all previously-collected sample counts to 1,",
+		"downgrading all likely values to maybe.",
 		"",
 		"The default is `false`.",
 	);
@@ -270,13 +265,28 @@ impl RipOptions {
 	);
 
 	with_flag!(
-		with_strict,
-		FLAG_STRICT,
-		"# Strict Mode.",
+		with_strict_c2,
+		FLAG_STRICT_C2,
+		"# Strict C2 (Sector).",
 		"",
-		"When `true`, if a sector contains _any_ C2 errors, all samples in the",
-		"response are considered bad. When `false`, sample goodness is judged",
-		"individually.",
+		"When `true`, C2 errors are an all-or-nothing proposition for the sector",
+		"as a whole. If any sample is bad, all samples are bad.",
+		"",
+		"The default is `false`.",
+	);
+
+	with_flag!(
+		with_sync,
+		FLAG_SYNC,
+		"# Require Subchannel Sync.",
+		"",
+		"When `true`, sector data will only be accepted if the subchannel",
+		"timecode matches the requested LSN; if there's a desync, data will be",
+		"ignored and tried again on subsequent passes.",
+		"",
+		"Subchannel data is easily corrupted, so this is only potentially",
+		"useful in cases where disc rot, rather than wear-and-tear, is the sole",
+		"cause of readability issues.",
 		"",
 		"The default is `false`.",
 	);
@@ -292,6 +302,33 @@ impl RipOptions {
 			..self
 		}
 	}
+
+	#[must_use]
+	/// # Exclude Track.
+	///
+	/// Remove a given track number from the to-rip list.
+	pub const fn without_track(self, track: u8) -> Self {
+		let flag = track_idx_to_bits(track);
+		if flag == 0 { self }
+		else {
+			let tracks = self.tracks & ! flag;
+			Self {
+				tracks,
+				..self
+			}
+		}
+	}
+
+	with_flag!(
+		with_verbose,
+		FLAG_VERBOSE,
+		"# Verbose (Log) Mode.",
+		"",
+		"When `true`, detailed sector quality issues will be printed to STDOUT",
+		"so they can be piped to a file for review.",
+		"",
+		"The default is `false`.",
+	);
 }
 
 
@@ -307,20 +344,16 @@ macro_rules! get_flag {
 /// # Getters.
 impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
-	get_flag!(c2, FLAG_C2, "Leverage C2 Error Pointers");
-	get_flag!(cache_bust, FLAG_CACHE_BUST, "Bust Cache");
-	get_flag!(raw, FLAG_RAW, "Output Raw PCM");
+	get_flag!(strict_c2, FLAG_STRICT_C2, "Strict C2 Error Pointers");
+	get_flag!(flip_flop, FLAG_FLIP_FLOP, "Alternate Rip Read Order");
 	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
-	get_flag!(strict, FLAG_STRICT, "Strict Mode");
+	get_flag!(sync, FLAG_SYNC, "Subchannel Sync");
+	get_flag!(verbose, FLAG_VERBOSE, "Verbose (Log) Mode");
 
 	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
 	pub const fn confidence(&self) -> u8 { self.confidence }
-
-	#[must_use]
-	/// # Likeliness Cutoff.
-	pub const fn cutoff(&self) -> u8 { self.cutoff }
 
 	#[must_use]
 	/// # Has Any Tracks?
@@ -332,13 +365,11 @@ impl RipOptions {
 
 	#[must_use]
 	/// # Number of Passes.
-	///
-	/// This is always `1` + [`RipOptions::refine`].
-	pub const fn passes(&self) -> u8 { self.refine + 1 }
+	pub const fn passes(&self) -> u8 { self.passes }
 
 	#[must_use]
-	/// # Number of Refine Passes.
-	pub const fn refine(&self) -> u8 { self.refine }
+	/// # Likeliness Reread Cutoffs.
+	pub const fn rereads(&self) -> (u8, u8) { self.rereads }
 
 	#[must_use]
 	/// # Tracks.
@@ -350,8 +381,62 @@ impl RipOptions {
 			pos: 0,
 		}
 	}
+
+	#[must_use]
+	/// # Tracks.
+	///
+	/// Return an iterator over the included track indices, collapsed into
+	/// inclusive ranges.
+	pub const fn tracks_rng(&self) -> RipOptionsTracksRng {
+		RipOptionsTracksRng {
+			set: self.tracks,
+			pos: 0,
+		}
+	}
 }
 
+#[cfg(feature = "bin")]
+/// # Misc.
+impl RipOptions {
+	#[must_use]
+	/// # CLI String.
+	///
+	/// Convert the options back into a list of arguments in CLI format. This
+	/// code isn't super pretty, but it's pretty straightforward.
+	pub fn cli(&self) -> String {
+		use std::borrow::Cow;
+
+		// The entries will be variable, so toss them into a vec first.
+		let mut opts = Vec::new();
+
+		// All the easy stuff.
+		if self.backwards() { opts.push(Cow::Borrowed("--backwards")); }
+		opts.push(Cow::Owned(format!("--confidence={}", self.confidence())));
+		if self.flip_flop() { opts.push(Cow::Borrowed("--flip-flop")); }
+		if ! self.resume() { opts.push(Cow::Borrowed("--no-resume")); }
+		let offset = self.offset().samples();
+		if offset != 0 { opts.push(Cow::Owned(format!("-o{offset}"))); }
+		opts.push(Cow::Owned(format!("-p{}", self.passes())));
+		let rr = self.rereads();
+		opts.push(Cow::Owned(format!("-r{},{}", rr.0, rr.1)));
+		if self.reset_counts() { opts.push(Cow::Borrowed("--reset-counts")); }
+		if self.strict_c2() { opts.push(Cow::Borrowed("--strict-c2")); }
+		if self.sync() { opts.push(Cow::Borrowed("--sync")); }
+
+		// The tracks should be condensed.
+		opts.push(Cow::Owned(format!(
+			"-t{}",
+			self.tracks_rng().map(|rng| {
+				let (a, b) = rng.into_inner();
+				if a == b { a.to_string() }
+				else { format!("{a}-{b}") }
+			}).collect::<Vec<String>>().join(",")
+		)));
+
+		// Done!
+		opts.join(" ")
+	}
+}
 
 
 #[derive(Debug, Clone)]
@@ -388,18 +473,50 @@ impl Iterator for RipOptionsTracks {
 
 
 
-/// # Track Number to Bitflag.
+#[derive(Debug, Clone)]
+/// # Rip Option Tracks (As Range).
 ///
-/// Redbook audio CDs can only have a maximum of 99 tracks — or 100 if we count
-/// the HTOA as #0 — so we can represent all possible combinations using a
-/// single `u128` bitflag. Aside from being `Copy`, this saves us the trouble
-/// of having to sort/dedup some sort of vector-like structure.
-///
-/// This method converts a `u8` decimal into the equivalent flag. Out of range
-/// values are silently treated as zero.
-const fn track_idx_to_bits(idx: u8) -> u128 {
-	if 99 < idx { 0 }
-	else { 2_u128.pow(idx as u32) }
+/// Like [`RipOptionsTracks`], but results are returned as ranges instead of
+/// individual numbers. Useful for compact display, I suppose.
+pub struct RipOptionsTracksRng {
+	set: u128,
+	pos: u8,
+}
+
+impl Iterator for RipOptionsTracksRng {
+	type Item = RangeInclusive<u8>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let mut from = u8::MAX;
+		let mut to = u8::MAX;
+
+		while self.pos < 100 {
+			let idx = self.pos;
+			if 0 != self.set & track_idx_to_bits(idx) {
+				if from == u8::MAX {
+					from = idx;
+					to = idx;
+				}
+				else if to + 1 == idx {
+					to = idx;
+				}
+				else {
+					return Some(from..=to);
+				}
+			}
+			self.pos += 1;
+		}
+
+		if from == u8::MAX { None }
+		else { Some(from..=to) }
+	}
+
+	/// # Size Hint.
+	///
+	/// There will never be more than 99 tracks.
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
+	}
 }
 
 
@@ -413,16 +530,19 @@ mod test {
 		// Make sure our flags are unique.
 		let mut all = vec![
 			FLAG_BACKWARDS,
-			FLAG_CACHE_BUST,
-			FLAG_C2,
-			FLAG_RAW,
+			FLAG_FLIP_FLOP,
 			FLAG_RESET_COUNTS,
 			FLAG_RESUME,
-			FLAG_STRICT,
+			FLAG_STRICT_C2,
+			FLAG_SYNC,
+			FLAG_VERBOSE,
 		];
 		all.sort_unstable();
 		all.dedup();
 		assert_eq!(all.len(), 7);
+
+		// Also make sure each is only one bit.
+		assert!(all.iter().all(|&v| v.count_ones() == 1));
 	}
 
 	#[test]
@@ -439,22 +559,6 @@ mod test {
 		// Max.
 		let opts = RipOptions::default().with_confidence(64);
 		assert_eq!(opts.confidence(), CONFIDENCE_MAX);
-	}
-
-	#[test]
-	fn t_rip_options_cutoff() {
-		for v in [1, 2, 3] {
-			let opts = RipOptions::default().with_cutoff(v);
-			assert_eq!(opts.cutoff(), v);
-		}
-
-		// Min.
-		let opts = RipOptions::default().with_cutoff(0);
-		assert_eq!(opts.cutoff(), 1);
-
-		// Max.
-		let opts = RipOptions::default().with_cutoff(64);
-		assert_eq!(opts.cutoff(), CUTOFF_MAX);
 	}
 
 	#[test]
@@ -475,12 +579,12 @@ mod test {
 		}
 
 		t_flags!("backwards", with_backwards, backwards);
-		t_flags!("c2", with_c2, c2);
-		t_flags!("cache bust", with_cache_bust, cache_bust);
-		t_flags!("raw", with_raw, raw);
+		t_flags!("flip_flop", with_flip_flop, flip_flop);
 		t_flags!("reset_counts", with_reset_counts, reset_counts);
 		t_flags!("resume", with_resume, resume);
-		t_flags!("strict", with_strict, strict);
+		t_flags!("strict_c2", with_strict_c2, strict_c2);
+		t_flags!("sync", with_sync, sync);
+		t_flags!("verbose", with_verbose, verbose);
 	}
 
 	#[test]
@@ -494,17 +598,33 @@ mod test {
 	}
 
 	#[test]
-	fn t_rip_options_refine() {
-		for v in [0, 1, 2, 3] {
-			let opts = RipOptions::default().with_refine(v);
-			assert_eq!(opts.refine(), v);
-			assert_eq!(opts.passes(), v + 1);
+	fn t_rip_options_passes() {
+		for v in [1, 2, 3] {
+			let opts = RipOptions::default().with_passes(v);
+			assert_eq!(opts.passes(), v);
 		}
 
+		// Min.
+		let opts = RipOptions::default().with_passes(0);
+		assert_eq!(opts.passes(), 1);
+
 		// Max.
-		let opts = RipOptions::default().with_refine(64);
-		assert_eq!(opts.refine(), REFINE_MAX);
-		assert_eq!(opts.passes(), REFINE_MAX + 1);
+		let opts = RipOptions::default().with_passes(64);
+		assert_eq!(opts.passes(), PASSES_MAX);
+	}
+
+	#[test]
+	fn t_rip_options_rereads() {
+		for (a, b) in [(1, 2), (2, 3), (3, 4)] {
+			let opts = RipOptions::default().with_rereads(a, b);
+			assert_eq!(opts.rereads(), (a, b));
+		}
+
+		// Min/Max.
+		let opts = RipOptions::default().with_rereads(0, 0);
+		assert_eq!(opts.rereads(), (1, 1));
+		let opts = RipOptions::default().with_rereads(64, 64);
+		assert_eq!(opts.rereads(), (REREADS_ABS_MAX, REREADS_REL_MAX));
 	}
 
 	#[test]
@@ -542,5 +662,38 @@ mod test {
 		for (real, expected) in real.into_iter().zip(expected) {
 			assert_eq!(real, expected, "Options track mismatch: {real} instead of {expected}.");
 		}
+
+		// Remove 0.
+		opts = opts.without_track(0);
+		let expected = [5, 15];
+		let real = opts.tracks().collect::<Vec<u8>>();
+		assert_eq!(real.len(), expected.len(), "Expected {} tracks.", expected.len());
+		for (real, expected) in real.into_iter().zip(expected) {
+			assert_eq!(real, expected, "Options track mismatch: {real} instead of {expected}.");
+		}
+
+		// Remove the rest.
+		opts = opts.without_track(5).without_track(15);
+		assert!(! opts.has_tracks(), "Options tracks should be empty!");
+	}
+
+	#[test]
+	fn t_track_rng() {
+		let mut opts = RipOptions::default();
+		for i in [1, 2, 3, 6, 10, 11] { opts = opts.with_track(i); }
+
+		let mut rng = opts.tracks_rng();
+		assert_eq!(rng.next(), Some(1..=3));
+		assert_eq!(rng.next(), Some(6..=6));
+		assert_eq!(rng.next(), Some(10..=11));
+		assert_eq!(rng.next(), None);
+
+		opts = RipOptions::default();
+		assert_eq!(opts.tracks_rng().next(), None);
+
+		opts = opts.with_track(4);
+		rng = opts.tracks_rng();
+		assert_eq!(rng.next(), Some(4..=4));
+		assert_eq!(rng.next(), None);
 	}
 }

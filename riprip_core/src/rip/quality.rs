@@ -2,16 +2,24 @@
 # Rip Rip Hooray: Quality Counts
 */
 
-use crate::RipSample;
-use dactyl::{
-	NiceU64,
-	traits::SaturatingFrom,
-};
-use super::{
+use crate::{
 	COLOR_BAD,
 	COLOR_CONFIRMED,
 	COLOR_LIKELY,
 	COLOR_MAYBE,
+	RipSample,
+};
+use dactyl::{
+	NiceFloat,
+	NiceU32,
+	traits::{
+		NiceInflection,
+		SaturatingFrom,
+	},
+};
+use std::{
+	borrow::Cow,
+	ops::Add,
 };
 
 
@@ -28,15 +36,31 @@ const QUALITY_BAR: &str = "#####################################################
 /// separate out a lot of simple but verbose-looking code from the modules that
 /// do _important_ things.
 pub(super) struct TrackQuality {
-	bad: usize,
-	maybe: usize,
-	likely: usize,
-	confirmed: usize,
+	bad: u32,
+	maybe: u32,
+	likely: u32,
+	confirmed: u32,
+	contentious: u32,
+}
+
+impl Add for TrackQuality {
+	type Output = Self;
+	fn add(self, other: Self) -> Self::Output {
+		Self {
+			bad: self.bad + other.bad,
+			maybe: self.maybe + other.maybe,
+			likely: self.likely + other.likely,
+			confirmed: self.confirmed + other.confirmed,
+			contentious: self.contentious + other.contentious,
+		}
+	}
 }
 
 impl TrackQuality {
-	/// # New.
-	pub(super) fn new(src: &[RipSample], cutoff: u8) -> Self {
+	/// # From Slice.
+	///
+	/// Count up all the different statuses in a given track slice.
+	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Self {
 		// This should never happen.
 		if src.is_empty() {
 			return Self {
@@ -44,6 +68,7 @@ impl TrackQuality {
 				maybe: 0,
 				likely: 0,
 				confirmed: 0,
+				contentious: 0,
 			};
 		}
 
@@ -51,38 +76,46 @@ impl TrackQuality {
 		let mut maybe = 0;
 		let mut likely = 0;
 		let mut confirmed = 0;
+		let mut contentious = 0;
 
 		for v in src {
 			match v {
 				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
 				RipSample::Confirmed(_) => { confirmed += 1; },
-				RipSample::Maybe(_) =>
-					if v.is_likely(cutoff) { likely += 1; }
-					else { maybe += 1; },
+				RipSample::Maybe(_) => {
+					if v.is_likely(rereads) { likely += 1; }
+					else { maybe += 1; }
+
+					if v.is_contentious() { contentious += 1; }
+				},
 			}
 		}
 
-		Self { bad, maybe, likely, confirmed }
+		Self { bad, maybe, likely, confirmed, contentious }
 	}
 }
 
 impl TrackQuality {
+	/*
 	/// # Bad.
-	pub(super) const fn bad(&self) -> usize { self.bad }
+	pub(super) const fn bad(&self) -> u32 { self.bad }
+	*/
 
 	/// # Maybe.
-	pub(super) const fn maybe(&self) -> usize { self.maybe }
+	pub(super) const fn maybe(&self) -> u32 { self.maybe }
 
 	/// # Likely.
-	pub(super) const fn likely(&self) -> usize { self.likely }
+	pub(super) const fn likely(&self) -> u32 { self.likely }
 
 	/// # Confirmed.
-	pub(super) const fn confirmed(&self) -> usize { self.confirmed }
+	pub(super) const fn confirmed(&self) -> u32 { self.confirmed }
 
+	/*
 	/// # Is Bad?
 	pub(super) const fn is_bad(&self) -> bool {
 		self.bad() == self.total()
 	}
+	*/
 
 	/// # Is Likely/Confirmed?
 	pub(super) const fn is_likely(&self) -> bool {
@@ -95,33 +128,35 @@ impl TrackQuality {
 	}
 
 	/// # Percent Maybe.
-	pub(super) fn percent_maybe(&self) -> f64 {
+	pub(super) fn percent_maybe(&self) -> Option<f64> {
 		let v = self.maybe + self.likely + self.confirmed;
-		if v == 0 { 0.0 }
-		else if v == self.total() { 100.0 }
+		if v == 0 { None }
+		else if v == self.total() { Some(100.0) }
 		else {
-			dactyl::int_div_float(
-				(self.maybe + self.likely + self.confirmed) * 100,
-				self.total()
-			).unwrap_or(0.0)
+			Some(
+				f64::from(self.maybe + self.likely + self.confirmed)
+				* 100.0
+				/ f64::from(self.total())
+			)
 		}
 	}
 
 	/// # Percent Likely.
-	pub(super) fn percent_likely(&self) -> f64 {
+	pub(super) fn percent_likely(&self) -> Option<f64> {
 		let v = self.likely + self.confirmed;
-		if v == 0 { 0.0 }
-		else if v == self.total() { 100.0 }
+		if v == 0 { None }
+		else if v == self.total() { Some(100.0) }
 		else {
-			dactyl::int_div_float(
-				(self.maybe + self.likely + self.confirmed) * 100,
-				self.total()
-			).unwrap_or(0.0)
+			Some(
+				f64::from(self.likely + self.confirmed)
+				* 100.0
+				/ f64::from(self.total())
+			)
 		}
 	}
 
 	/// # Total.
-	pub(super) const fn total(&self) -> usize {
+	pub(super) const fn total(&self) -> u32 {
 		self.bad + self.maybe + self.likely + self.confirmed
 	}
 }
@@ -131,8 +166,13 @@ impl TrackQuality {
 	///
 	/// Return all the values ordered worst to best in an array. (This is
 	/// ofte ncomputationally easier to work with than individual variables.)
-	pub(super) const fn as_array(&self) -> [usize; 4] {
-		[self.bad, self.maybe, self.likely, self.confirmed]
+	pub(super) const fn as_array(&self) -> [u32; 4] {
+		[
+			self.bad,
+			self.maybe,
+			self.likely,
+			self.confirmed,
+		]
 	}
 
 	#[allow(clippy::cast_precision_loss)]
@@ -154,8 +194,7 @@ impl TrackQuality {
 				let tmp = usize::max(
 					1,
 					usize::saturating_from(
-						(dactyl::int_div_float(v, q_total).unwrap_or(0.0) * b_len)
-							.floor()
+						(f64::from(v) / f64::from(q_total) * b_len).floor()
 					)
 				);
 				b_total += tmp;
@@ -201,16 +240,11 @@ impl TrackQuality {
 	/// first one, only differences will be included, so if there are none,
 	/// it will be returned as `None`.
 	pub(super) fn legend(&self, start: &Self) -> (Option<String>, String) {
-		let mut start = start.as_array().map(|n| if n == 0 { None } else { Some(NiceU64::from(n)) });
-		let end = self.as_array().map(|n| if n == 0 { None } else { Some(NiceU64::from(n)) });
+		let start = start.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
+		let end = self.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
 
-		// Clear the samey values.
-		for (a, b) in start.iter_mut().zip(end.iter()) {
-			if b.eq(a) { *a = None; }
-		}
-
-		// Do we have any start values?
-		let start_any = start.iter().any(Option::is_some);
+		// Do we have any start values different from the end?
+		let start_any = start.iter().zip(end.iter()).any(|(a, b)| a.is_some() && a != b);
 
 		// Hold the final, used values, which will probably be less than four.
 		let mut list1 = Vec::new();
@@ -227,9 +261,19 @@ impl TrackQuality {
 
 				// Only include starts if there's at least one.
 				if start_any {
-					let v = a.as_ref().map_or("0", |v| v.as_str());
-					let extra = " ".repeat(len - v.len());
-					list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
+					// If unchanged, don't cross it out.
+					if a == b {
+						list1.push(format!(
+							"\x1b[2;{color}m{:>len$}\x1b[0m",
+							a.as_ref().map_or("0", |v| v.as_str()),
+						));
+					}
+					// Otherwise strike!
+					else {
+						let v = a.as_ref().map_or("0", |v| v.as_str());
+						let extra = " ".repeat(len - v.len());
+						list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
+					}
 				}
 				list2.push(format!(
 					"\x1b[{color}m{:>len$}\x1b[0m",
@@ -243,5 +287,61 @@ impl TrackQuality {
 			if list1.is_empty() { None } else { Some(list1.join("   ")) },
 			list2.join("\x1b[2m + \x1b[0m"),
 		)
+	}
+
+	/// # Summary.
+	///
+	/// Summarize the state of the track rip in one line.
+	pub(crate) fn summarize(&self) -> Cow<'static, str> {
+		// Perfect!
+		if self.is_confirmed() {
+			Cow::Borrowed("All data has been accurately recovered!")
+		}
+		// Likely but maybe also not.
+		else if self.is_likely() {
+			if self.contentious == 0 {
+				Cow::Borrowed("Recovery is likely complete!")
+			}
+			else {
+				Cow::Owned(format!(
+					"Recovery is likely complete, but {} contention.",
+					self.contentious.nice_inflect("sample has", "samples have"),
+				))
+			}
+		}
+		// The progress is probably more granular.
+		else {
+			let low = self.percent_likely().map(NiceFloat::from).filter(|v| v.precise_str(3) != "0.000");
+			let mut high = self.percent_maybe().map(NiceFloat::from).filter(|v| v.precise_str(3) != "0.000");
+
+			// Remove the second percentage if it matches the first when
+			// rounded.
+			if low.zip(high).filter(|(l, h)| l.precise_str(3) == h.precise_str(3)).is_some() {
+				high = None;
+			}
+
+			match (low, high) {
+				(None, None) => Cow::Borrowed("The road to recovery may be a long one."),
+				(Some(p), None) | (None, Some(p)) => {
+					let qualifier =
+						if self.maybe() < self.likely() { "likely" }
+						else { "maybe" };
+					Cow::Owned(format!(
+						"Recovery is \x1b[2m({qualifier})\x1b[0m {}{}complete.",
+						if p.compact_str() == "100" { "" } else { p.compact_str() },
+						if p.compact_str() == "100" { "" } else { "% " },
+					))
+				},
+				(Some(p1), Some(p2)) if p2.precise_str(3) == "100.000" => Cow::Owned(format!(
+					"Recovery is \x1b[2m(likely)\x1b[0m at least {}% complete.",
+					p1.compact_str(),
+				)),
+				(Some(p1), Some(p2)) => Cow::Owned(format!(
+					"Recovery is \x1b[2m(roughly)\x1b[0m {}% – {}%s complete.",
+					p1.precise_str(3),
+					p2.precise_str(3),
+				)),
+			}
+		}
 	}
 }

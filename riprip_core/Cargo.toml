@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.0.9"
+version = "0.1.0"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -17,6 +17,7 @@ dactyl = "0.5.*"
 hound = "3.5.0"
 tempfile = "3.8.0"
 trimothy = "0.1.*"
+utc2k = "0.6.*"
 
 [dependencies.ahash]
 version = "0.8.*"

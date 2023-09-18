@@ -12,18 +12,20 @@ use crate::{
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
+	COLOR_BAD,
+	COLOR_CONFIRMED,
+	COLOR_LIKELY,
 	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
-	Rip,
 	RipOptions,
+	Ripper,
 	RipRipError,
+	SavedRips,
 };
-use fyi_msg::{
-	Msg,
-	Progless,
-};
+use fyi_msg::Progless;
 use std::{
+	borrow::Cow,
 	collections::BTreeMap,
 	ffi::OsStr,
 	fmt,
@@ -235,66 +237,67 @@ impl Disc {
 	/// This will bubble up any IO/rip/etc. errors encountered along the way.
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
-		// Loop the loop!
-		let mut saved = BTreeMap::default();
-		for t in opts.tracks() {
-			if killed.killed() { continue; }
+		// Handle all the ripping business!
+		let mut rip = Ripper::new(self, opts)?;
+		rip.rip(progress, killed)?;
+		rip.summarize();
 
-			let track =
-				if t == 0 {
-					if let Some(track) = self.toc.htoa() { track }
-					else {
-						Msg::warning("The disc has no HTOA; skipping track #0.").eprint();
-						continue;
-					}
-				}
-				else if let Some(track) = self.toc.audio_track(usize::from(t)) { track }
-				else {
-					Msg::warning(format!("There is no audio track #{t}.")).eprint();
-					continue;
-				};
-
-			// Rip it, and keep track of the destination file so we can print
-			// a complete list at the end.
-			let mut rip = Rip::new(self, track, opts)?;
-			let res = rip.rip(progress, killed)?;
-			rip.summarize();
-			saved.insert(t, res);
-		}
-
-		// Print what we did!
-		if ! saved.is_empty() {
+		// Mention all the file paths and statuses, and maybe build a cue
+		// sheet to go along with them.
+		if let Some(saved) = rip.finish() {
 			let mut total = 0;
 			let mut good = 0;
+
+			let htoa_any = saved.contains_key(&0);
+			let htoa_likely = saved.get(&0).map_or(false, |(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
+			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
+			let col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
 			eprintln!("\nThe fruits of your labor:");
 
 			// If we did all tracks, make a cue sheet.
-			if ! opts.raw() {
-				if let Some(file) = save_cuesheet(&self.toc, &saved) {
-					eprintln!("  \x1b[2m{}\x1b[0m", file.to_string_lossy());
-				}
-			}
-
-			for (file, confirmed) in saved.values() {
+			if let Some(file) = save_cuesheet(&self.toc, &saved) {
 				eprintln!(
-					"  \x1b[2m{}{}\x1b[0m",
+					"  \x1b[2m{}\x1b[0m",
 					file.to_string_lossy(),
-					if *confirmed { " \x1b[0;1;92m✓" } else { "" },
 				);
-				total += 1;
-				if *confirmed { good += 1; }
 			}
 
-			// Summarize confirmation counts if we confirmed anything and
-			// ripped more than one track.
-			if good != 0 && total != 1 {
-				if good == total {
-					eprintln!("\x1b[1;92m✓\x1b[0m All tracks have been accurately ripped!");
-				}
-				else {
-					eprintln!("\x1b[1;92m✓\x1b[0m {good}/{total} tracks have been accurately ripped!");
-				}
+			for (idx, (file, ar, ctdb)) in saved {
+				total += 1;
+				if ar.is_some() || ctdb.is_some() { good += 1; }
+
+				eprintln!(
+					"  \x1b[2m{:<col1$}\x1b[0m{}{}",
+					file.to_string_lossy(),
+					if conf {
+						if idx == 0 { Cow::Borrowed("            \x1b[0;93m*\x1b[0m") }
+						else { fmt_ar(ar) }
+					} else { Cow::Borrowed("            \x1b[0;91mx\x1b[0m") },
+					if conf {
+						if idx == 0 { Cow::Borrowed("         \x1b[0;93m*\x1b[0m") }
+						else { fmt_ctdb(ctdb) }
+					} else { Cow::Borrowed("         \x1b[0;91mx\x1b[0m") },
+				);
+			}
+
+			// Add confirmation column headers.
+			eprintln!(
+				"  {}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
+				" ".repeat(col1),
+				if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
+			);
+
+			// Mention that the HTOA can't be verified but is probably okay.
+			if htoa_likely {
+				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,");
+				eprintln!("  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m");
+			}
+			// Mention that the HTOA can't be verified and should be reripped
+			// to increase certainty.
+			else if htoa_any {
+				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB");
+				eprintln!("  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
 			}
 
 			// An extra line break for separation.
@@ -307,21 +310,60 @@ impl Disc {
 
 
 
+/// # Format AccurateRip.
+fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
+	if let Some((v1, v2)) = ar {
+		let c1 =
+			if v1 == 0 { COLOR_BAD }
+			else if v1 <= 5 { COLOR_LIKELY }
+			else { COLOR_CONFIRMED };
+
+		let c2 =
+			if v2 == 0 { COLOR_BAD }
+			else if v2 <= 5 { COLOR_LIKELY }
+			else { COLOR_CONFIRMED };
+
+		Cow::Owned(format!(
+			"        \x1b[0;{c1}m{:02}\x1b[0;2m+\x1b[0;{c2}m{:02}\x1b[0m",
+			v1.min(99),
+			v2.min(99),
+		))
+	}
+	else { Cow::Borrowed("             ") }
+}
+
+#[allow(clippy::option_if_let_else)]
+/// # Format CUETools.
+fn fmt_ctdb(ctdb: Option<u16>) -> Cow<'static, str> {
+	if let Some(v1) = ctdb {
+		let c1 =
+			if v1 == 0 { COLOR_BAD }
+			else if v1 <= 5 { COLOR_LIKELY }
+			else { COLOR_CONFIRMED };
+
+		Cow::Owned(format!(
+			"       \x1b[0;{c1}m{:03}\x1b[0m",
+			v1.min(999),
+		))
+	}
+	else { Cow::Borrowed("          ") }
+}
+
 /// # Generate CUE Sheet if Complete.
-fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<PathBuf> {
+fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	use std::fmt::Write;
 
 	// Make sure all tracks on the disc have been ripped, and pair their file
 	// names with the corresponding Track object.
 	let mut all = Vec::with_capacity(ripped.len());
 	for track in toc.audio_tracks() {
-		let (dst, _) = ripped.get(&track.number())?;
+		let (dst, _, _) = ripped.get(&track.number())?;
 		let dst = dst.file_name().and_then(OsStr::to_str)?;
 		all.push((track, dst));
 	}
 
 	// The output folder.
-	let parent = ripped.get(&1).and_then(|(dst, _)| dst.parent())?;
+	let parent = ripped.get(&1).and_then(|(dst, _, _)| dst.parent())?;
 
 	let mut cue = String::new();
 	for (track, src) in all {
@@ -329,7 +371,7 @@ fn save_cuesheet(toc: &Toc, ripped: &BTreeMap<u8, (PathBuf, bool)>) -> Option<Pa
 		if track.position().is_first() && toc.htoa().is_some() {
 			// This should have been ripped with everything else.
 			let src0 = ripped.get(&0)
-				.and_then(|(dst, _)| dst.file_name())
+				.and_then(|(dst, _, _)| dst.file_name())
 				.and_then(OsStr::to_str)?;
 
 			// Add the lines to our cue!
