@@ -5,6 +5,7 @@
 pub(super) mod buf;
 pub(super) mod data;
 mod iter;
+mod log;
 pub(super) mod opts;
 mod quality;
 pub(super) mod sample;
@@ -37,6 +38,7 @@ use fyi_msg::{
 	Progless,
 };
 use iter::ReadIter;
+use log::RipLog;
 use quality::TrackQuality;
 use std::{
 	collections::BTreeMap,
@@ -116,6 +118,7 @@ impl<'a> Ripper<'a> {
 		let leadout = toc.audio_leadout() as i32;
 		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
 		let mut buf = RipBuffer::default();
+		let mut log = RipLog::new();
 
 		// Load the first track's state.
 		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
@@ -132,9 +135,8 @@ impl<'a> Ripper<'a> {
 		let mut last_read_track = first_track.track.number();
 
 		for pass in 1..=self.opts.passes() {
-			if self.opts.verbose() {
-				progress.push_msg(Msg::plain(format!("##\n## Pass {pass}.\n##")), false);
-			}
+			// Fire up the log if we're logging.
+			if self.opts.verbose() { log.pass(pass); }
 
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
@@ -189,6 +191,7 @@ impl<'a> Ripper<'a> {
 					self.disc.cdio(),
 					&mut state,
 					&self.opts,
+					&mut log,
 					progress,
 					killed,
 				)? {
@@ -288,6 +291,7 @@ struct RipEntry {
 }
 
 impl RipEntry {
+	#[allow(clippy::too_many_arguments)] // Sorry about that.
 	/// # Rip!
 	///
 	/// Rip or skip, depending on the state.
@@ -307,6 +311,7 @@ impl RipEntry {
 		cdio: &LibcdioInstance,
 		state: &mut RipState,
 		opts: &RipOptions,
+		log: &mut RipLog,
 		progress: &Progless,
 		killed: &KillSwitch,
 	)
@@ -344,19 +349,17 @@ impl RipEntry {
 				},
 				// Silently skip generic read errors.
 				Err(RipRipError::CdRead(_)) => if opts.verbose() {
-					log_line(
+					log.line(
 						self.track,
 						read_lsn,
 						"Read error.",
-						progress,
 					);
 				},
 				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
-					log_line(
+					log.line(
 						self.track,
 						read_lsn,
 						"Subchannel desync (or corruption).",
-						progress,
 					);
 				},
 				// Abort for all other kinds of errors.
@@ -372,19 +375,17 @@ impl RipEntry {
 					else if v.is_wishywashy() { total_wishy += 1; }
 				}
 				if total_bad != 0 {
-					log_line(
+					log.line(
 						self.track,
 						read_lsn,
 						format!("{total_bad:03}/588 samples are bad."),
-						progress,
 					);
 				}
 				if total_wishy != 0 {
-					log_line(
+					log.line(
 						self.track,
 						read_lsn,
 						format!("{total_wishy:03}/588 samples are very inconsistent."),
-						progress,
 					);
 				}
 			}
@@ -474,17 +475,6 @@ impl RipEntry {
 }
 
 
-
-/// # Generate Log Line for Verbosity.
-fn log_line<S>(track: Track, lsn: i32, msg: S, progress: &Progless)
-where S: AsRef<str> {
-	progress.push_msg(Msg::plain(format!(
-		"{:10}  {:02}  {lsn:06}  {}",
-		utc2k::unixtime(),
-		track.number(),
-		msg.as_ref().trim(),
-	)), false);
-}
 
 /// # Prune Invalid Tracks.
 fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {
