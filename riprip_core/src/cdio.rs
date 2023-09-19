@@ -535,7 +535,7 @@ impl LibcdioInstance {
 		match res {
 			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadUnsupported),
 			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
-			_ => Err(RipRipError::CdRead(lsn)),
+			_ => Err(RipRipError::CdRead),
 		}
 	}
 }

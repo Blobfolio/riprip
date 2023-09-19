@@ -349,7 +349,7 @@ impl RipEntry {
 					}
 				},
 				// Silently skip generic read errors.
-				Err(RipRipError::CdRead(_)) => if opts.verbose() {
+				Err(RipRipError::CdRead) => if opts.verbose() {
 					log.line(
 						self.track,
 						read_lsn,
