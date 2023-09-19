@@ -61,6 +61,7 @@ use std::{
 	},
 };
 use trimothy::TrimSlice;
+use utc2k::FmtUtc2k;
 
 
 
@@ -153,26 +154,38 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 	let mut handle = writer.lock();
 
 	// Program version.
-	let _res = writeln!(&mut handle, concat!("##\n## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "\n##"));
-	let _res = writeln!(&mut handle, "## CLI:   {}", opts.cli());
+	let _res = writeln!(
+		&mut handle,
+		concat!("#####
+## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "
+## {}
+##"),
+		opts.cli(),
+	);
 
 	// Drive.
 	if let Some(v) = disc.drive_vendor_model() {
 		let _res = writeln!(&mut handle, "## Drive: {v}");
 	}
 
-	let _res = writeln!(&mut handle, "## Disc:  {}", disc.toc().cddb_id());
-
-	// Column Headers, kinda.
+	// Everything else!
 	let _res = writeln!(
 		&mut handle,
-		r"##
-## Sectors with outstanding problems are listed in the order in which they're
-## read. Each line contains the following, separated by two spaces:
-##   * Unix timestamp        (10 digits)
-##   * Track number          (02 digits)
-##   * Logical sector number (06 digits)
-##   * Text description");
+		"## Disc:  {}
+## Date:  {}
+##
+## The quality issues noted for each pass are composed of the following fields,
+## separated by two spaces:
+##   * Track Number                   [2 digits]
+##   * Logical Sector Number          [6 digits]
+##   * Affected Samples (out of 588)  [3 digits]
+##   * Description
+##       * BAD:      values returned with C2 errors
+##       * CONFUSED: many contradictory \"good\" values
+#####",
+		FmtUtc2k::now(),
+		disc.toc().cddb_id(),
+	);
 
 	let _res = handle.flush();
 }

@@ -349,18 +349,10 @@ impl RipEntry {
 				},
 				// Silently skip generic read errors.
 				Err(RipRipError::CdRead) => if opts.verbose() {
-					log.line(
-						self.track,
-						read_lsn,
-						"Read error.",
-					);
+					log.add_error(read_lsn, RipRipError::CdRead);
 				},
 				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
-					log.line(
-						self.track,
-						read_lsn,
-						"Subchannel desync (or corruption).",
-					);
+					log.add_error(read_lsn, RipRipError::SubchannelDesync);
 				},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
@@ -372,21 +364,13 @@ impl RipEntry {
 				let mut total_wishy = 0;
 				for v in sector {
 					if v.is_bad() { total_bad += 1; }
-					else if v.is_wishywashy() { total_wishy += 1; }
+					else if v.is_confused() { total_wishy += 1; }
 				}
 				if total_bad != 0 {
-					log.line(
-						self.track,
-						read_lsn,
-						format!("{total_bad:03}/588 samples are bad."),
-					);
+					log.add_bad(self.track, read_lsn, total_bad);
 				}
 				if total_wishy != 0 {
-					log.line(
-						self.track,
-						read_lsn,
-						format!("{total_wishy:03}/588 samples are very inconsistent."),
-					);
+					log.add_confused(self.track, read_lsn, total_wishy);
 				}
 			}
 

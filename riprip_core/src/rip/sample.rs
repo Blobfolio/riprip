@@ -102,11 +102,11 @@ impl RipSample {
 		}
 	}
 
-	/// # Is Wishywashy.
+	/// # Is Confused.
 	///
-	/// Returns true if the data is so inconsistent as to exceed the maximum
-	/// contention slots.
-	pub(crate) const fn is_wishywashy(&self) -> bool {
+	/// Returns true if the data has been so inconsistent as to warrant strict
+	/// handling.
+	pub(crate) const fn is_confused(&self) -> bool {
 		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
 	}
 }
