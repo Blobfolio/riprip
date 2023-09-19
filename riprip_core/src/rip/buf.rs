@@ -36,12 +36,14 @@ impl RipBuffer {
 	/// Depending on the options, this will fetch some combination of audio
 	/// data, C2 error pointers, and subchannel (for timestamp verification).
 	///
+	/// Returns `true` if no C2 errors were reported.
+	///
 	/// ## Errors
 	///
 	/// This will return any I/O related errors encountered, or if timestamp
 	/// verification fails, a desync error.
 	pub(crate) fn read_sector(&mut self, cdio: &LibcdioInstance, lsn: i32, opts: &RipOptions)
-	-> Result<(), RipRipError> {
+	-> Result<bool, RipRipError> {
 		// Subchannel sync?
 		if opts.sync() {
 			self.read_subchannel(cdio, lsn)?;
@@ -50,12 +52,12 @@ impl RipBuffer {
 			let hash = crc32fast::hash(self.data_slice());
 
 			// Read again with C2 details.
-			self.read_c2(cdio, lsn, opts)?;
+			let good = self.read_c2(cdio, lsn, opts)?;
 
 			// Make sure we got the same data both times.
-			if hash == crc32fast::hash(self.data_slice()) { Ok(()) }
+			if hash == crc32fast::hash(self.data_slice()) { Ok(good) }
 			// If not, treat it like a generic read error.
-			else { Err(RipRipError::CdRead(lsn)) }
+			else { Err(RipRipError::CdRead) }
 		}
 		// Normal read.
 		else { self.read_c2(cdio, lsn, opts) }
@@ -67,19 +69,24 @@ impl RipBuffer {
 	///
 	/// If strict mode is in effect and there are any C2 errors, all samples
 	/// will be marked as having an error.
+	///
+	/// Returns true if no C2 errors were reported.
 	fn read_c2(&mut self, cdio: &LibcdioInstance, lsn: i32, opts: &RipOptions)
-	-> Result<(), RipRipError> {
+	-> Result<bool, RipRipError> {
 		// Just in case the read is bogus, let's flip all C2 to bad beforehand.
 		self.set_bad();
 
 		// Okay, read away!
 		cdio.read_cd_c2(&mut self.0, lsn)?;
 
+		// How'd we do?
+		let good = self.all_good();
+
 		// If we're in strict mode and there's any error, set all bits
 		// to error.
-		if opts.strict_c2() && ! self.all_good() { self.set_bad(); }
+		if opts.strict_c2() && ! good { self.set_bad(); }
 
-		Ok(())
+		Ok(good)
 	}
 
 	/// # Read Subchannel.
@@ -94,12 +101,6 @@ impl RipBuffer {
 			&mut self.0[..usize::from(CD_DATA_SUBCHANNEL_SIZE)],
 			lsn,
 		)
-	}
-
-	#[inline]
-	/// # Mark All C2 Bad.
-	fn set_bad(&mut self) {
-		for v in self.c2_slice_mut() { *v = 0b1111_1111; }
 	}
 }
 
@@ -122,7 +123,7 @@ impl RipBuffer {
 	/// # No C2 Errors?
 	///
 	/// Returns `true` if all C2 bits are happy and error-free.
-	pub(crate) fn all_good(&self) -> bool {
+	fn all_good(&self) -> bool {
 		self.0.iter().skip(usize::from(CD_DATA_SIZE)).all(|v| 0.eq(v))
 	}
 
@@ -135,6 +136,12 @@ impl RipBuffer {
 	///
 	/// Return the portion of the buffer containing the audio data.
 	fn data_slice(&self) -> &[u8] { &self.0[..usize::from(CD_DATA_SIZE)] }
+
+	#[inline]
+	/// # Mark All C2 Bad.
+	fn set_bad(&mut self) {
+		for v in self.c2_slice_mut() { *v = 0b1111_1111; }
+	}
 }
 
 

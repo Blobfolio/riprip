@@ -340,10 +340,9 @@ impl RipEntry {
 			any_read = true;
 			match buf.read_sector(cdio, read_lsn, opts) {
 				// Good is good!
-				Ok(()) => if ! killed.killed() {
+				Ok(all_good) => if ! killed.killed() {
 					// Patch the data, unless the user just aborted, as that
 					// will probably have messed up the data.
-					let all_good = buf.all_good();
 					for (old, (new, c2_err)) in sector.iter_mut().zip(buf.samples()) {
 						old.update(new, c2_err, all_good);
 					}
