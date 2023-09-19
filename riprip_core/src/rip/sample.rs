@@ -77,7 +77,7 @@ impl RipSample {
 			Self::Maybe(
 				ContentiousSample::Maybe2(_) |
 				ContentiousSample::Maybe3(_) |
-				ContentiousSample::Maybe4(_)
+				ContentiousSample::Strict(_)
 			)
 		)
 	}
@@ -107,7 +107,7 @@ impl RipSample {
 	/// Returns true if the data is so inconsistent as to exceed the maximum
 	/// contention slots.
 	pub(crate) const fn is_wishywashy(&self) -> bool {
-		matches!(self, Self::Maybe(ContentiousSample::Maybe4((_, other))) if *other != 0)
+		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
 	}
 }
 
@@ -127,7 +127,7 @@ impl RipSample {
 	/// changed to Maybe.)
 	///
 	/// Confirmed stay the same.
-	pub(crate) fn update(&mut self, new: Sample, err_c2: bool) {
+	pub(crate) fn update(&mut self, new: Sample, err_c2: bool, all_good: bool) {
 		// Send bad samples to a different method to halve the onslaught of
 		// conditional handling. Haha.
 		if err_c2 { return self.update_bad(new); }
@@ -138,8 +138,12 @@ impl RipSample {
 				*self = Self::Maybe(ContentiousSample::new(new));
 			},
 
-			// Simple Maybes.
-			Self::Maybe(s) => { s.add_good(new); },
+			// Maybes
+			Self::Maybe(s) =>
+				// Strict samples can only be updated if all good.
+				if all_good || ! matches!(s, ContentiousSample::Strict(_)) {
+					s.add_good(new);
+				},
 
 			// Leave confirmed samples alone.
 			Self::Confirmed(_) => {},
@@ -175,18 +179,18 @@ impl RipSample {
 #[derive(Debug, Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// # Contentious Rip Sample.
 ///
-/// This structure holds up to 4 samples sorted by popularity and age. This
-/// is used instead of a straight vector because there shouldn't be _that_
+/// This structure holds up to 3 sample values sorted by popularity and age.
+/// This is used instead of a straight vector because there shouldn't be _that_
 /// many contradictory samples, and since the counts are fixed, we don't have
 /// to worry about silly bounds checks or non-const indexing constraints.
 ///
-/// This is also two bytes smaller than a `Vec<(Sample, u8)>`, handy at the
-/// scale of a CD track with hundreds of thousands of samples.
+/// This is also eight bytes smaller than a `Vec<(Sample, u8)>`, which isn't
+/// anything to sneeze at given the scale of data we're working with. Haha.
 pub(crate) enum ContentiousSample {
 	Maybe1((Sample, u8)),
 	Maybe2([(Sample, u8); 2]),
 	Maybe3([(Sample, u8); 3]),
-	Maybe4(([(Sample, u8); 4], u8)),
+	Strict([(Sample, u8); 3]),
 }
 
 impl ContentiousSample {
@@ -201,8 +205,7 @@ impl ContentiousSample {
 		match self {
 			Self::Maybe1((s, _)) => *s,
 			Self::Maybe2(set) => set[0].0,
-			Self::Maybe3(set) => set[0].0,
-			Self::Maybe4((set, _)) => set[0].0,
+			Self::Maybe3(set) | Self::Strict(set) => set[0].0,
 		}
 	}
 
@@ -211,8 +214,7 @@ impl ContentiousSample {
 		match self {
 			Self::Maybe1((s, _)) => s.as_slice(),
 			Self::Maybe2(set) => set[0].0.as_slice(),
-			Self::Maybe3(set) => set[0].0.as_slice(),
-			Self::Maybe4((set, _)) => set[0].0.as_slice(),
+			Self::Maybe3(set) | Self::Strict(set) => set[0].0.as_slice(),
 		}
 	}
 
@@ -223,22 +225,15 @@ impl ContentiousSample {
 		match self {
 			Self::Maybe1((_, c)) => (*c, 0),
 			Self::Maybe2(set) => (set[0].1, set[1].1),
-			Self::Maybe3(set) => (
+			Self::Maybe3(set) | Self::Strict(set) => (
 				set[0].1,
 				set[1].1.saturating_add(set[2].1),
-			),
-			Self::Maybe4((set, other)) => (
-				set[0].1,
-				other.saturating_add(set[1].1)
-					.saturating_add(set[2].1)
-					.saturating_add(set[3].1),
 			),
 		}
 	}
 }
 
 impl ContentiousSample {
-	#[allow(clippy::cognitive_complexity)]
 	/// # Add (Bad) Sample.
 	///
 	/// If the value already exists, the count is _decreased_. If it reaches
@@ -247,6 +242,7 @@ impl ContentiousSample {
 	/// Returns a bad sample if the value can no longer be held (e.g. a `Maybe1`
 	/// with a count of zero).
 	fn add_bad(&mut self, new: Sample) -> Option<RipSample> {
+		let strict = matches!(self, Self::Strict(_));
 		match self {
 			Self::Maybe1((old, count)) =>
 				if new.eq(old) {
@@ -270,7 +266,8 @@ impl ContentiousSample {
 					// Decrement.
 					else { *count2 -= 1; }
 				},
-			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) =>
+			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) |
+			Self::Strict([(old1, count1), (old2, count2), (old3, count3)]) =>
 				if new.eq(old1) {
 					// Drop, keeping 2,3.
 					if *count1 == 1 {
@@ -294,62 +291,17 @@ impl ContentiousSample {
 					}
 				}
 				else if new.eq(old3) {
-					// Drop, keeping 1,2.
 					if *count3 == 1 {
-						*self = Self::Maybe2([(*old1, *count1), (*old2, *count2)]);
+						// Strict stays, but maybe drops to 1,2.
+						if ! strict {
+							*self = Self::Maybe2([
+								(*old1, *count1),
+								(*old2, *count2),
+							]);
+						}
 					}
 					// Decrement.
 					else { *count3 -= 1; }
-				},
-			Self::Maybe4(([(old1, count1), (old2, count2), (old3, count3), (old4, count4)], _)) =>
-				if new.eq(old1) {
-					// Drop, keeping 2,3,4.
-					if *count1 == 1 {
-						*self = Self::Maybe3([
-							(*old2, *count2), (*old3, *count3), (*old4, *count4),
-						]);
-					}
-					// Decrement and maybe resort.
-					else {
-						*count1 -= 1;
-						if *count1 < *count2 { self.sort(); }
-					}
-				}
-				else if new.eq(old2) {
-					// Drop, keeping 1,3,4.
-					if *count2 == 1 {
-						*self = Self::Maybe3([
-							(*old1, *count1), (*old3, *count3), (*old4, *count4),
-						]);
-					}
-					// Decrement and maybe resort.
-					else {
-						*count2 -= 1;
-						if *count2 < *count3 { self.sort(); }
-					}
-				}
-				else if new.eq(old3) {
-					// Drop, keeping 1,2,4.
-					if *count3 == 1 {
-						*self = Self::Maybe3([
-							(*old1, *count1), (*old2, *count2), (*old4, *count4),
-						]);
-					}
-					// Decrement and maybe resort.
-					else {
-						*count3 -= 1;
-						if *count3 < *count4 { self.sort(); }
-					}
-				}
-				else if new.eq(old4) {
-					// Drop, keeping 1,2,3.
-					if *count4 == 1 {
-						*self = Self::Maybe3([
-							(*old1, *count1), (*old2, *count2), (*old3, *count3),
-						]);
-					}
-					// Decrement.
-					else { *count4 -= 1; }
 				},
 		}
 
@@ -362,9 +314,10 @@ impl ContentiousSample {
 	/// latest version is synced and the original wasn't, that will be made
 	/// happy too.
 	///
-	/// If the value is different, it will be added, unless we're already a
-	/// Maybe4, in which case we'll just bump the "other" count.
+	/// If the value is different, it will be added, unless we're already at
+	/// Strict level, in which case it will either be swapped in or ignored.
 	fn add_good(&mut self, new: Sample) {
+		let strict = matches!(self, Self::Strict(_));
 		match self {
 			Self::Maybe1((old, count)) =>
 				// Bump the count.
@@ -388,7 +341,8 @@ impl ContentiousSample {
 						(new, 1),
 					]);
 				},
-			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) =>
+			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) |
+			Self::Strict([(old1, count1), (old2, count2), (old3, count3)]) =>
 				// Bump the count.
 				if new.eq(old1) { *count1 = count1.saturating_add(1); }
 				else if new.eq(old2) {
@@ -399,35 +353,15 @@ impl ContentiousSample {
 					*count3 = count3.saturating_add(1);
 					if *count3 > *count2 { self.sort(); }
 				}
-				// Move to Maybe4.
+				// Strict can't get any stricter, but we can swap the worst
+				// sample if it's count is one. Damn bullshit drives…
+				else if strict {
+					if *count3 == 1 { *old3 = new; }
+				}
+				// Move to Strict.
 				else {
-					*self = Self::Maybe4((
-						[
-							(*old1, *count1),
-							(*old2, *count2),
-							(*old3, *count3),
-							(new, 1),
-						],
-						0
-					));
+					*self = Self::Strict([(*old1, 1), (*old2, 1), (*old3, 1)]);
 				},
-			Self::Maybe4(([(old1, count1), (old2, count2), (old3, count3), (old4, count4)], other)) =>
-				// Bump the count.
-				if new.eq(old1) { *count1 = count1.saturating_add(1); }
-				else if new.eq(old2) {
-					*count2 = count2.saturating_add(1);
-					if *count2 > *count1 { self.sort(); }
-				}
-				else if new.eq(old3) {
-					*count3 = count3.saturating_add(1);
-					if *count3 > *count2 { self.sort(); }
-				}
-				else if new.eq(old4) {
-					*count4 = count4.saturating_add(1);
-					if *count4 > *count3 { self.sort(); }
-				}
-				// Increment other.
-				else { *other = other.saturating_add(1); },
 		}
 	}
 
@@ -441,18 +375,10 @@ impl ContentiousSample {
 				set[0].1 = 1;
 				set[1].1 = 1;
 			},
-			Self::Maybe3(set) => {
+			Self::Maybe3(set) | Self::Strict(set) => {
 				set[0].1 = 1;
 				set[1].1 = 1;
 				set[2].1 = 1;
-			},
-			Self::Maybe4((set, other)) => {
-				set[0].1 = 1;
-				set[1].1 = 1;
-				set[2].1 = 1;
-				set[3].1 = 1;
-
-				*other = 0;
 			},
 		}
 	}
@@ -462,8 +388,8 @@ impl ContentiousSample {
 		match self {
 			Self::Maybe1(_) => {},
 			Self::Maybe2(set) => { set.sort_unstable_by(sort_sample_count); },
-			Self::Maybe3(set) => { set.sort_unstable_by(sort_sample_count); },
-			Self::Maybe4((set, _)) => { set.sort_unstable_by(sort_sample_count); },
+			Self::Maybe3(set) |
+			Self::Strict(set) => { set.sort_unstable_by(sort_sample_count); },
 		}
 	}
 }
@@ -487,32 +413,32 @@ mod test {
 	fn t_update() {
 		// Start with TBD.
 		let mut sample = RipSample::Tbd;
-		sample.update(NULL_SAMPLE, true);
+		sample.update(NULL_SAMPLE, true, false);
 		assert_eq!(sample, RipSample::Bad(NULL_SAMPLE));
 
 		// Bad + Good = Maybe.
-		sample.update(NULL_SAMPLE, false);
+		sample.update(NULL_SAMPLE, false, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1)))
 		);
 
 		// Maybe + Bad = no change.
-		sample.update([1, 1, 1, 1], true);
+		sample.update([1, 1, 1, 1], true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 1)))
 		);
 
 		// Maybe + Good = ++
-		sample.update(NULL_SAMPLE, false);
+		sample.update(NULL_SAMPLE, false, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1((NULL_SAMPLE, 2)))
 		);
 
 		// Maybe + Good (different) = Contentious
-		sample.update([1, 1, 1, 1], false);
+		sample.update([1, 1, 1, 1], false, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
@@ -522,7 +448,7 @@ mod test {
 		);
 
 		// Contentious + Bad (different) = no change
-		sample.update([1, 2, 1, 2], true);
+		sample.update([1, 2, 1, 2], true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
@@ -532,7 +458,7 @@ mod test {
 		);
 
 		// Bump the second.
-		sample.update([1, 1, 1, 1], false);
+		sample.update([1, 1, 1, 1], false, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
@@ -542,7 +468,7 @@ mod test {
 		);
 
 		// Second takes the lead!
-		sample.update([1, 1, 1, 1], false);
+		sample.update([1, 1, 1, 1], false, true);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
@@ -552,7 +478,7 @@ mod test {
 		);
 
 		// Contentious + Bad (existing) = --
-		sample.update(NULL_SAMPLE, true);
+		sample.update(NULL_SAMPLE, true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe2([
@@ -562,7 +488,7 @@ mod test {
 		);
 
 		// Contentious + Bad (existing) = -- = Maybe
-		sample.update(NULL_SAMPLE, true);
+		sample.update(NULL_SAMPLE, true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
@@ -571,21 +497,21 @@ mod test {
 		);
 
 		// Maybe + Bad (existing) = -- = empty = Bad.
-		sample.update([1, 1, 1, 1], true);
+		sample.update([1, 1, 1, 1], true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
 				([1, 1, 1, 1], 2),
 			))
 		);
-		sample.update([1, 1, 1, 1], true);
+		sample.update([1, 1, 1, 1], true, false);
 		assert_eq!(
 			sample,
 			RipSample::Maybe(ContentiousSample::Maybe1(
 				([1, 1, 1, 1], 1),
 			))
 		);
-		sample.update([1, 1, 1, 1], true);
+		sample.update([1, 1, 1, 1], true, false);
 		assert_eq!(sample, RipSample::Bad([1, 1, 1, 1]));
 	}
 }
