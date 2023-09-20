@@ -13,9 +13,13 @@ use crate::{
 	CD_LEADIN,
 	CDTextKind,
 	DriveVendorModel,
+	KillSwitch,
 	RipRipError,
 };
-use dactyl::traits::SaturatingFrom;
+use dactyl::{
+	NoHash,
+	traits::SaturatingFrom,
+};
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -29,6 +33,8 @@ use libcdio_sys::{
 	track_format_t_TRACK_FORMAT_PSX,
 };
 use std::{
+	cell::RefCell,
+	collections::HashSet,
 	ffi::{
 		CStr,
 		CString,
@@ -46,6 +52,14 @@ use std::{
 
 /// # Initialization Counter.
 static LIBCDIO_INIT: Once = Once::new();
+
+thread_local! {
+	/// # Sector Shitlist.
+	///
+	/// Keep track of sectors that trigger hard read errors so we don't
+	/// accidentally try them in a cache-bust situation.
+	static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
+}
 
 
 
@@ -375,49 +389,68 @@ impl LibcdioInstance {
 impl LibcdioInstance {
 	/// # Cache Bust.
 	///
-	/// In lieu of any universal I/O command to clear the drive cache, we can
-	/// do the next best thing: fill its buffers with other stuff!
+	/// There is no simple, universal command to disable or flush a drive's
+	/// read buffer, so we have to do the next best thing: fill it with
+	/// useless crap!
 	///
-	/// This will read 1800 sectors — preferrably outside the target track's
-	/// range — to ensure that when we ask for the target track's data, the
-	/// drive will have to _actually read it_.
+	/// There is _also_ no good way to know how much crap we need to fill,
+	/// because that would be too easy. Haha. Instead we'll just assume the
+	/// buffer is 4MiB, and read a teenie bit more than that. That should cover
+	/// most drives.
 	///
-	/// That's the theory anyway.
+	/// Thankfully, we're never reading the same sector back-to-back, so this
+	/// only has to be done once per track, not after each and every read.
 	///
-	/// Thankfully we're never requesting the same sector back-to-back, so only
-	/// need to do this at the start of each rip pass.
-	pub(super) fn bust_cache(&self, blacklist: Range<i32>, leadout: i32) {
-		// We want to read lots of data at once, but don't want a gigantic
-		// buffer either. 64 KiB seems about right. The data size doesn't
-		// evenly fit, so we'll go a little under.
-		const NUM_BLOCKS: u16 = u16::MAX.wrapping_div(CD_DATA_SIZE);
+	/// For this to work, we have to be able to find regions outside the track
+	/// range. That should usually be possible, but won't _always_ be.
+	/// Sometimes we'll just have to live with cache.
+	///
+	/// Also of note: drives tend to slow down for read errors. This will
+	/// skip any sector which previously returned a read error to keep it from
+	/// being too terrible.
+	pub(super) fn cache_bust(
+		&self,
+		buf: &mut[u8],
+		mut todo: u32,
+		rng: &Range<i32>,
+		leadout: i32,
+		backwards: bool,
+		killed: &KillSwitch,
+	) {
+		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
+			// If we're moving backwards, try after, then before.
+			if backwards {
+				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
+			}
+			// Otherwise before, then after.
+			else {
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
+				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
+			}
+		}
+	}
 
-		// We ultimately want to read about 4 MiB. Given our NUM_BLOCKS, that
-		// means reading this many times. (Plus one for good measure.)
-		const CHUNKS: i32 = (4_i32 * 1024 * 1024).wrapping_div(NUM_BLOCKS as i32 * CD_DATA_SIZE as i32) + 1;
-
-		// Where can we read from without getting in the way?
-		let lsn =
-			// Read from the start of the disc.
-			if 1800 < blacklist.start { 0 }
-			// Read after the current track.
-			else if blacklist.end + 1800 < leadout { blacklist.end }
-			// Read the last 1800 sectors on the disc.
-			else { leadout - 1800 };
-
-		// Read and discard the results until we have done what we set out to
-		// do. Errors aren't that big a deal since this is only a mitigation
-		// strategy. If it doesn't work, oh well.
-		let mut buf = [0_u8; NUM_BLOCKS as usize * CD_DATA_SIZE as usize];
-		for i in 0..CHUNKS {
-			let _res = self.read_cd(
-				&mut buf,
-				lsn + i * i32::from(NUM_BLOCKS),
-				false,
-				0,
-				CD_DATA_SIZE,
-				u32::from(NUM_BLOCKS),
-			);
+	/// # Actually Cache Bust.
+	///
+	/// This method attempts to read up to `todo` sectors between `from..to`.
+	/// It is separated from the main method only to cut down on repetitive
+	/// code.
+	fn _cache_bust(
+		&self,
+		buf: &mut[u8],
+		mut from: i32,
+		to: i32,
+		todo: &mut u32,
+		killed: &KillSwitch,
+	) {
+		while from < to && 0 < *todo {
+			if killed.killed() { break; }
+			if
+				! SHITLIST.with(|q| q.borrow().contains(&from)) &&
+				self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
+			{ *todo -= 1; }
+			from += 1;
 		}
 	}
 
@@ -442,7 +475,7 @@ impl LibcdioInstance {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE, 1)
+		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
 	}
 
 	#[allow(unsafe_code)]
@@ -474,7 +507,7 @@ impl LibcdioInstance {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE, 1)?;
+		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
 
 		// We can only get timing information from ADR-1.
 		if 1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 {
@@ -512,7 +545,6 @@ impl LibcdioInstance {
 		c2: bool,
 		sub: u8,
 		block_size: u16,
-		blocks: u32
 	) -> Result<(), RipRipError> {
 		let res = unsafe {
 			libcdio_sys::mmc_read_cd(
@@ -528,28 +560,22 @@ impl LibcdioInstance {
 				u8::from(c2), // C2 or no C2?
 				sub,          // Subchannel? What kind?
 				block_size,   // Block size (varies by data requested).
-				blocks,       // Total number of blocks to read.
+				1,            // Always read one block at a time.
 			)
 		};
 
 		match res {
 			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadUnsupported),
 			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
-			_ => Err(RipRipError::CdRead(lsn)),
+			_ => {
+				SHITLIST.with(|q| q.borrow_mut().insert(lsn));
+				Err(RipRipError::CdRead)
+			},
 		}
 	}
 }
 
 
-
-#[allow(unsafe_code)]
-/// # Initialize `libcdio`.
-///
-/// This is only called once, but to be safe, it is also wrapped in a static to
-/// make sure it can never re-initialize.
-fn init() {
-	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
-}
 
 #[allow(unsafe_code)]
 /// # Pointer to String.
@@ -564,4 +590,13 @@ fn c_char_to_string(ptr: *const c_char) -> Option<String> {
 			.map(|s| s.trim().to_owned())
 			.filter(|s| ! s.is_empty())
 	}
+}
+
+#[allow(unsafe_code)]
+/// # Initialize `libcdio`.
+///
+/// This is only called once, but to be safe, it is also wrapped in a static to
+/// make sure it can never re-initialize.
+fn init() {
+	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
 }

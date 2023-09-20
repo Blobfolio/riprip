@@ -34,7 +34,10 @@ use argyle::{
 	FLAG_HELP,
 	FLAG_VERSION,
 };
-use dactyl::traits::BytesToUnsigned;
+use dactyl::{
+	NiceU16,
+	traits::BytesToUnsigned,
+};
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -61,6 +64,7 @@ use std::{
 	},
 };
 use trimothy::TrimSlice;
+use utc2k::FmtUtc2k;
 
 
 
@@ -153,26 +157,38 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 	let mut handle = writer.lock();
 
 	// Program version.
-	let _res = writeln!(&mut handle, concat!("##\n## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "\n##"));
-	let _res = writeln!(&mut handle, "## CLI:   {}", opts.cli());
+	let _res = writeln!(
+		&mut handle,
+		concat!("#####
+## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "
+## {}
+##"),
+		opts.cli(),
+	);
 
 	// Drive.
 	if let Some(v) = disc.drive_vendor_model() {
 		let _res = writeln!(&mut handle, "## Drive: {v}");
 	}
 
-	let _res = writeln!(&mut handle, "## Disc:  {}", disc.toc().cddb_id());
-
-	// Column Headers, kinda.
+	// Everything else!
 	let _res = writeln!(
 		&mut handle,
-		r"##
-## Sectors with outstanding problems are listed in the order in which they're
-## read. Each line contains the following, separated by two spaces:
-##   * Unix timestamp        (10 digits)
-##   * Track number          (02 digits)
-##   * Logical sector number (06 digits)
-##   * Text description");
+		"## Disc:  {}
+## Date:  {}
+##
+## The quality issues noted for each pass are composed of the following fields,
+## separated by two spaces:
+##   * Track Number                   [2 digits]
+##   * Logical Sector Number          [6 digits]
+##   * Affected Samples (out of 588)  [3 digits]
+##   * Description
+##       * BAD:      values returned with C2 errors
+##       * CONFUSED: many contradictory \"good\" values
+#####",
+		FmtUtc2k::now(),
+		disc.toc().cddb_id(),
+	);
 
 	let _res = handle.flush();
 }
@@ -195,6 +211,18 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	}
 	else if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
 		opts = opts.with_offset(v);
+	}
+
+	// Cache is more annoying than some options, less annoying than others.
+	if let Some(v) = args.option2(b"-c", b"--cache") {
+		let v = v.iter()
+			.position(|&b| matches!(b, b'm' | b'M'))
+			.map_or_else(
+				|| u16::btou(v),
+				|pos| u16::btou(v[..pos].trim()).and_then(|v| v.checked_mul(1024))
+			)
+			.ok_or(RipRipError::CliParse("-c/--cache"))?;
+		opts = opts.with_cache(v);
 	}
 
 	if let Some(v) = args.option(b"--confidence") {
@@ -279,8 +307,12 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict_c2() { "C2 Error Pointers (Sector)" }
-		else { "C2 Error Pointers (Sample)" }
+		if opts.strict_c2() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
+		else { "C2 Error Pointers \x1b[0;2m(\x1b[0;1mSample\x1b[0;2m)" }
+	);
+	let nice_cache = opts.cache().map_or(
+		Cow::Borrowed("Disabled"),
+		|c| Cow::Owned(format!("{} KiB", NiceU16::from(c.get())))
 	);
 	let nice_chk = Cow::Owned(format!(
 		"AccurateRip/CTDB cf. {}+",
@@ -296,10 +328,10 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		"{}{}",
 		opts.passes(),
 		if opts.resume() {
-			if opts.reset_counts() { " (Reset Counts)" }
+			if opts.reset_counts() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
 			else { "" }
 		}
-		else { " (From Scratch)" },
+		else { " \x1b[0;2m(\x1b[0;1;93mFrom Scratch\x1b[0;2m)" },
 	));
 	let nice_read_order = Cow::Borrowed(
 		if opts.flip_flop() { "Alternate" }
@@ -312,7 +344,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		else { Cow::Owned(format!("Re-Read Consistency {rr_a}+")) };
 	let nice_rereads2 =
 		if rr_b == 1 { Cow::Borrowed("Re-Read Contention") }
-		else { Cow::Owned(format!("Re-Read Contention {rr_b}x")) };
+		else { Cow::Owned(format!("Re-Read Contention {rr_b}×")) };
 	let nice_sync = Cow::Borrowed("Subchannel Sync");
 	let nice_tracks = Cow::Owned(rip_summary_tracks(opts));
 	let nice_verbose = Cow::Borrowed(if opts.verbose() { "Yes" } else { "No" });
@@ -322,6 +354,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	let set = [
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
+		("Cache Bust:", nice_cache, opts.cache().is_some()),
 		("Verification:", nice_chk, true),
 		("", nice_c2, true),
 		("", nice_rereads1, 1 != rr_a),
@@ -449,6 +482,11 @@ WHEN ALL ELSE FAILS:
                       from the initial rip and onward.
 
 DRIVE SETTINGS:
+    -c, --cache <NUM> Drive cache can interfere with re-read accuracy. If your
+                      drive caches data, use this option to specify its buffer
+                      size so Rip Rip can try to mitigate it. Values with an
+                      M suffix are treated as MiB, otherwise KiB are assumed.
+                      [default: 0; max: 65,535]
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
     -o, --offset <SAMPLES>

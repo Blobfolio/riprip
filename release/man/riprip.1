@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.1.0" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.1.1" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.1.0.
+Rip Rip Hooray! \- Manual page for riprip v0.1.1.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -41,6 +41,9 @@ Print detailed sector quality information to STDOUT, so it can e.g. be piped to 
 \fB\-V\fR, \fB\-\-version\fR
 Print version information to STDOUT and exit.
 .SS OPTIONS:
+.TP
+\fB\-c\fR, \fB\-\-cache\fR <NUM>
+Drive cache can interfere with re\-read accuracy. If your drive caches data, use this option to specify its buffer size so Rip Rip can try to mitigate it. Values with an M suffix are treated as MiB, otherwise KiB are assumed. [default: 0; max: 65,535]
 .TP
 \fB\-\-confidence\fR <NUM>
 Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]

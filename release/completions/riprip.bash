@@ -24,6 +24,10 @@ _basher___riprip() {
 		opts+=("-V")
 		opts+=("--version")
 	fi
+	if [[ ! " ${COMP_LINE} " =~ " -c " ]] && [[ ! " ${COMP_LINE} " =~ " --cache " ]]; then
+		opts+=("-c")
+		opts+=("--cache")
+	fi
 	[[ " ${COMP_LINE} " =~ " --confidence " ]] || opts+=("--confidence")
 	if [[ ! " ${COMP_LINE} " =~ " -d " ]] && [[ ! " ${COMP_LINE} " =~ " --dev " ]]; then
 		opts+=("-d")

@@ -5,6 +5,7 @@
 pub(super) mod buf;
 pub(super) mod data;
 mod iter;
+mod log;
 pub(super) mod opts;
 mod quality;
 pub(super) mod sample;
@@ -37,6 +38,7 @@ use fyi_msg::{
 	Progless,
 };
 use iter::ReadIter;
+use log::RipLog;
 use quality::TrackQuality;
 use std::{
 	collections::BTreeMap,
@@ -71,8 +73,12 @@ impl<'a> Ripper<'a> {
 		// and add up their rippable sector counts to give us a grand total.
 		let toc = disc.toc();
 		let mut tracks = BTreeMap::default();
-		let mut total_sectors: u32 = 1; // Start at one so we can manipulate the title after finishing.
+
+		// Count up the sectors, and pre-populate the tracks. We'll pad the
+		// total by one so we can keep the progress bar alive for a few
+		// extra status-related tasks at the end of the rip.
 		let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
+		let mut total_sectors: u32 = 1;
 		for t in opts.tracks().filter_map(|t|
 			if t == 0 { toc.htoa() }
 			else { toc.audio_track(usize::from(t)) }
@@ -113,9 +119,8 @@ impl<'a> Ripper<'a> {
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		let toc = self.disc.toc();
-		let leadout = toc.audio_leadout() as i32;
 		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
-		let mut buf = RipBuffer::default();
+		let mut share = RipShare::new(self.disc, progress, killed);
 
 		// Load the first track's state.
 		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
@@ -127,14 +132,10 @@ impl<'a> Ripper<'a> {
 			self.opts.reset_counts(), // Only true on the first pass.
 		)?;
 
-		// Cache bust selectively; only bother if we're reading the same track
-		// two times in a row.
-		let mut last_read_track = first_track.track.number();
-
 		for pass in 1..=self.opts.passes() {
-			if self.opts.verbose() {
-				progress.push_msg(Msg::plain(format!("##\n## Pass {pass}.\n##")), false);
-			}
+			// Fire up the log if we're logging.
+			if self.opts.verbose() { share.log.pass(pass); }
+			share.bump_pass(&self.opts);
 
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
@@ -163,39 +164,8 @@ impl<'a> Ripper<'a> {
 					entry.q2.replace(q);
 				}
 
-				// Cache bust!
-				if last_read_track == entry.track.number() {
-					set_progress_title(
-						progress,
-						entry.track.number(),
-						"Busting the cache…",
-					);
-					self.disc.cdio().bust_cache(state.sector_rip_range(), leadout);
-				}
-
 				// Actual rip.
-				set_progress_title(
-					progress,
-					entry.track.number(),
-					&format!(
-						"{}{}{}…",
-						if pass == 1 && state.is_new() { "Ripping fresh" } else { "Re-ripping" },
-						if self.opts.passes() == 1 { String::new() } else { format!(", pass #{pass}") },
-						if self.opts.backwards() { ", backwards, and in heels" } else { "" },
-					)
-				);
-				if entry.rip(
-					&mut buf,
-					self.disc.cdio(),
-					&mut state,
-					&self.opts,
-					progress,
-					killed,
-				)? {
-					// Note that we attempted to read at least one sector for
-					// this track.
-					last_read_track = entry.track.number();
-				}
+				entry.rip(&mut share, &mut state, &self.opts)?;
 			}
 
 			// Flip the read order for next time?
@@ -273,7 +243,7 @@ impl<'a> Ripper<'a> {
 
 
 
-/// # Basic Rip Info.
+/// # Basic Track Rip Info.
 ///
 /// This holds most of the state-related information other than the state
 /// itself, helping us cut down on the number of operations between runs.
@@ -301,16 +271,17 @@ impl RipEntry {
 	/// ## Errors
 	///
 	/// This will bubble up any errors encountered.
-	fn rip(
-		&mut self,
-		buf: &mut RipBuffer,
-		cdio: &LibcdioInstance,
-		state: &mut RipState,
-		opts: &RipOptions,
-		progress: &Progless,
-		killed: &KillSwitch,
-	)
-	-> Result<bool, RipRipError> {
+	fn rip(&mut self, share: &mut RipShare, state: &mut RipState, opts: &RipOptions)
+	-> Result<(), RipRipError> {
+		// Update the title.
+		let title = format!(
+			"{}{}{}…",
+			if share.pass == 1 && state.is_new() { "Ripping fresh" } else { "Re-ripping" },
+			if opts.passes() == 1 { String::new() } else { format!(", pass #{}", share.pass) },
+			if opts.backwards() { ", backwards, and in heels" } else { "" },
+		);
+		set_progress_title(share.progress, self.track.number(), &title);
+
 		let mut any_read = false;
 		let before = state.quick_hash();
 		let rip_rng = state.sector_rip_range();
@@ -324,40 +295,57 @@ impl RipEntry {
 			// We can skip this block if the user aborted or there's
 			// nothing to refine.
 			if
-				killed.killed() ||
+				share.killed.killed() ||
 				sector.iter().all(|v| v.is_likely(opts.rereads()))
 			{
-				progress.increment();
+				share.progress.increment();
 				continue;
+			}
+
+			// We might need to bust the cache before reading any track data.
+			// This will trigger if the cache size has been set, we're doing
+			// more than one pass, and either didn't read enough sectors on the
+			// last pass to fill the buffer, or are reading the same track
+			// back-to-back.
+			if ! any_read {
+				if let Some(cache_len) = share.should_bust_cache(self.track.number(), opts) {
+					set_progress_title(
+						share.progress,
+						self.track.number(),
+						"Busting the cache…",
+					);
+					share.log.add_cache_bust();
+					share.buf.cache_bust(
+						share.cdio,
+						cache_len,
+						&rip_rng,
+						share.leadout,
+						opts.backwards(),
+						share.killed,
+					);
+					set_progress_title(share.progress, self.track.number(), &title);
+				}
+				else { share.last_read_track = self.track.number(); }
 			}
 
 			// Read and patch!
 			any_read = true;
-			match buf.read_sector(cdio, read_lsn, opts) {
+			share.pass_reads += 1;
+			match share.buf.read_sector(share.cdio, read_lsn, opts) {
 				// Good is good!
-				Ok(()) => if ! killed.killed() {
+				Ok(all_good) => if ! share.killed.killed() {
 					// Patch the data, unless the user just aborted, as that
 					// will probably have messed up the data.
-					for (old, (new, c2_err)) in sector.iter_mut().zip(buf.samples()) {
-						old.update(new, c2_err);
+					for (old, (new, c2_err)) in sector.iter_mut().zip(share.buf.samples()) {
+						old.update(new, c2_err, all_good);
 					}
 				},
 				// Silently skip generic read errors.
-				Err(RipRipError::CdRead(_)) => if opts.verbose() {
-					log_line(
-						self.track,
-						read_lsn,
-						"Read error.",
-						progress,
-					);
+				Err(RipRipError::CdRead) => if opts.verbose() {
+					share.log.add_error(read_lsn, RipRipError::CdRead);
 				},
 				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
-					log_line(
-						self.track,
-						read_lsn,
-						"Subchannel desync (or corruption).",
-						progress,
-					);
+					share.log.add_error(read_lsn, RipRipError::SubchannelDesync);
 				},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
@@ -369,33 +357,23 @@ impl RipEntry {
 				let mut total_wishy = 0;
 				for v in sector {
 					if v.is_bad() { total_bad += 1; }
-					else if v.is_wishywashy() { total_wishy += 1; }
+					else if v.is_confused() { total_wishy += 1; }
 				}
 				if total_bad != 0 {
-					log_line(
-						self.track,
-						read_lsn,
-						format!("{total_bad:03}/588 samples are bad."),
-						progress,
-					);
+					share.log.add_bad(self.track, read_lsn, total_bad);
 				}
 				if total_wishy != 0 {
-					log_line(
-						self.track,
-						read_lsn,
-						format!("{total_wishy:03}/588 samples are very inconsistent."),
-						progress,
-					);
+					share.log.add_confused(self.track, read_lsn, total_wishy);
 				}
 			}
 
-			progress.increment();
+			share.progress.increment();
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
 		self.q2.replace(state.track_quality(opts.rereads()));
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
-			self.verify(state, opts, progress);
+			self.verify(state, opts, share.progress);
 		}
 
 		// Save the state if we changed any data.
@@ -403,7 +381,7 @@ impl RipEntry {
 		if changed {
 			// Resave the state.
 			set_progress_title(
-				progress,
+				share.progress,
 				self.track.number(),
 				"Saving the state…",
 			);
@@ -416,7 +394,7 @@ impl RipEntry {
 			self.dst.replace(state.save_track()?);
 		}
 
-		Ok(any_read)
+		Ok(())
 	}
 
 	/// # Skippable?
@@ -432,11 +410,7 @@ impl RipEntry {
 	/// Returns `true` if verified.
 	fn verify(&mut self, state: &mut RipState, opts: &RipOptions, progress: &Progless)
 	-> bool {
-		set_progress_title(
-			progress,
-			self.track.number(),
-			"Verifying the rip…",
-		);
+		set_progress_title(progress, self.track.number(), "Verifying the rip…");
 
 		// HTOA isn't verifiable. Boo.
 		if self.track.is_htoa() { return false; }
@@ -475,16 +449,86 @@ impl RipEntry {
 
 
 
-/// # Generate Log Line for Verbosity.
-fn log_line<S>(track: Track, lsn: i32, msg: S, progress: &Progless)
-where S: AsRef<str> {
-	progress.push_msg(Msg::plain(format!(
-		"{:10}  {:02}  {lsn:06}  {}",
-		utc2k::unixtime(),
-		track.number(),
-		msg.as_ref().trim(),
-	)), false);
+/// # Rip Share.
+///
+/// This groups together all the shared elements needed exclusively during the
+/// ripping run(s), eliminating the need to share ten million separate
+/// variables between methods. Haha.
+///
+/// This also tracks certain pass/read-related details to facilitate _selective_
+/// cache-busting, when applicable.
+struct RipShare<'a> {
+	buf: RipBuffer,
+	log: RipLog,
+	leadout: i32,
+	pass: u8,
+	pass_reads: u32,
+	force_bust: bool,
+	last_read_track: u8,
+	cdio: &'a LibcdioInstance,
+	progress: &'a Progless,
+	killed: &'a KillSwitch,
 }
+
+impl<'a> RipShare<'a> {
+	#[allow(clippy::cast_possible_wrap)]
+	/// # New.
+	fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
+		Self {
+			buf: RipBuffer::default(),
+			log: RipLog::new(),
+			leadout: disc.toc().audio_leadout() as i32,
+			pass: 0,
+			pass_reads: 0,
+			force_bust: false,
+			last_read_track: u8::MAX,
+			cdio: disc.cdio(),
+			progress,
+			killed,
+		}
+	}
+
+	/// # Bump Pass.
+	///
+	/// Increment the pass number, and potentially set the force-bust flag if
+	/// the previous run failed to conduct enough reads to moot the cache on
+	/// its own.
+	fn bump_pass(&mut self, opts: &RipOptions) {
+		// Force a cache bust if we didn't read enough during the previous pass.
+		if self.pass != 0 {
+			let len = opts.cache_sectors();
+			self.force_bust = len != 0 && self.pass_reads < len;
+			self.pass_reads = 0;
+		}
+
+		// Bump the pass.
+		self.pass += 1;
+	}
+
+	/// # Should Bust Cache?
+	///
+	/// This method is only called at most once per track per pass, just before
+	/// the first read operation (if there is one).
+	///
+	/// If the previous pass did not read enough samples to moot the cache on
+	/// its own, or if the current track was the last track to be ripped (i.e.
+	/// back-to-back), this will return the number of (random) sectors that
+	/// need to be read to bust the cache.
+	///
+	/// Otherwise — most of the time — it will return `None`.
+	fn should_bust_cache(&mut self, track: u8, opts: &RipOptions) -> Option<u32> {
+		if self.force_bust || track == self.last_read_track {
+			self.force_bust = false;
+			self.last_read_track = track;
+			let len = opts.cache_sectors();
+			if 0 == len { None }
+			else { Some(len) }
+		}
+		else { None }
+	}
+}
+
+
 
 /// # Prune Invalid Tracks.
 fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {

@@ -415,7 +415,8 @@ impl RipState {
 	/// Add up the bad, maybe, likely, and confirmed samples within the track
 	/// range.
 	pub(super) fn track_quality(&self, rereads: (u8, u8)) -> TrackQuality {
-		TrackQuality::new(self.track_slice(), rereads)
+		let slice = self.track_slice();
+		TrackQuality::new(slice, rereads).unwrap_or_else(|| TrackQuality::from(slice.len()))
 	}
 
 	/// # Track Slice.
