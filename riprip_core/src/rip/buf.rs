@@ -6,12 +6,14 @@ use crate::{
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_DATA_SUBCHANNEL_SIZE,
+	KillSwitch,
 	LibcdioInstance,
 	RipOptions,
 	RipRipError,
 	Sample,
 	SAMPLES_PER_SECTOR,
 };
+use std::ops::Range;
 
 
 
@@ -29,6 +31,22 @@ impl Default for RipBuffer {
 
 /// # Setters.
 impl RipBuffer {
+	#[inline]
+	/// # Cache Bust.
+	///
+	/// See `LibcdioInstance::cache_bust` for the complete rant.
+	pub(crate) fn cache_bust(
+		&mut self,
+		cdio: &LibcdioInstance,
+		len: u32,
+		rng: &Range<i32>,
+		leadout: i32,
+		backwards: bool,
+		killed: &KillSwitch,
+	) {
+		cdio.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
+	}
+
 	/// # Read Sector.
 	///
 	/// Read a single sector from the disc into the buffer.
@@ -136,6 +154,11 @@ impl RipBuffer {
 	///
 	/// Return the portion of the buffer containing the audio data.
 	fn data_slice(&self) -> &[u8] { &self.0[..usize::from(CD_DATA_SIZE)] }
+
+	/// # Data Slice Mut.
+	///
+	/// Return the portion of the buffer containing the audio data.
+	fn data_slice_mut(&mut self) -> &mut [u8] { &mut self.0[..usize::from(CD_DATA_SIZE)] }
 
 	#[inline]
 	/// # Mark All C2 Bad.

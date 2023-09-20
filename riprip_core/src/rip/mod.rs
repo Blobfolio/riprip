@@ -116,8 +116,7 @@ impl<'a> Ripper<'a> {
 	-> Result<(), RipRipError> {
 		let toc = self.disc.toc();
 		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
-		let mut buf = RipBuffer::default();
-		let mut log = RipLog::new();
+		let mut share = RipShare::new(self.disc, progress, killed);
 
 		// Load the first track's state.
 		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
@@ -131,7 +130,8 @@ impl<'a> Ripper<'a> {
 
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
-			if self.opts.verbose() { log.pass(pass); }
+			if self.opts.verbose() { share.log.pass(pass); }
+			share.bump_pass(&self.opts);
 
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
@@ -161,25 +161,7 @@ impl<'a> Ripper<'a> {
 				}
 
 				// Actual rip.
-				set_progress_title(
-					progress,
-					entry.track.number(),
-					&format!(
-						"{}{}{}…",
-						if pass == 1 && state.is_new() { "Ripping fresh" } else { "Re-ripping" },
-						if self.opts.passes() == 1 { String::new() } else { format!(", pass #{pass}") },
-						if self.opts.backwards() { ", backwards, and in heels" } else { "" },
-					)
-				);
-				entry.rip(
-					&mut buf,
-					self.disc.cdio(),
-					&mut state,
-					&self.opts,
-					&mut log,
-					progress,
-					killed,
-				)?;
+				entry.rip(&mut share, &mut state, &self.opts)?;
 			}
 
 			// Flip the read order for next time?
@@ -257,7 +239,7 @@ impl<'a> Ripper<'a> {
 
 
 
-/// # Basic Rip Info.
+/// # Basic Track Rip Info.
 ///
 /// This holds most of the state-related information other than the state
 /// itself, helping us cut down on the number of operations between runs.
@@ -272,7 +254,6 @@ struct RipEntry {
 }
 
 impl RipEntry {
-	#[allow(clippy::too_many_arguments)] // Sorry about that.
 	/// # Rip!
 	///
 	/// Rip or skip, depending on the state.
@@ -286,17 +267,17 @@ impl RipEntry {
 	/// ## Errors
 	///
 	/// This will bubble up any errors encountered.
-	fn rip(
-		&mut self,
-		buf: &mut RipBuffer,
-		cdio: &LibcdioInstance,
-		state: &mut RipState,
-		opts: &RipOptions,
-		log: &mut RipLog,
-		progress: &Progless,
-		killed: &KillSwitch,
-	)
-	-> Result<bool, RipRipError> {
+	fn rip(&mut self, share: &mut RipShare, state: &mut RipState, opts: &RipOptions)
+	-> Result<(), RipRipError> {
+		// Update the title.
+		let title = format!(
+			"{}{}{}…",
+			if share.pass == 1 && state.is_new() { "Ripping fresh" } else { "Re-ripping" },
+			if opts.passes() == 1 { String::new() } else { format!(", pass #{}", share.pass) },
+			if opts.backwards() { ", backwards, and in heels" } else { "" },
+		);
+		set_progress_title(share.progress, self.track.number(), &title);
+
 		let mut any_read = false;
 		let before = state.quick_hash();
 		let rip_rng = state.sector_rip_range();
@@ -310,30 +291,57 @@ impl RipEntry {
 			// We can skip this block if the user aborted or there's
 			// nothing to refine.
 			if
-				killed.killed() ||
+				share.killed.killed() ||
 				sector.iter().all(|v| v.is_likely(opts.rereads()))
 			{
-				progress.increment();
+				share.progress.increment();
 				continue;
+			}
+
+			// We might need to bust the cache before reading any track data.
+			// This will trigger if the cache size has been set, we're doing
+			// more than one pass, and either didn't read enough sectors on the
+			// last pass to fill the buffer, or are reading the same track
+			// back-to-back.
+			if ! any_read {
+				if let Some(cache_len) = share.should_bust_cache(self.track.number(), opts) {
+					set_progress_title(
+						share.progress,
+						self.track.number(),
+						"Busting the cache…",
+					);
+					share.log.add_cache_bust();
+					share.buf.cache_bust(
+						share.cdio,
+						cache_len,
+						&rip_rng,
+						share.leadout,
+						opts.backwards(),
+						share.killed,
+					);
+					set_progress_title(share.progress, self.track.number(), &title);
+				}
+				else { share.last_read_track = self.track.number(); }
 			}
 
 			// Read and patch!
 			any_read = true;
-			match buf.read_sector(cdio, read_lsn, opts) {
+			share.pass_reads += 1;
+			match share.buf.read_sector(share.cdio, read_lsn, opts) {
 				// Good is good!
-				Ok(all_good) => if ! killed.killed() {
+				Ok(all_good) => if ! share.killed.killed() {
 					// Patch the data, unless the user just aborted, as that
 					// will probably have messed up the data.
-					for (old, (new, c2_err)) in sector.iter_mut().zip(buf.samples()) {
+					for (old, (new, c2_err)) in sector.iter_mut().zip(share.buf.samples()) {
 						old.update(new, c2_err, all_good);
 					}
 				},
 				// Silently skip generic read errors.
 				Err(RipRipError::CdRead) => if opts.verbose() {
-					log.add_error(read_lsn, RipRipError::CdRead);
+					share.log.add_error(read_lsn, RipRipError::CdRead);
 				},
 				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
-					log.add_error(read_lsn, RipRipError::SubchannelDesync);
+					share.log.add_error(read_lsn, RipRipError::SubchannelDesync);
 				},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
@@ -348,20 +356,20 @@ impl RipEntry {
 					else if v.is_confused() { total_wishy += 1; }
 				}
 				if total_bad != 0 {
-					log.add_bad(self.track, read_lsn, total_bad);
+					share.log.add_bad(self.track, read_lsn, total_bad);
 				}
 				if total_wishy != 0 {
-					log.add_confused(self.track, read_lsn, total_wishy);
+					share.log.add_confused(self.track, read_lsn, total_wishy);
 				}
 			}
 
-			progress.increment();
+			share.progress.increment();
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
 		self.q2.replace(state.track_quality(opts.rereads()));
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
-			self.verify(state, opts, progress);
+			self.verify(state, opts, share.progress);
 		}
 
 		// Save the state if we changed any data.
@@ -369,7 +377,7 @@ impl RipEntry {
 		if changed {
 			// Resave the state.
 			set_progress_title(
-				progress,
+				share.progress,
 				self.track.number(),
 				"Saving the state…",
 			);
@@ -382,7 +390,7 @@ impl RipEntry {
 			self.dst.replace(state.save_track()?);
 		}
 
-		Ok(any_read)
+		Ok(())
 	}
 
 	/// # Skippable?
@@ -398,11 +406,7 @@ impl RipEntry {
 	/// Returns `true` if verified.
 	fn verify(&mut self, state: &mut RipState, opts: &RipOptions, progress: &Progless)
 	-> bool {
-		set_progress_title(
-			progress,
-			self.track.number(),
-			"Verifying the rip…",
-		);
+		set_progress_title(progress, self.track.number(), "Verifying the rip…");
 
 		// HTOA isn't verifiable. Boo.
 		if self.track.is_htoa() { return false; }
@@ -436,6 +440,69 @@ impl RipEntry {
 
 		// Return the answer.
 		verified
+	}
+}
+
+
+
+/// # Rip Share.
+///
+/// This groups together all the shared elements needed during ripping, and
+/// only during ripping.
+struct RipShare<'a> {
+	buf: RipBuffer,
+	log: RipLog,
+	leadout: i32,
+	pass: u8,
+	pass_reads: u32,
+	force_bust: bool,
+	last_read_track: u8,
+	cdio: &'a LibcdioInstance,
+	progress: &'a Progless,
+	killed: &'a KillSwitch,
+}
+
+impl<'a> RipShare<'a> {
+	#[allow(clippy::cast_possible_wrap)]
+	/// # New.
+	fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
+		Self {
+			buf: RipBuffer::default(),
+			log: RipLog::new(),
+			leadout: disc.toc().audio_leadout() as i32,
+			pass: 0,
+			pass_reads: 0,
+			force_bust: false,
+			last_read_track: u8::MAX,
+			cdio: disc.cdio(),
+			progress,
+			killed,
+		}
+	}
+
+	/// # Bump Pass.
+	fn bump_pass(&mut self, opts: &RipOptions) {
+		// Force a cache bust if we didn't read enough during the previous pass.
+		if self.pass != 0 {
+			let len = opts.cache_sectors();
+			self.force_bust = len != 0 && self.pass_reads < len;
+			self.pass_reads = 0;
+		}
+
+		// Bump the pass.
+		self.pass += 1;
+	}
+
+	/// # Should Bust Cache?
+	fn should_bust_cache(&mut self, track: u8, opts: &RipOptions) -> Option<u32> {
+		if self.force_bust || track == self.last_read_track {
+			self.force_bust = false;
+			self.last_read_track = track;
+			let len = opts.cache_sectors();
+			if 0 == len { None }
+			else { Some(len) }
+		}
+		else { None }
 	}
 }
 

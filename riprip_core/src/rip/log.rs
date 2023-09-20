@@ -6,6 +6,7 @@ use cdtoc::Track;
 use crate::RipRipError;
 use dactyl::NiceElapsed;
 use std::{
+	fmt,
 	io::Write,
 	num::NonZeroU8,
 	time::Instant,
@@ -23,8 +24,8 @@ use utc2k::FmtUtc2k;
 /// consistent ordering, otherwise it's a crapshoot.
 pub(super) struct RipLog {
 	pass: Option<(NonZeroU8, Instant)>,
-	err: Vec<(i32, RipRipError, FmtUtc2k)>,
-	state: Vec<(u8, i32, u8, RipLogKind)>,
+	events: Vec<(RipLogEventKind, FmtUtc2k)>,
+	sectors: Vec<(u8, i32, u8, RipLogSampleKind)>,
 }
 
 impl Drop for RipLog {
@@ -37,8 +38,8 @@ impl RipLog {
 	pub(super) const fn new() -> Self {
 		Self {
 			pass: None,
-			err: Vec::new(),
-			state: Vec::new(),
+			events: Vec::new(),
+			sectors: Vec::new(),
 		}
 	}
 
@@ -47,8 +48,8 @@ impl RipLog {
 		self.flush();
 
 		// Unnecessary but unhurtful.
-		self.err.truncate(0);
-		self.state.truncate(0);
+		self.events.truncate(0);
+		self.sectors.truncate(0);
 
 		// This should never fail.
 		if let Some(pass) = NonZeroU8::new(pass) {
@@ -56,28 +57,33 @@ impl RipLog {
 		}
 	}
 
+	/// # Add Cache Bust.
+	pub(super) fn add_cache_bust(&mut self) {
+		self.events.push((RipLogEventKind::CacheBust, FmtUtc2k::now()));
+	}
+
 	/// # Add Error.
 	pub(super) fn add_error(&mut self, lsn: i32, err: RipRipError) {
-		self.err.push((lsn, err, FmtUtc2k::now()));
+		self.events.push((RipLogEventKind::Err((lsn, err)), FmtUtc2k::now()));
 	}
 
 	/// # Add Bad Sample Count.
 	pub(super) fn add_bad(&mut self, track: Track, lsn: i32, total: u8) {
-		self.state.push((
+		self.sectors.push((
 			track.number(),
 			lsn,
 			total,
-			RipLogKind::Bad,
+			RipLogSampleKind::Bad,
 		));
 	}
 
 	/// # Add Confused Sample Count.
 	pub(super) fn add_confused(&mut self, track: Track, lsn: i32, total: u8) {
-		self.state.push((
+		self.sectors.push((
 			track.number(),
 			lsn,
 			total,
-			RipLogKind::Confused,
+			RipLogSampleKind::Confused,
 		));
 	}
 
@@ -95,22 +101,22 @@ impl RipLog {
 ## Problematic Samples: {}
 ##",
 			NiceElapsed::from(start),
-			self.state.len(),
-			self.state.iter().fold(0_usize, |acc, (_, _, v, _)| acc + usize::from(*v))
+			self.sectors.len(),
+			self.sectors.iter().fold(0_usize, |acc, (_, _, v, _)| acc + usize::from(*v))
 		);
 
-		// Miscellaneous errors.
-		if ! self.err.is_empty() {
-			for (lsn, err, time) in self.err.drain(..) {
-				let _res = writeln!(&mut handle, r"## [{time}] {lsn:06} {err}");
+		// Miscellaneous events.
+		if ! self.events.is_empty() {
+			for (event, time) in self.events.drain(..) {
+				let _res = writeln!(&mut handle, r"## [{time}] {event}");
 			}
 			let _res =writeln!(&mut handle, "##");
 		}
 
 		// Sample issues.
-		if ! self.state.is_empty() {
-			self.state.sort_unstable_by(|a, b| a.1.cmp(&b.1));
-			for (track, lsn, samples, kind) in self.state.drain(..) {
+		if ! self.sectors.is_empty() {
+			self.sectors.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+			for (track, lsn, samples, kind) in self.sectors.drain(..) {
 				let _res = writeln!(
 					&mut handle,
 					r"{track:02}  {lsn:06}  {samples:03}  {}",
@@ -126,14 +132,31 @@ impl RipLog {
 
 
 
+/// # Event Kind.
+enum RipLogEventKind {
+	CacheBust,
+	Err((i32, RipRipError)),
+}
+
+impl fmt::Display for RipLogEventKind {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::CacheBust => f.write_str("------ Defeat drive cache."),
+			Self::Err((lsn, e)) => write!(f, "{lsn:06} {e}"),
+		}
+	}
+}
+
+
+
 #[derive(Debug, Clone, Copy)]
 /// # Sample Issue Kind.
-enum RipLogKind {
+enum RipLogSampleKind {
 	Bad,
 	Confused,
 }
 
-impl RipLogKind {
+impl RipLogSampleKind {
 	/// # As Str.
 	const fn as_str(self) -> &'static str {
 		match self {

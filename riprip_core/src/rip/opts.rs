@@ -2,8 +2,14 @@
 # Rip Rip Hooray: Ripping Options
 */
 
-use crate::ReadOffset;
-use std::ops::RangeInclusive;
+use crate::{
+	CD_DATA_SIZE,
+	ReadOffset,
+};
+use std::{
+	num::NonZeroU16,
+	ops::RangeInclusive,
+};
 use super::track_idx_to_bits;
 
 
@@ -72,6 +78,7 @@ const REREADS_REL_MAX: u8 = 10;
 /// ```
 pub struct RipOptions {
 	offset: ReadOffset,
+	cache: Option<NonZeroU16>,
 	confidence: u8,
 	rereads: (u8, u8),
 	passes: u8,
@@ -83,6 +90,7 @@ impl Default for RipOptions {
 	fn default() -> Self {
 		Self {
 			offset: ReadOffset::default(),
+			cache: None,
 			confidence: 3,
 			rereads: (2, 2),
 			passes: 1,
@@ -123,6 +131,20 @@ impl RipOptions {
 		"",
 		"The default is `false`.",
 	);
+
+	#[must_use]
+	/// # With Cache Size.
+	///
+	/// Set the drive's read buffer cache size in KiB (1024 bytes) so that it
+	/// can be (probably) effectively cleared before reading from a track.
+	///
+	/// Set to zero to disable. Also the default.
+	pub const fn with_cache(self, cache: u16) -> Self {
+		Self {
+			cache: NonZeroU16::new(cache),
+			..self
+		}
+	}
 
 	#[must_use]
 	/// # Confirmation Confidence.
@@ -352,6 +374,24 @@ impl RipOptions {
 	get_flag!(verbose, FLAG_VERBOSE, "Verbose (Log) Mode");
 
 	#[must_use]
+	/// # Cache Size.
+	pub const fn cache(&self) -> Option<NonZeroU16> { self.cache }
+
+	#[must_use]
+	#[allow(clippy::integer_division)]
+	/// # Cache Sectors.
+	///
+	/// Return the cache size in sectors, rounded up.
+	///
+	/// TODO: use `div_ceil` once it becomes available.
+	pub const fn cache_sectors(&self) -> u32 {
+		if let Some(c) = self.cache {
+			c.get() as u32 * 1024 / CD_DATA_SIZE as u32 + 1
+		}
+		else { 0 }
+	}
+
+	#[must_use]
 	/// # Minimum AccurateRip/CTDB Confidence.
 	pub const fn confidence(&self) -> u8 { self.confidence }
 
@@ -411,6 +451,9 @@ impl RipOptions {
 
 		// All the easy stuff.
 		if self.backwards() { opts.push(Cow::Borrowed("--backwards")); }
+		if let Some(cache) = self.cache {
+			opts.push(Cow::Owned(format!("-c{cache}")));
+		}
 		opts.push(Cow::Owned(format!("--confidence={}", self.confidence())));
 		if self.flip_flop() { opts.push(Cow::Borrowed("--flip-flop")); }
 		if ! self.resume() { opts.push(Cow::Borrowed("--no-resume")); }
@@ -543,6 +586,16 @@ mod test {
 
 		// Also make sure each is only one bit.
 		assert!(all.iter().all(|&v| v.count_ones() == 1));
+	}
+
+	#[test]
+	fn t_rip_options_cache() {
+		let mut opts = RipOptions::default();
+		assert_eq!(opts.cache(), None);
+		opts = opts.with_cache(16);
+		assert_eq!(opts.cache(), NonZeroU16::new(16));
+		opts = opts.with_cache(0);
+		assert_eq!(opts.cache(), None);
 	}
 
 	#[test]

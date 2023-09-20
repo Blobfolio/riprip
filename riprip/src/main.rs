@@ -34,7 +34,10 @@ use argyle::{
 	FLAG_HELP,
 	FLAG_VERSION,
 };
-use dactyl::traits::BytesToUnsigned;
+use dactyl::{
+	NiceU16,
+	traits::BytesToUnsigned,
+};
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -210,6 +213,18 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		opts = opts.with_offset(v);
 	}
 
+	// Cache is more annoying than some options, less annoying than others.
+	if let Some(v) = args.option2(b"-c", b"--cache") {
+		let v = v.iter()
+			.position(|&b| matches!(b, b'm' | b'M'))
+			.map_or_else(
+				|| u16::btou(v),
+				|pos| u16::btou(v[..pos].trim()).and_then(|v| v.checked_mul(1024))
+			)
+			.ok_or(RipRipError::CliParse("-c/--cache"))?;
+		opts = opts.with_cache(v);
+	}
+
 	if let Some(v) = args.option(b"--confidence") {
 		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
 		opts = opts.with_confidence(confidence);
@@ -295,6 +310,10 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		if opts.strict_c2() { "C2 Error Pointers (Sector)" }
 		else { "C2 Error Pointers (Sample)" }
 	);
+	let nice_cache = opts.cache().map_or(
+		Cow::Borrowed("Disabled"),
+		|c| Cow::Owned(format!("{} KiB", NiceU16::from(c.get())))
+	);
 	let nice_chk = Cow::Owned(format!(
 		"AccurateRip/CTDB cf. {}+",
 		opts.confidence(),
@@ -335,6 +354,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	let set = [
 		("Tracks:", nice_tracks, true),
 		("Read Offset:", nice_offset, 0 != opts.offset().samples_abs()),
+		("Cache Bust:", nice_cache, opts.cache().is_some()),
 		("Verification:", nice_chk, true),
 		("", nice_c2, true),
 		("", nice_rereads1, 1 != rr_a),
@@ -462,6 +482,11 @@ WHEN ALL ELSE FAILS:
                       from the initial rip and onward.
 
 DRIVE SETTINGS:
+    -c, --cache <NUM> Drive cache can interfere with re-read accuracy. If your
+                      drive caches data, use this option to specify its buffer
+                      size so Rip Rip can try to mitigate it. Values with an
+                      M suffix are treated as MiB, otherwise KiB are assumed.
+                      [default: 0; max: 65,535]
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
     -o, --offset <SAMPLES>

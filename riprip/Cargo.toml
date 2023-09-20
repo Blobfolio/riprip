@@ -80,6 +80,12 @@ long = "--version"
 description = "Print version information to STDOUT and exit."
 
 [[package.metadata.bashman.options]]
+short = "-c"
+long = "--cache"
+label = "<NUM>"
+description = "Drive cache can interfere with re-read accuracy. If your drive caches data, use this option to specify its buffer size so Rip Rip can try to mitigate it. Values with an M suffix are treated as MiB, otherwise KiB are assumed. [default: 0; max: 65,535]"
+
+[[package.metadata.bashman.options]]
 long = "--confidence"
 label = "<NUM>"
 description = "Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"

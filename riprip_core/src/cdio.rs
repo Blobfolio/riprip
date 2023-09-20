@@ -13,9 +13,13 @@ use crate::{
 	CD_LEADIN,
 	CDTextKind,
 	DriveVendorModel,
+	KillSwitch,
 	RipRipError,
 };
-use dactyl::traits::SaturatingFrom;
+use dactyl::{
+	NoHash,
+	traits::SaturatingFrom,
+};
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -29,10 +33,13 @@ use libcdio_sys::{
 	track_format_t_TRACK_FORMAT_PSX,
 };
 use std::{
+	cell::RefCell,
+	collections::HashSet,
 	ffi::{
 		CStr,
 		CString,
 	},
+	ops::Range,
 	os::{
 		raw::c_char,
 		unix::ffi::OsStrExt,
@@ -45,6 +52,14 @@ use std::{
 
 /// # Initialization Counter.
 static LIBCDIO_INIT: Once = Once::new();
+
+thread_local! {
+	/// # Sector Shitlist.
+	///
+	/// Keep track of sectors that trigger hard read errors so we don't
+	/// accidentally try them in a cache-bust situation.
+	static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
+}
 
 
 
@@ -372,6 +387,75 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
+	/// # Cache Bust.
+	///
+	/// There is no simple, universal command to disable or flush a drive's
+	/// read buffer, so we have to do the next best thing: fill it with
+	/// useless crap!
+	///
+	/// There is _also_ no good way to know how much crap we need to fill,
+	/// because that would be too easy. Haha. Instead we'll just assume the
+	/// buffer is 4MiB, and read a teenie bit more than that. That should cover
+	/// most drives.
+	///
+	/// Thankfully, we're never reading the same sector back-to-back, so this
+	/// only has to be done once per track, not after each and every read.
+	///
+	/// For this to work, we have to be able to find regions outside the track
+	/// range. That should usually be possible, but won't _always_ be.
+	/// Sometimes we'll just have to live with cache.
+	///
+	/// Also of note: drives tend to slow down for read errors. This will
+	/// skip any sector which previously returned a read error to keep it from
+	/// being too terrible.
+	///
+	/// TODO: use `div_ceil` once stabilized.
+	pub(super) fn cache_bust(
+		&self,
+		buf: &mut[u8],
+		mut todo: u32,
+		rng: &Range<i32>,
+		leadout: i32,
+		backwards: bool,
+		killed: &KillSwitch,
+	) {
+		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
+			// If we're moving backwards, try after, then before.
+			if backwards {
+				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
+			}
+			// Otherwise before, then after.
+			else {
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
+				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
+			}
+		}
+	}
+
+	/// # Actually Cache Bust.
+	///
+	/// This method attempts to read up to `todo` sectors between `from..to`.
+	/// It is separated from the main method only to cut down on repetitive
+	/// code.
+	fn _cache_bust(
+		&self,
+		buf: &mut[u8],
+		mut from: i32,
+		to: i32,
+		todo: &mut u32,
+		killed: &KillSwitch,
+	) {
+		while from < to && 0 < *todo {
+			if killed.killed() { break; }
+			if
+				! SHITLIST.with(|q| q.borrow().contains(&from)) &&
+				self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
+			{ *todo -= 1; }
+			from += 1;
+		}
+	}
+
 	/// # Read Data + C2.
 	///
 	/// Read a single sector's worth of data and C2 error pointer information
@@ -393,7 +477,7 @@ impl LibcdioInstance {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE, 1)
+		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
 	}
 
 	#[allow(unsafe_code)]
@@ -425,7 +509,7 @@ impl LibcdioInstance {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE, 1)?;
+		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
 
 		// We can only get timing information from ADR-1.
 		if 1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 {
@@ -463,7 +547,6 @@ impl LibcdioInstance {
 		c2: bool,
 		sub: u8,
 		block_size: u16,
-		blocks: u32
 	) -> Result<(), RipRipError> {
 		let res = unsafe {
 			libcdio_sys::mmc_read_cd(
@@ -479,14 +562,17 @@ impl LibcdioInstance {
 				u8::from(c2), // C2 or no C2?
 				sub,          // Subchannel? What kind?
 				block_size,   // Block size (varies by data requested).
-				blocks,       // Total number of blocks to read.
+				1,            // Always read one block at a time.
 			)
 		};
 
 		match res {
 			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadUnsupported),
 			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
-			_ => Err(RipRipError::CdRead),
+			_ => {
+				SHITLIST.with(|q| q.borrow_mut().insert(lsn));
+				Err(RipRipError::CdRead)
+			},
 		}
 	}
 }
