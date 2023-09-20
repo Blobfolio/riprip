@@ -115,7 +115,6 @@ impl<'a> Ripper<'a> {
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		let toc = self.disc.toc();
-		let leadout = toc.audio_leadout() as i32;
 		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
 		let mut buf = RipBuffer::default();
 		let mut log = RipLog::new();
@@ -129,10 +128,6 @@ impl<'a> Ripper<'a> {
 			self.opts.resume(), // Only false on the first pass.
 			self.opts.reset_counts(), // Only true on the first pass.
 		)?;
-
-		// Cache bust selectively; only bother if we're reading the same track
-		// two times in a row.
-		let mut last_read_track = first_track.track.number();
 
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
@@ -165,16 +160,6 @@ impl<'a> Ripper<'a> {
 					entry.q2.replace(q);
 				}
 
-				// Cache bust!
-				if last_read_track == entry.track.number() {
-					set_progress_title(
-						progress,
-						entry.track.number(),
-						"Busting the cache…",
-					);
-					self.disc.cdio().bust_cache(state.sector_rip_range(), leadout);
-				}
-
 				// Actual rip.
 				set_progress_title(
 					progress,
@@ -186,7 +171,7 @@ impl<'a> Ripper<'a> {
 						if self.opts.backwards() { ", backwards, and in heels" } else { "" },
 					)
 				);
-				if entry.rip(
+				entry.rip(
 					&mut buf,
 					self.disc.cdio(),
 					&mut state,
@@ -194,11 +179,7 @@ impl<'a> Ripper<'a> {
 					&mut log,
 					progress,
 					killed,
-				)? {
-					// Note that we attempted to read at least one sector for
-					// this track.
-					last_read_track = entry.track.number();
-				}
+				)?;
 			}
 
 			// Flip the read order for next time?

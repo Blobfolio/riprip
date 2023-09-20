@@ -33,7 +33,6 @@ use std::{
 		CStr,
 		CString,
 	},
-	ops::Range,
 	os::{
 		raw::c_char,
 		unix::ffi::OsStrExt,
@@ -373,54 +372,6 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	/// # Cache Bust.
-	///
-	/// In lieu of any universal I/O command to clear the drive cache, we can
-	/// do the next best thing: fill its buffers with other stuff!
-	///
-	/// This will read 1800 sectors — preferrably outside the target track's
-	/// range — to ensure that when we ask for the target track's data, the
-	/// drive will have to _actually read it_.
-	///
-	/// That's the theory anyway.
-	///
-	/// Thankfully we're never requesting the same sector back-to-back, so only
-	/// need to do this at the start of each rip pass.
-	pub(super) fn bust_cache(&self, blacklist: Range<i32>, leadout: i32) {
-		// We want to read lots of data at once, but don't want a gigantic
-		// buffer either. 64 KiB seems about right. The data size doesn't
-		// evenly fit, so we'll go a little under.
-		const NUM_BLOCKS: u16 = u16::MAX.wrapping_div(CD_DATA_SIZE);
-
-		// We ultimately want to read about 4 MiB. Given our NUM_BLOCKS, that
-		// means reading this many times. (Plus one for good measure.)
-		const CHUNKS: i32 = (4_i32 * 1024 * 1024).wrapping_div(NUM_BLOCKS as i32 * CD_DATA_SIZE as i32) + 1;
-
-		// Where can we read from without getting in the way?
-		let lsn =
-			// Read from the start of the disc.
-			if 1800 < blacklist.start { 0 }
-			// Read after the current track.
-			else if blacklist.end + 1800 < leadout { blacklist.end }
-			// Read the last 1800 sectors on the disc.
-			else { leadout - 1800 };
-
-		// Read and discard the results until we have done what we set out to
-		// do. Errors aren't that big a deal since this is only a mitigation
-		// strategy. If it doesn't work, oh well.
-		let mut buf = [0_u8; NUM_BLOCKS as usize * CD_DATA_SIZE as usize];
-		for i in 0..CHUNKS {
-			let _res = self.read_cd(
-				&mut buf,
-				lsn + i * i32::from(NUM_BLOCKS),
-				false,
-				0,
-				CD_DATA_SIZE,
-				u32::from(NUM_BLOCKS),
-			);
-		}
-	}
-
 	/// # Read Data + C2.
 	///
 	/// Read a single sector's worth of data and C2 error pointer information
@@ -543,15 +494,6 @@ impl LibcdioInstance {
 
 
 #[allow(unsafe_code)]
-/// # Initialize `libcdio`.
-///
-/// This is only called once, but to be safe, it is also wrapped in a static to
-/// make sure it can never re-initialize.
-fn init() {
-	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
-}
-
-#[allow(unsafe_code)]
 /// # Pointer to String.
 ///
 /// Convert C-string pointers to a string, unless they're null.
@@ -564,4 +506,13 @@ fn c_char_to_string(ptr: *const c_char) -> Option<String> {
 			.map(|s| s.trim().to_owned())
 			.filter(|s| ! s.is_empty())
 	}
+}
+
+#[allow(unsafe_code)]
+/// # Initialize `libcdio`.
+///
+/// This is only called once, but to be safe, it is also wrapped in a static to
+/// make sure it can never re-initialize.
+fn init() {
+	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
 }
