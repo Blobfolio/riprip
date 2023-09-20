@@ -307,8 +307,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict_c2() { "C2 Error Pointers (Sector)" }
-		else { "C2 Error Pointers (Sample)" }
+		if opts.strict_c2() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
+		else { "C2 Error Pointers \x1b[0;2m(\x1b[0;1mSample\x1b[0;2m)" }
 	);
 	let nice_cache = opts.cache().map_or(
 		Cow::Borrowed("Disabled"),
@@ -328,10 +328,10 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		"{}{}",
 		opts.passes(),
 		if opts.resume() {
-			if opts.reset_counts() { " (Reset Counts)" }
+			if opts.reset_counts() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
 			else { "" }
 		}
-		else { " (From Scratch)" },
+		else { " \x1b[0;2m(\x1b[0;1;93mFrom Scratch\x1b[0;2m)" },
 	));
 	let nice_read_order = Cow::Borrowed(
 		if opts.flip_flop() { "Alternate" }
@@ -344,7 +344,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		else { Cow::Owned(format!("Re-Read Consistency {rr_a}+")) };
 	let nice_rereads2 =
 		if rr_b == 1 { Cow::Borrowed("Re-Read Contention") }
-		else { Cow::Owned(format!("Re-Read Contention {rr_b}x")) };
+		else { Cow::Owned(format!("Re-Read Contention {rr_b}×")) };
 	let nice_sync = Cow::Borrowed("Subchannel Sync");
 	let nice_tracks = Cow::Owned(rip_summary_tracks(opts));
 	let nice_verbose = Cow::Borrowed(if opts.verbose() { "Yes" } else { "No" });
