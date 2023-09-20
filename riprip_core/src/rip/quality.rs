@@ -13,7 +13,7 @@ use dactyl::{
 	NiceFloat,
 	NiceU32,
 	traits::{
-		NiceInflection,
+		Inflection,
 		SaturatingFrom,
 	},
 };
@@ -41,6 +41,7 @@ pub(super) struct TrackQuality {
 	likely: u32,
 	confirmed: u32,
 	contentious: u32,
+	confused: bool,
 }
 
 impl Add for TrackQuality {
@@ -52,6 +53,20 @@ impl Add for TrackQuality {
 			likely: self.likely + other.likely,
 			confirmed: self.confirmed + other.confirmed,
 			contentious: self.contentious + other.contentious,
+			confused: self.confused || other.confused,
+		}
+	}
+}
+
+impl From<usize> for TrackQuality {
+	fn from(src: usize) -> Self {
+		Self {
+			bad: u32::try_from(src.max(1)).unwrap_or(1),
+			maybe: 0,
+			likely: 0,
+			confirmed: 0,
+			contentious: 0,
+			confused: false,
 		}
 	}
 }
@@ -60,23 +75,17 @@ impl TrackQuality {
 	/// # From Slice.
 	///
 	/// Count up all the different statuses in a given track slice.
-	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Self {
-		// This should never happen.
-		if src.is_empty() {
-			return Self {
-				bad: 1,
-				maybe: 0,
-				likely: 0,
-				confirmed: 0,
-				contentious: 0,
-			};
-		}
+	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Option<Self> {
+		// This should never happen, but will ensure there's never any
+		// division-by-zero weirdness later on.
+		if src.is_empty() { return None; }
 
 		let mut bad = 0;
 		let mut maybe = 0;
 		let mut likely = 0;
 		let mut confirmed = 0;
 		let mut contentious = 0;
+		let mut confused = false;
 
 		for v in src {
 			match v {
@@ -86,12 +95,15 @@ impl TrackQuality {
 					if v.is_likely(rereads) { likely += 1; }
 					else { maybe += 1; }
 
-					if v.is_contentious() { contentious += 1; }
+					if v.is_contentious() {
+						contentious += 1;
+						if v.is_confused() { confused = true; }
+					}
 				},
 			}
 		}
 
-		Self { bad, maybe, likely, confirmed, contentious }
+		Some(Self { bad, maybe, likely, confirmed, contentious, confused })
 	}
 }
 
@@ -302,10 +314,18 @@ impl TrackQuality {
 			if self.contentious == 0 {
 				Cow::Borrowed("Recovery is likely complete!")
 			}
+			else if self.confused {
+				Cow::Owned(format!(
+					"Recovery is likely complete, but with {} confused/contentious {}.",
+					NiceU32::from(self.contentious),
+					self.contentious.inflect("sample", "samples"),
+				))
+			}
 			else {
 				Cow::Owned(format!(
-					"Recovery is likely complete, but {} contention.",
-					self.contentious.nice_inflect("sample has", "samples have"),
+					"Recovery is likely complete, but with {} contentious {}.",
+					NiceU32::from(self.contentious),
+					self.contentious.inflect("sample", "samples"),
 				))
 			}
 		}

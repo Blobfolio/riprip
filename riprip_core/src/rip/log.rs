@@ -141,7 +141,7 @@ enum RipLogEventKind {
 impl fmt::Display for RipLogEventKind {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::CacheBust => f.write_str("------ Defeat drive cache."),
+			Self::CacheBust => f.write_str("------ Cache mitigation."),
 			Self::Err((lsn, e)) => write!(f, "{lsn:06} {e}"),
 		}
 	}

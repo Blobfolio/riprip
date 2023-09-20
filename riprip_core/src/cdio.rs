@@ -408,8 +408,6 @@ impl LibcdioInstance {
 	/// Also of note: drives tend to slow down for read errors. This will
 	/// skip any sector which previously returned a read error to keep it from
 	/// being too terrible.
-	///
-	/// TODO: use `div_ceil` once stabilized.
 	pub(super) fn cache_bust(
 		&self,
 		buf: &mut[u8],

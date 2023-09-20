@@ -82,6 +82,14 @@ impl RipSample {
 		)
 	}
 
+	/// # Is Confused.
+	///
+	/// Returns true if the data has been so inconsistent as to warrant strict
+	/// handling.
+	pub(crate) const fn is_confused(&self) -> bool {
+		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
+	}
+
 	/// # Is Confirmed?
 	pub(crate) const fn is_confirmed(&self) -> bool { matches!(self, Self::Confirmed(_)) }
 
@@ -100,14 +108,6 @@ impl RipSample {
 				rereads.0 <= a && b.saturating_mul(rereads.1).min(254) < a
 			},
 		}
-	}
-
-	/// # Is Confused.
-	///
-	/// Returns true if the data has been so inconsistent as to warrant strict
-	/// handling.
-	pub(crate) const fn is_confused(&self) -> bool {
-		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
 	}
 }
 
@@ -242,7 +242,6 @@ impl ContentiousSample {
 	/// Returns a bad sample if the value can no longer be held (e.g. a `Maybe1`
 	/// with a count of zero).
 	fn add_bad(&mut self, new: Sample) -> Option<RipSample> {
-		let strict = matches!(self, Self::Strict(_));
 		match self {
 			Self::Maybe1((old, count)) =>
 				if new.eq(old) {
@@ -266,10 +265,9 @@ impl ContentiousSample {
 					// Decrement.
 					else { *count2 -= 1; }
 				},
-			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) |
-			Self::Strict([(old1, count1), (old2, count2), (old3, count3)]) =>
+			Self::Maybe3([(old1, count1), (old2, count2), (old3, count3)]) =>
 				if new.eq(old1) {
-					// Drop, keeping 2,3.
+					// Drop to Maybe2, keeping 2,3.
 					if *count1 == 1 {
 						*self = Self::Maybe2([(*old2, *count2), (*old3, *count3)]);
 					}
@@ -280,7 +278,7 @@ impl ContentiousSample {
 					}
 				}
 				else if new.eq(old2) {
-					// Drop, keeping 1,3.
+					// Drop to Maybe2, keeping 1,3.
 					if *count2 == 1 {
 						*self = Self::Maybe2([(*old1, *count1), (*old3, *count3)]);
 					}
@@ -291,18 +289,34 @@ impl ContentiousSample {
 					}
 				}
 				else if new.eq(old3) {
+					// Drop to Maybe2, keeping 1,2.
 					if *count3 == 1 {
-						// Strict stays, but maybe drops to 1,2.
-						if ! strict {
-							*self = Self::Maybe2([
-								(*old1, *count1),
-								(*old2, *count2),
-							]);
-						}
+						*self = Self::Maybe2([(*old1, *count1), (*old2, *count2)]);
 					}
 					// Decrement.
 					else { *count3 -= 1; }
 				},
+			Self::Strict(set) =>
+				if new == set[0].0 {
+					// Keep the count, but shift it to the end.
+					if set[0].1 == 1 { set.rotate_left(1); }
+					// Decrement and maybe resort.
+					else {
+						set[0].1 -= 1;
+						if set[0].1 < set[1].1 { self.sort(); }
+					}
+				}
+				else if new == set[1].0 {
+					// Keep the count, but shift it to the end.
+					if set[1].1 == 1 { set.swap(1, 2); }
+					// Decrement and maybe resort.
+					else {
+						set[1].1 -= 1;
+						if set[1].1 < set[2].1 { set.swap(1, 2); }
+					}
+				}
+				// Lower the count, but only as far as one.
+				else if new == set[2].0 && set[2].1 != 1 { set[2].1 -= 1; },
 		}
 
 		None
@@ -354,7 +368,7 @@ impl ContentiousSample {
 					if *count3 > *count2 { self.sort(); }
 				}
 				// Strict can't get any stricter, but we can swap the worst
-				// sample if it's count is one. Damn bullshit drives…
+				// sample if its count is one. Enough already!
 				else if strict {
 					if *count3 == 1 { *old3 = new; }
 				}

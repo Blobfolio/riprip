@@ -73,8 +73,12 @@ impl<'a> Ripper<'a> {
 		// and add up their rippable sector counts to give us a grand total.
 		let toc = disc.toc();
 		let mut tracks = BTreeMap::default();
-		let mut total_sectors: u32 = 1; // Start at one so we can manipulate the title after finishing.
+
+		// Count up the sectors, and pre-populate the tracks. We'll pad the
+		// total by one so we can keep the progress bar alive for a few
+		// extra status-related tasks at the end of the rip.
 		let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
+		let mut total_sectors: u32 = 1;
 		for t in opts.tracks().filter_map(|t|
 			if t == 0 { toc.htoa() }
 			else { toc.audio_track(usize::from(t)) }
@@ -447,8 +451,12 @@ impl RipEntry {
 
 /// # Rip Share.
 ///
-/// This groups together all the shared elements needed during ripping, and
-/// only during ripping.
+/// This groups together all the shared elements needed exclusively during the
+/// ripping run(s), eliminating the need to share ten million separate
+/// variables between methods. Haha.
+///
+/// This also tracks certain pass/read-related details to facilitate _selective_
+/// cache-busting, when applicable.
 struct RipShare<'a> {
 	buf: RipBuffer,
 	log: RipLog,
@@ -481,6 +489,10 @@ impl<'a> RipShare<'a> {
 	}
 
 	/// # Bump Pass.
+	///
+	/// Increment the pass number, and potentially set the force-bust flag if
+	/// the previous run failed to conduct enough reads to moot the cache on
+	/// its own.
 	fn bump_pass(&mut self, opts: &RipOptions) {
 		// Force a cache bust if we didn't read enough during the previous pass.
 		if self.pass != 0 {
@@ -494,6 +506,16 @@ impl<'a> RipShare<'a> {
 	}
 
 	/// # Should Bust Cache?
+	///
+	/// This method is only called at most once per track per pass, just before
+	/// the first read operation (if there is one).
+	///
+	/// If the previous pass did not read enough samples to moot the cache on
+	/// its own, or if the current track was the last track to be ripped (i.e.
+	/// back-to-back), this will return the number of (random) sectors that
+	/// need to be read to bust the cache.
+	///
+	/// Otherwise — most of the time — it will return `None`.
 	fn should_bust_cache(&mut self, track: u8, opts: &RipOptions) -> Option<u32> {
 		if self.force_bust || track == self.last_read_track {
 			self.force_bust = false;
