@@ -23,10 +23,11 @@ use crate::{
 	RipRipError,
 	SavedRips,
 };
+use dactyl::NoHash;
 use fyi_msg::Progless;
 use std::{
 	borrow::Cow,
-	collections::BTreeMap,
+	collections::HashMap,
 	ffi::OsStr,
 	fmt,
 	path::{
@@ -45,7 +46,7 @@ pub struct Disc {
 	cdio: LibcdioInstance,
 	toc: Toc,
 	barcode: Option<Barcode>,
-	isrcs: BTreeMap<u8, String>,
+	isrcs: HashMap<u8, String, NoHash>,
 }
 
 impl fmt::Display for Disc {
@@ -186,7 +187,7 @@ impl Disc {
 		let barcode = cdio.mcn();
 
 		// Pull the track ISRCs (if any).
-		let mut isrcs = BTreeMap::default();
+		let mut isrcs = HashMap::with_hasher(NoHash::default());
 		for t in toc.audio_tracks() {
 			let idx = t.number();
 			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc) {
