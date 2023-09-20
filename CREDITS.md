@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.1.0
-    Generated: 2023-09-18 07:02:36 UTC
+    Version:   0.1.1
+    Generated: 2023-09-20 20:31:30 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -35,7 +35,7 @@
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.67 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [serde](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [serde_derive](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.5 | RustCrypto Developers | Apache-2.0 or MIT |
@@ -49,7 +49,7 @@
 | [unicode-bidi](https://github.com/servo/unicode-bidi) | 0.3.13 | The Servo Project Developers | Apache-2.0 or MIT |
 | [unicode-ident](https://github.com/dtolnay/unicode-ident) | 1.0.12 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 AND Unicode-DFS-2016 or MIT |
 | [unicode-normalization](https://github.com/unicode-rs/unicode-normalization) | 0.1.22 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
-| [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.1.10 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
+| [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.1.11 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
 | [ureq](https://github.com/algesten/ureq) | 2.7.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |
 | [url](https://github.com/servo/rust-url) | 2.4.1 | The rust-url developers | Apache-2.0 or MIT |
 | [utc2k](https://github.com/Blobfolio/utc2k) | 0.6.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
