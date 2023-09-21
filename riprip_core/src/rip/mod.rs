@@ -52,7 +52,7 @@ use std::{
 /// # Rip Manager.
 ///
 /// This holds the disc details, ripping options, etc., to coordinate the rip
-/// action(s).
+/// action(s) when `Ripper::rip` is called.
 pub(crate) struct Ripper<'a> {
 	now: Instant,
 	disc: &'a Disc,
@@ -65,6 +65,10 @@ impl<'a> Ripper<'a> {
 	/// # New!
 	///
 	/// Initialize from a disc and options.
+	///
+	/// This verifies the requested track list actually matches the disc, then
+	/// counts up the total number of sectors being traversed, but that's it.
+	/// The real work comes later.
 	pub(crate) fn new(disc: &'a Disc, opts: &RipOptions) -> Result<Self, RipRipError> {
 		// Redo the options so we can weed out invalid tracks.
 		let opts = prune_tracks(opts, disc.toc())?;
@@ -108,13 +112,31 @@ impl<'a> Ripper<'a> {
 		})
 	}
 
-	#[allow(
-		clippy::cast_possible_truncation,
-		clippy::cast_possible_wrap,
-	)]
-	/// # Rip!
+	/// # Rip All Passes and Tracks!
 	///
-	/// Rip and export the tracks!
+	/// This sets up some shared buffers, the progress bar, etc., then loops
+	/// through each "pass", and within that, loops through each track. In
+	/// other words, this will rip tracks 1, 2, 3, 1, 2, 3, rather than 1, 1,
+	/// 2, 2, 3, 3.
+	///
+	/// This approach results in more accurate reads and less wear and tear on
+	/// the drive, but adds some complication and overhead, namely in that the
+	/// large state data has to be opened/closed multiple times when doing
+	/// multiple passes, except when there's only one track being worked on.
+	///
+	/// Whatever. It is what it is.
+	///
+	/// The actual read/writing logic is handled by `RipEntry::rip`, called by
+	/// this method.
+	///
+	/// Aside from the ripping, this will also verify and export each track.
+	///
+	/// ## Errors
+	///
+	/// General read errors aren't a show-stopper, but if the drive doesn't
+	/// support an operation at all — it's missing a feature, etc. — or there
+	/// are I/O issues with the state data, etc., those will kill the process
+	/// and be returned.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		let toc = self.disc.toc();
@@ -180,6 +202,8 @@ impl<'a> Ripper<'a> {
 	/// # Summarize.
 	///
 	/// Print a colored bar, some numbers, and a status for the rip as a whole.
+	/// This is displayed along with the `Disc` summary details once all work
+	/// has completed.
 	pub(crate) fn summarize(&self) {
 		// Add up the totals
 		let Some((q1, q2)) = self.tracks.values()
@@ -214,7 +238,8 @@ impl<'a> Ripper<'a> {
 	/// # Finish.
 	///
 	/// Dissolve the instance and return the tracks we actually exported, along
-	/// with their confirmation status.
+	/// with their confirmation details. Specifically, this returns the file
+	/// path and AccurateRip/CTDB match counts, indexed by track number.
 	pub(crate) fn finish(self) -> Option<SavedRips> {
 		let conf = self.opts.confidence();
 		let out: SavedRips = self.tracks.into_iter()
@@ -239,8 +264,10 @@ impl<'a> Ripper<'a> {
 
 /// # Basic Track Rip Info.
 ///
-/// This holds most of the state-related information other than the state
-/// itself, helping us cut down on the number of operations between runs.
+/// This is basically a track state's state, without all the pesky data bloat.
+/// The `Ripper` structure uses this so it can broadly know where everything
+/// stands, without the cost of perpetually holding the _full_ data for an
+/// entire album or anything crazy like that.
 struct RipEntry {
 	dst: Option<PathBuf>,
 	track: Track,
@@ -253,17 +280,24 @@ struct RipEntry {
 impl RipEntry {
 	/// # Rip!
 	///
-	/// Rip or skip, depending on the state.
+	/// Of the million different `rip` methods spread throughout this program,
+	/// we've finally reached THE ONE THAT RIPS! Haha.
 	///
-	/// In addition to the basic ripping, this will also update the quality
-	/// variables, verify the track, and resave the state, if applicable.
+	/// In other words, this what decides which sectors need to be read from
+	/// the disc, and does it, saving them to the state at the correct read
+	/// offset.
 	///
-	/// This will return `true` if any read requests were made (regardless of
-	/// success), `false` otherwise.
+	/// It runs sector-by-sector, skipping any blocks that contain nothing but
+	/// confirmed or likely samples.
+	///
+	/// It also handles verbose logging, verification, and track export. (Plus
+	/// if there are changes, it will resave the state file.)
 	///
 	/// ## Errors
 	///
-	/// This will bubble up any errors encountered.
+	/// This will bubble up any errors encountered, except run-of-the-mill
+	/// sector read or sync errors, which are simply recorded to the state as
+	/// "bad" and/or skipped.
 	fn rip(&mut self, share: &mut RipShare, state: &mut RipState, opts: &RipOptions)
 	-> Result<(), RipRipError> {
 		// Update the title.
@@ -392,15 +426,25 @@ impl RipEntry {
 
 	/// # Skippable?
 	///
-	/// Returns `true` if we've loaded/exported this rip and it is
-	/// likely/confirmed.
+	/// Returns `true` if we have already loaded/exported this rip, and at last
+	/// check all of its samples were confirmed or likely.
+	///
+	/// In other words, this is an all-or-nothing equivalent to the sector-by-
+	/// sector skipping that would normally happen. Aside from avoiding an
+	/// unnecessary loop, this prevents us having to read/decompress/deserialize
+	/// the state data at all.
 	fn skippable(&self) -> bool {
 		self.dst.is_some() && self.quality.map_or(false, |(_, q)| q.is_confirmed())
 	}
 
 	/// # Verify Entry.
 	///
-	/// Returns `true` if verified.
+	/// Unless this is the HTOA track, this will try to match the rip against
+	/// the AccurateRip and CUETools databases, updating the match counts, if
+	/// any. It will also mark the track as confirmed if it is, allowing us to
+	/// skip any further work on it.
+	///
+	/// This will return `true` if verified.
 	fn verify(&mut self, state: &mut RipState, opts: &RipOptions, progress: &Progless)
 	-> bool {
 		set_progress_title(progress, self.track.number(), "Verifying the rip…");
@@ -443,6 +487,9 @@ impl RipEntry {
 	///
 	/// Store the latest and greatest quality counts to the second slot, or if
 	/// no quality has been recorded yet, to both slots.
+	///
+	/// This is its own method only because it is kind of annoying to write to
+	/// only _part_ of an `Option<(a, b)>` pair. Haha.
 	fn update_quality(&mut self, state: &RipState, opts: &RipOptions) {
 		let new = state.track_quality(opts.rereads());
 		match self.quality.as_mut() {
@@ -460,8 +507,14 @@ impl RipEntry {
 /// ripping run(s), eliminating the need to share ten million separate
 /// variables between methods. Haha.
 ///
-/// This also tracks certain pass/read-related details to facilitate _selective_
-/// cache-busting, when applicable.
+/// This does have some innate utility, however. It keeps track of the number
+/// of reads made across all tracks during a given pass, as well as the last
+/// track to have made a read, which we can then use to determine whether or
+/// not cache busting is necessary.
+///
+/// (Unlike serial CD-rippers, we'd only ever read the same track twice in a
+/// row, or sector twice in a row, if they're literally the only things left to
+/// rip. We can usually get away with a lot less busting as a result.)
 struct RipShare<'a> {
 	buf: RipBuffer,
 	log: RipLog,
@@ -477,7 +530,7 @@ struct RipShare<'a> {
 
 impl<'a> RipShare<'a> {
 	#[allow(clippy::cast_possible_wrap)]
-	/// # New.
+	/// # New Instance.
 	const fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
 		Self {
 			buf: RipBuffer::new(),
@@ -497,7 +550,8 @@ impl<'a> RipShare<'a> {
 	///
 	/// Increment the pass number, and potentially set the force-bust flag if
 	/// the previous run failed to conduct enough reads to moot the cache on
-	/// its own.
+	/// its own. (The flag exists so that we can clear the count straight away,
+	/// and deal with busting if and when we actually need to read something.)
 	fn bump_pass(&mut self, opts: &RipOptions) {
 		// Force a cache bust if we didn't read enough during the previous pass.
 		if self.pass != 0 {
@@ -581,6 +635,9 @@ fn rip_distance_iter(rng: &Range<i32>, offset: ReadOffset, backwards: bool)
 }
 
 /// # Set Progress Title.
+///
+/// Most of our progress bars share a common prefix based on the track number,
+/// so this just abstracts away some of the tedium of generating that.
 fn set_progress_title(progress: &Progless, idx: u8, msg: &str) {
 	progress.set_title(Some(Msg::custom(
 		format!("Track {idx:02}").as_str(),

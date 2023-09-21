@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 #[derive(Debug, Clone, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// # Rip Sample.
 ///
-/// This enum combines sample value(s) and their status.
+/// This enum combines sample value(s) and their statuses.
 pub(crate) enum RipSample {
 	#[default]
 	/// # Unread samples.
@@ -63,10 +63,16 @@ impl RipSample {
 	/// # Is Bad?
 	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Tbd | Self::Bad(_)) }
 
-	/*
-	/// # Is Maybe?
-	pub(crate) const fn is_maybe(&self) -> bool { matches!(self, Self::Contentious(_)) }
-	*/
+	/// # Is Confirmed?
+	pub(crate) const fn is_confirmed(&self) -> bool { matches!(self, Self::Confirmed(_)) }
+
+	/// # Is Confused.
+	///
+	/// Returns true if the data has been so inconsistent as to warrant strict
+	/// handling.
+	pub(crate) const fn is_confused(&self) -> bool {
+		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
+	}
 
 	/// # Is Contentious?
 	///
@@ -81,17 +87,6 @@ impl RipSample {
 			)
 		)
 	}
-
-	/// # Is Confused.
-	///
-	/// Returns true if the data has been so inconsistent as to warrant strict
-	/// handling.
-	pub(crate) const fn is_confused(&self) -> bool {
-		matches!(self, Self::Maybe(ContentiousSample::Strict(_)))
-	}
-
-	/// # Is Confirmed?
-	pub(crate) const fn is_confirmed(&self) -> bool { matches!(self, Self::Confirmed(_)) }
 
 	/// # Is Likely?
 	///
@@ -398,6 +393,8 @@ impl ContentiousSample {
 	}
 
 	/// # Sort.
+	///
+	/// Multi-sample sets are ordered by popularity and age.
 	fn sort(&mut self) {
 		match self {
 			Self::Maybe1(_) => {},
@@ -415,6 +412,9 @@ impl ContentiousSample {
 /// # Sort Sample Count Tuple.
 ///
 /// Order by highest count.
+///
+/// This is an explicit method only because it has to be called for arrays of
+/// different sizes.
 fn sort_sample_count(a: &(Sample, u8), b: &(Sample, u8)) -> Ordering { b.1.cmp(&a.1) }
 
 
