@@ -87,7 +87,7 @@ impl RipLog {
 		self.sectors.push((
 			track.number(),
 			lsn,
-			total,
+			u16::min(total, 588),
 			RipLogSampleKind::Bad,
 		));
 	}
@@ -97,7 +97,7 @@ impl RipLog {
 		self.sectors.push((
 			track.number(),
 			lsn,
-			total,
+			u16::min(total, 588),
 			RipLogSampleKind::Confused,
 		));
 	}
