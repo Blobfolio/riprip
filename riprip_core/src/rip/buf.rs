@@ -24,13 +24,12 @@ use std::ops::Range;
 /// struct eliminates a lot of the headache of figuring all that out.
 pub(crate) struct RipBuffer([u8; CD_DATA_C2_SIZE as usize]);
 
-impl Default for RipBuffer {
-	#[inline]
-	fn default() -> Self { Self([0; CD_DATA_C2_SIZE as usize]) }
-}
-
 /// # Setters.
 impl RipBuffer {
+	#[inline]
+	/// # New Instance.
+	pub(crate) const fn new() -> Self { Self([0; CD_DATA_C2_SIZE as usize]) }
+
 	#[inline]
 	/// # Cache Bust.
 	///
@@ -222,7 +221,7 @@ mod test {
 
 	#[test]
 	fn t_buf_iters() {
-		let mut buf = RipBuffer::default();
+		let mut buf = RipBuffer::new();
 		buf.0[4..8].copy_from_slice(&[1, 1, 1, 1]);
 		buf.0[usize::from(CD_DATA_SIZE)] = 0b0000_1111;
 		buf.0[usize::from(CD_DATA_SIZE) + 1] = 0b1111_1111;

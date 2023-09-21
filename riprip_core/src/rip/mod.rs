@@ -473,9 +473,9 @@ struct RipShare<'a> {
 impl<'a> RipShare<'a> {
 	#[allow(clippy::cast_possible_wrap)]
 	/// # New.
-	fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
+	const fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
 		Self {
-			buf: RipBuffer::default(),
+			buf: RipBuffer::new(),
 			log: RipLog::new(),
 			leadout: disc.toc().audio_leadout() as i32,
 			pass: 0,
@@ -531,6 +531,11 @@ impl<'a> RipShare<'a> {
 
 
 /// # Prune Invalid Tracks.
+///
+/// Make sure all tracks in the options are actually part of the disc, and
+/// print warnings if not.
+///
+/// If for some reason every track is invalid, an error will be returned.
 fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {
 	let mut new = *old;
 	for t in old.tracks() {
