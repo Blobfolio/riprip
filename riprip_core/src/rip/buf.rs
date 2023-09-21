@@ -24,13 +24,12 @@ use std::ops::Range;
 /// struct eliminates a lot of the headache of figuring all that out.
 pub(crate) struct RipBuffer([u8; CD_DATA_C2_SIZE as usize]);
 
-impl Default for RipBuffer {
-	#[inline]
-	fn default() -> Self { Self([0; CD_DATA_C2_SIZE as usize]) }
-}
-
 /// # Setters.
 impl RipBuffer {
+	#[inline]
+	/// # New Instance.
+	pub(crate) const fn new() -> Self { Self([0; CD_DATA_C2_SIZE as usize]) }
+
 	#[inline]
 	/// # Cache Bust.
 	///
@@ -170,6 +169,10 @@ impl RipBuffer {
 
 
 /// # Per Sample Iterator.
+///
+/// This returns each individual sample (pair) along with its C2 error status
+/// (`false` for good, `true` for bad). Since the data range covers one sector,
+/// this will always produce exactly `588` results.
 pub(crate) struct RipBufferIter<'a> {
 	set: &'a [u8; CD_DATA_C2_SIZE as usize],
 	pos: usize,
@@ -180,14 +183,18 @@ impl<'a> Iterator for RipBufferIter<'a> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.pos < usize::from(SAMPLES_PER_SECTOR) {
-			// Samples are at the beginning.
+			// Samples are at the beginning. It is tempting to unsafely recast
+			// the slice to an array because we know it's the right length, but
+			// -O3 figures that out, so it doesn't make any difference.
 			let pos = self.pos * 4;
 			let sample: Sample = self.set[pos..pos + 4].try_into().ok()?;
 
 			// C2 is at the end, and stored in half-bytes, so that's fun.
 			let pos = usize::from(CD_DATA_SIZE) + self.pos.wrapping_div(2);
 			let c2_err =
-				// Even indexes get the first half.
+				// Even indexes get the first half. As with the sample part,
+				// `get_unchecked` would be tempting, but -O3 removes the
+				// panic-able checks for us.
 				if 0 == self.pos & 1 { 0 != self.set[pos] & 0b1111_0000 }
 				// Odds the second.
 				else { 0 != self.set[pos] & 0b0000_1111 };
@@ -222,7 +229,7 @@ mod test {
 
 	#[test]
 	fn t_buf_iters() {
-		let mut buf = RipBuffer::default();
+		let mut buf = RipBuffer::new();
 		buf.0[4..8].copy_from_slice(&[1, 1, 1, 1]);
 		buf.0[usize::from(CD_DATA_SIZE)] = 0b0000_1111;
 		buf.0[usize::from(CD_DATA_SIZE) + 1] = 0b1111_1111;

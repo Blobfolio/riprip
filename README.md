@@ -12,7 +12,7 @@ It doesn't beat a drive senseless every time a read error is encountered; it sim
 
 Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to finish up for you.
 
-Total recovery is not always possible, but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
+Total recovery is not always possible — drives can only read what they can read — but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
 
 
 
@@ -32,10 +32,12 @@ Beyond that, it supports all the good things:
 * Cache busting
 * Sample re/confirmation
 * Backwards ripping
-* Raw PCM and WAV output
-* CUE sheet generation (when ripping whole disc in WAV format)
+* Good ol' WAV output
+* CUE sheet generation (when ripping the whole disc)
 
-Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc. But it does print a nice little summary of the disc's table of contents and its various identifiers:
+Rip Rip Hooray! _does not_ aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
+
+But it does print a nice little summary of the disc's table of contents and its various TOC-derived and encoded identifiers:
 
 * [AccurateRip](http://accuraterip.com/) ID
 * [CDDB](https://en.wikipedia.org/wiki/CDDB) ID
@@ -44,29 +46,46 @@ Rip Rip Hooray! does not aspire to manage your media library, so doesn't muck ab
 * Track ISRCs (if present)
 * UPC/EAN (if present)
 
-That summary can be produced on its own using the `--no-rip` flag, if that's all you're interested in.
+(That summary can be produced on its own using the `--no-rip` flag if that's all you're looking for.)
 
 
 
-## Limitations/Requirements
+## Requirements
 
-Rip Rip Hooray! is specifically developed for x86-64 Linux systems, but may well work on other 64-bit Unix platforms or even Windows WSL. See the [installation](#installation) section for more information about the software side of things.
+Rip Rip Hooray! is a command line utility built for and tested on x86-64 Linux systems, but it may well work with other 64-bit Unix platforms and/or Windows WSL too. See the [installation](#installation) section for information about building it from source.
 
-Hardware-wise, Rip Rip Hooray!, like any other CD-ripping software, is ultimately dependent on the optical drive to correctly read and report the data from the disc, or at least be accurate about any inaccuracies it passes down.
 
-As such, you'll need an drive with:
+### Optical Drive
 
-* Accurate Stream (most modern drives qualify)
-* C2 Error Pointer support
-* A known [read offset](http://www.accuraterip.com/driveoffsets.htm)
+Because of its focus on _recovery_, Rip Rip Hooray! imposes stricter requirements on optical drives than most CD-ripping software. To work with this program, your drive will need to support:
 
-Unlike traditional CD-rippers, Rip Rip Hooray! can't just react to data in realtime and throw it away; it needs to keep track of each individual sample's state and history to progressively work towards a complete rip.
+* "AccurateStream" (most modern drives qualify)
+* SCSI/MMC 2+ (again, most modern drives qualify)
+* C2 Error Pointers
+
+The drive will also need a known [read offset](http://www.accuraterip.com/driveoffsets.htm) to be auto-detected, or you'll need to know and enter the appropriate value using the `-o`/`--offset` option.
+
+If your drive has a read buffer cache, you'll need to know and enter that value with the `-c`/`--cache` option so Rip Rip can mitigate its effects.
+
+
+### Disk/RAM
+
+Unlike traditional CD-rippers, Rip Rip Hooray! can't just react to data in realtime and promptly throw it away; it needs to keep track of each individual sample's state and history to progressively work towards a complete rip.
 
 This data is only needed while it's needed — you can delete the `_riprip` subfolder as soon as you've gotten what you wanted to reclaim the space — but is nonetheless hefty, generally about 1-3x the size of the original CD source.
 
-The peak memory usage of Rip Rip Hooray! is comparable to some traditional CD-ripping software, albeit for completely different reasons. It will usually top out at 1-2 GiB, but may require a little more in some cases.
+The peak memory usage of Rip Rip Hooray! is (surprisingly) comparable to some traditional CD-ripping software, albeit for completely different reasons. It will usually top out at around 1-2 GiB, but may require a little more in some cases.
 
-Recovery isn't free, but it's damn satisfying. Haha.
+
+### Expectations
+
+Rip Rip Hooray! does its best to _mitigate_ drive confusion and inconsistency, but like any other CD-ripping software, it is ultimately dependent on the drive's ability to accurately read the data on the disc, or at least be honest about any inaccuracies.
+
+When a disc's surface is as pocked and cratered as the moon's, or disc rot has started to take hold, chances are some of that data will remain inaccessible, no matter how many times a drive, or multiple drives, attempts to re-read it.
+
+(The unaffiliated) [CUETools](http://cue.tools/wiki/Main_Page)'s repair feature can be instrumental in filling in those final bits. If Rip Rip Hooray! can't confirm the rips, toss them into CUETools to see if they're _close enough_ for automatic repair. If not, re-Rip Rip and try again.
+
+Hopefully with a little back-and-forth, you'll wind up with perfect rips, one way or another.
 
 
 
@@ -98,7 +117,7 @@ riprip -t 2-4,10
 # -t 2 -t 3 -t 4 -t 10
 ```
 
-If you'd rather stick with one program to keep things simple, that's fine too. Rip Rip Hooray! will rip an entire disc, including the HTOA (if any), by default, and generate a helpful cue sheet too:
+If you'd rather stick with one program to keep things simple, that's fine too. Rip Rip Hooray! will rip an entire disc, including the HTOA (if any), by default, and generate a helpful cue sheet at the end of the process too:
 
 ```bash
 # Rip the whole disc!
@@ -132,6 +151,8 @@ riprip --passes 3
 
 If problem tracks remain, recheck the refined album rip with CUETools repair. Rinse and repeat until everything is perfect, or the drive has clearly read everything it's ever going to read.
 
+There are a number of different options that can come in handy for tricky situations, so be sure to take a look at the `--help` screen for inspiration.
+
 Good luck!
 
 
@@ -140,7 +161,7 @@ Good luck!
 
 Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page.
 
-While specifically written for use on x86-64 Linux systems, both Rust and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unix systems using `cargo`:
+While specifically written for use on x86-64 Linux systems, both Rust and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
 
 ```bash
 # Clone the repository:

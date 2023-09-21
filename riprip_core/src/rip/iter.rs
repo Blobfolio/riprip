@@ -12,9 +12,9 @@ use std::{
 #[derive(Debug, Clone)]
 /// # Read Iterator.
 ///
-/// We need to be able to conditionally reverse the sector read order when
-/// ripping. The types change when chaining `Range.rev()`, so we need to use an
-/// enum to hold the two variations.
+/// This is just a simple wrapper that allows treat forward and backward `Range`
+/// iterators as the same thing without Rust complaining about them being
+/// different types.
 ///
 /// Iteration-wise, this simply passes through the inner values.
 pub(super) enum ReadIter {

@@ -93,8 +93,7 @@ impl<'a> Ripper<'a> {
 				dst: None,
 				track: t,
 				sectors,
-				q1: None,
-				q2: None,
+				quality: None,
 				ar: None,
 				ctdb: None,
 			});
@@ -158,10 +157,8 @@ impl<'a> Ripper<'a> {
 
 				// Run some initial tests to see if we need to do anything
 				// further.
-				if entry.q1.is_none() {
-					let q = state.track_quality(self.opts.rereads());
-					entry.q1.replace(q);
-					entry.q2.replace(q);
+				if entry.quality.is_none() {
+					entry.update_quality(&state, &self.opts);
 				}
 
 				// Actual rip.
@@ -185,12 +182,9 @@ impl<'a> Ripper<'a> {
 	/// Print a colored bar, some numbers, and a status for the rip as a whole.
 	pub(crate) fn summarize(&self) {
 		// Add up the totals
-		let Some(q1) = self.tracks.values()
-			.filter_map(|t| t.q1)
-			.reduce(|a, b| a + b) else { return; };
-		let Some(q2) = self.tracks.values()
-			.filter_map(|t| t.q2)
-			.reduce(|a, b| a + b) else { return; };
+		let Some((q1, q2)) = self.tracks.values()
+			.filter_map(|t| t.quality)
+			.reduce(|a, b| (a.0 + b.0, a.1 + b.1)) else { return; };
 
 		// Print some words.
 		let ripped = self.tracks.values().filter(|t| t.dst.is_some()).count();
@@ -227,10 +221,10 @@ impl<'a> Ripper<'a> {
 			.filter_map(|(k, v)| {
 				let dst = v.dst?;
 				let ar =
-					if k == 0 && v.q2.map_or(false, |q| q.is_likely()) { Some((u8::MAX, u8::MAX))}
+					if k == 0 && v.quality.map_or(false, |(_, q)| q.is_likely()) { Some((u8::MAX, u8::MAX))}
 					else { v.ar.filter(|&(v1, v2)| conf <= v1 || conf <= v2) };
 				let ctdb =
-					if k == 0 && v.q2.map_or(false, |q| q.is_likely()) { Some(u16::MAX) }
+					if k == 0 && v.quality.map_or(false, |(_, q)| q.is_likely()) { Some(u16::MAX) }
 					else { v.ctdb.filter(|&v1| u16::from(conf) <= v1) };
 				Some((k, (dst, ar, ctdb)))
 			})
@@ -251,8 +245,7 @@ struct RipEntry {
 	dst: Option<PathBuf>,
 	track: Track,
 	sectors: u32,
-	q1: Option<TrackQuality>,
-	q2: Option<TrackQuality>,
+	quality: Option<(TrackQuality, TrackQuality)>,
 	ar: Option<(u8, u8)>,
 	ctdb: Option<u16>,
 }
@@ -371,7 +364,7 @@ impl RipEntry {
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
-		self.q2.replace(state.track_quality(opts.rereads()));
+		self.update_quality(state, opts);
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
 			self.verify(state, opts, share.progress);
 		}
@@ -402,7 +395,7 @@ impl RipEntry {
 	/// Returns `true` if we've loaded/exported this rip and it is
 	/// likely/confirmed.
 	fn skippable(&self) -> bool {
-		self.dst.is_some() && self.q2.map_or(false, |t| t.is_confirmed())
+		self.dst.is_some() && self.quality.map_or(false, |(_, q)| q.is_confirmed())
 	}
 
 	/// # Verify Entry.
@@ -437,13 +430,25 @@ impl RipEntry {
 		let verified =
 			self.ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
 			self.ctdb.map_or(false, |v| u16::from(conf) <= v);
-		if ! self.q2.map_or(false, |q| q.is_confirmed()) && verified {
+		if verified && ! self.quality.map_or(false, |(_, q)| q.is_confirmed()) {
 			state.confirm_track();
-			self.q2.replace(state.track_quality(opts.rereads()));
+			self.update_quality(state, opts);
 		}
 
 		// Return the answer.
 		verified
+	}
+
+	/// # Update Quality.
+	///
+	/// Store the latest and greatest quality counts to the second slot, or if
+	/// no quality has been recorded yet, to both slots.
+	fn update_quality(&mut self, state: &RipState, opts: &RipOptions) {
+		let new = state.track_quality(opts.rereads());
+		match self.quality.as_mut() {
+			Some((_, q2)) => { *q2 = new; },
+			None => { self.quality = Some((new, new)); },
+		}
 	}
 }
 
@@ -473,9 +478,9 @@ struct RipShare<'a> {
 impl<'a> RipShare<'a> {
 	#[allow(clippy::cast_possible_wrap)]
 	/// # New.
-	fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
+	const fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
 		Self {
-			buf: RipBuffer::default(),
+			buf: RipBuffer::new(),
 			log: RipLog::new(),
 			leadout: disc.toc().audio_leadout() as i32,
 			pass: 0,
@@ -531,6 +536,11 @@ impl<'a> RipShare<'a> {
 
 
 /// # Prune Invalid Tracks.
+///
+/// Make sure all tracks in the options are actually part of the disc, and
+/// print warnings if not.
+///
+/// If for some reason every track is invalid, an error will be returned.
 fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {
 	let mut new = *old;
 	for t in old.tracks() {

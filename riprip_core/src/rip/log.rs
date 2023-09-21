@@ -17,19 +17,21 @@ use utc2k::FmtUtc2k;
 
 /// # Super Basic Log.
 ///
-/// This holds the log-worthy details from an individual pass, printing it out
-/// en masse at the end of the run.
+/// This holds the log-worthy details from an individual pass, printing the
+/// records out — to STDOUT — en masse at the end of the run.
 ///
-/// Doing it this way, versus printing each line in realtime, ensures
-/// consistent ordering, otherwise it's a crapshoot.
+/// Aside from helping to ensure consistent formatting, this also keeps the
+/// ordering consistent.
 pub(super) struct RipLog {
 	pass: Option<(NonZeroU8, Instant)>,
 	events: Vec<(RipLogEventKind, FmtUtc2k)>,
-	sectors: Vec<(u8, i32, u8, RipLogSampleKind)>,
+	sectors: Vec<(u8, i32, u16, RipLogSampleKind)>,
 }
 
 impl Drop for RipLog {
-	/// # Final Print Maybe.
+	/// # Final Print (Maybe).
+	///
+	/// This will print any remaining log data before retiring.
 	fn drop(&mut self) { self.flush(); }
 }
 
@@ -44,6 +46,13 @@ impl RipLog {
 	}
 
 	/// # New Pass!
+	///
+	/// This prints the contents of the previous pass, if any, and resets the
+	/// data so it can do it all over again.
+	///
+	/// There is no logic to ensure passes actually increment correctly, but
+	/// they do; this is only called from the `Ripper` loop, which is a simple
+	/// `i in 1..N` loop.
 	pub(super) fn pass(&mut self, pass: u8) {
 		self.flush();
 
@@ -58,17 +67,23 @@ impl RipLog {
 	}
 
 	/// # Add Cache Bust.
+	///
+	/// Record that a cache bust occurred at such-and-such time.
 	pub(super) fn add_cache_bust(&mut self) {
 		self.events.push((RipLogEventKind::CacheBust, FmtUtc2k::now()));
 	}
 
 	/// # Add Error.
+	///
+	/// Record a read or sync error corresponding to a read attempt at `lsn`.
 	pub(super) fn add_error(&mut self, lsn: i32, err: RipRipError) {
 		self.events.push((RipLogEventKind::Err((lsn, err)), FmtUtc2k::now()));
 	}
 
 	/// # Add Bad Sample Count.
-	pub(super) fn add_bad(&mut self, track: Track, lsn: i32, total: u8) {
+	///
+	/// Record the number of bad samples (`total`) associated with `lsn`.
+	pub(super) fn add_bad(&mut self, track: Track, lsn: i32, total: u16) {
 		self.sectors.push((
 			track.number(),
 			lsn,
@@ -78,7 +93,7 @@ impl RipLog {
 	}
 
 	/// # Add Confused Sample Count.
-	pub(super) fn add_confused(&mut self, track: Track, lsn: i32, total: u8) {
+	pub(super) fn add_confused(&mut self, track: Track, lsn: i32, total: u16) {
 		self.sectors.push((
 			track.number(),
 			lsn,
