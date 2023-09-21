@@ -47,23 +47,17 @@ impl RipLog {
 
 	/// # New Pass!
 	///
-	/// This prints the contents of the previous pass, if any, and resets the
-	/// data so it can do it all over again.
-	///
-	/// There is no logic to ensure passes actually increment correctly, but
-	/// they do; this is only called from the `Ripper` loop, which is a simple
-	/// `i in 1..N` loop.
-	pub(super) fn pass(&mut self, pass: u8) {
+	/// This prints the contents of the previous pass, if any, and increments
+	/// the pass counter so it can start all over again.
+	pub(super) fn bump_pass(&mut self) {
 		self.flush();
 
 		// Unnecessary but unhurtful.
 		self.events.truncate(0);
 		self.sectors.truncate(0);
 
-		// This should never fail.
-		if let Some(pass) = NonZeroU8::new(pass) {
-			self.pass.replace((pass, Instant::now()));
-		}
+		let next = self.pass.map_or(NonZeroU8::MIN, |(p, _)| p.saturating_add(1));
+		self.pass.replace((next, Instant::now()));
 	}
 
 	/// # Add Cache Bust.

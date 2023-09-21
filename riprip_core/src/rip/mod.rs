@@ -133,7 +133,7 @@ impl<'a> Ripper<'a> {
 
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
-			if self.opts.verbose() { share.log.pass(pass); }
+			if self.opts.verbose() { share.log.bump_pass(); }
 			share.bump_pass(&self.opts);
 
 			for entry in self.tracks.values_mut() {
