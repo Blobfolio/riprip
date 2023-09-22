@@ -75,10 +75,19 @@ impl TrackQuality {
 	/// # From Slice.
 	///
 	/// Count up all the different statuses in a given track slice.
-	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Option<Self> {
+	pub(super) fn new(src: &[RipSample], rereads: (u8, u8)) -> Self {
 		// This should never happen, but will ensure there's never any
 		// division-by-zero weirdness later on.
-		if src.is_empty() { return None; }
+		if src.is_empty() {
+			return Self {
+				bad: 1,
+				maybe: 0,
+				likely: 0,
+				confirmed: 0,
+				contentious: 0,
+				confused: false,
+			};
+		}
 
 		let mut bad = 0;
 		let mut maybe = 0;
@@ -103,7 +112,7 @@ impl TrackQuality {
 			}
 		}
 
-		Some(Self { bad, maybe, likely, confirmed, contentious, confused })
+		Self { bad, maybe, likely, confirmed, contentious, confused }
 	}
 }
 

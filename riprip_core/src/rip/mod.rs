@@ -58,7 +58,7 @@ pub(crate) struct Ripper<'a> {
 	disc: &'a Disc,
 	opts: RipOptions,
 	tracks: BTreeMap<u8, RipEntry>,
-	sectors: u32,
+	total: u32, // Total sectors across all passes, plus one.
 }
 
 impl<'a> Ripper<'a> {
@@ -70,45 +70,33 @@ impl<'a> Ripper<'a> {
 	/// counts up the total number of sectors being traversed, but that's it.
 	/// The real work comes later.
 	pub(crate) fn new(disc: &'a Disc, opts: &RipOptions) -> Result<Self, RipRipError> {
-		// Redo the options so we can weed out invalid tracks.
-		let opts = prune_tracks(opts, disc.toc())?;
-
 		// Build up a basic list of the tracks we're going to be working on,
 		// and add up their rippable sector counts to give us a grand total.
 		let toc = disc.toc();
-		let mut tracks = BTreeMap::default();
 
-		// Count up the sectors, and pre-populate the tracks. We'll pad the
-		// total by one so we can keep the progress bar alive for a few
-		// extra status-related tasks at the end of the rip.
+		// Prepopulate the track entries. This potentially incurs a little
+		// overhead from an extra read, but allows us to find mean errors up
+		// front, which is useful.
 		let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
-		let mut total_sectors: u32 = 1;
-		for t in opts.tracks().filter_map(|t|
-			if t == 0 { toc.htoa() }
-			else { toc.audio_track(usize::from(t)) }
-		) {
-			let sectors = u32::try_from(t.duration().sectors()).ok()
-				.and_then(|n| n.checked_add(padding))
-				.ok_or(RipRipError::RipOverflow)?;
-			total_sectors = total_sectors.checked_add(sectors)
-				.ok_or(RipRipError::RipOverflow)?;
+		let tracks: BTreeMap<u8, RipEntry> = opts.tracks()
+			.map(|idx| RipEntry::new(toc, idx, padding, opts).map(|e| (idx, e)))
+			.collect::<Result<_, RipRipError>>()?;
+		if tracks.is_empty() { return Err(RipRipError::Noop); }
 
-			tracks.insert(t.number(), RipEntry {
-				dst: None,
-				track: t,
-				sectors,
-				quality: None,
-				ar: None,
-				ctdb: None,
-			});
-		}
+		// We should check the total sector count will fit within our progress
+		// bar before we leave.
+		let total = tracks.values()
+			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
+			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
+			.and_then(|n| n.checked_add(1))
+			.ok_or(RipRipError::RipOverflow)?;
 
 		Ok(Self {
 			now: Instant::now(),
 			disc,
-			opts,
+			opts: *opts,
 			tracks,
-			sectors: total_sectors,
+			total,
 		})
 	}
 
@@ -140,7 +128,7 @@ impl<'a> Ripper<'a> {
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
 		let toc = self.disc.toc();
-		let _res = progress.reset(self.sectors * u32::from(self.opts.passes()));
+		let _res = progress.reset(self.total);
 		let mut share = RipShare::new(self.disc, progress, killed);
 
 		// Load the first track's state.
@@ -165,12 +153,6 @@ impl<'a> Ripper<'a> {
 				if state.track() != entry.track {
 					set_progress_title(progress, entry.track.number(), "Initializing…");
 					state = RipState::from_track(toc, entry.track, &self.opts)?;
-				}
-
-				// Run some initial tests to see if we need to do anything
-				// further.
-				if entry.quality.is_none() {
-					entry.update_quality(&state, &self.opts);
 				}
 
 				// Actual rip.
@@ -201,7 +183,7 @@ impl<'a> Ripper<'a> {
 	pub(crate) fn summarize(&self) {
 		// Add up the totals
 		let Some((q1, q2)) = self.tracks.values()
-			.filter_map(|t| t.quality)
+			.map(|t| t.quality)
 			.reduce(|a, b| (a.0 + b.0, a.1 + b.1)) else { return; };
 
 		// Print some words.
@@ -240,10 +222,10 @@ impl<'a> Ripper<'a> {
 			.filter_map(|(k, v)| {
 				let dst = v.dst?;
 				let ar =
-					if k == 0 && v.quality.map_or(false, |(_, q)| q.is_likely()) { Some((u8::MAX, u8::MAX))}
+					if k == 0 && v.quality.1.is_likely() { Some((u8::MAX, u8::MAX))}
 					else { v.ar.filter(|&(v1, v2)| conf <= v1 || conf <= v2) };
 				let ctdb =
-					if k == 0 && v.quality.map_or(false, |(_, q)| q.is_likely()) { Some(u16::MAX) }
+					if k == 0 && v.quality.1.is_likely() { Some(u16::MAX) }
 					else { v.ctdb.filter(|&v1| u16::from(conf) <= v1) };
 				Some((k, (dst, ar, ctdb)))
 			})
@@ -266,9 +248,61 @@ struct RipEntry {
 	dst: Option<PathBuf>,
 	track: Track,
 	sectors: u32,
-	quality: Option<(TrackQuality, TrackQuality)>,
+	quality: (TrackQuality, TrackQuality),
 	ar: Option<(u8, u8)>,
 	ctdb: Option<u16>,
+}
+
+impl RipEntry {
+	/// # New!
+	///
+	/// Try loading the previous rip (unless we aren't resuming) to grab the
+	/// stats, and if confirmed, recrunch AccurateRip/CTDB so we can avoid
+	/// having to ever look at it again.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if the track is not in the TOC or the state
+	/// file exists but is corrupt.
+	fn new(toc: &Toc, idx: u8, padding: u32, opts: &RipOptions) -> Result<Self, RipRipError> {
+		let track =
+			if idx == 0 { toc.htoa() }
+			else { toc.audio_track(usize::from(idx)) }
+			.ok_or(RipRipError::NoTrack(idx))?;
+
+		// Make sure the padded sector count fits u32. The state will do this
+		// too, but a little redundancy isn't the end of the world.
+		let sectors = u32::try_from(track.duration().sectors()).ok()
+			.and_then(|n| n.checked_add(padding))
+			.ok_or(RipRipError::RipOverflow)?;
+
+		// Set some nothing defaults.
+		let mut dst = None;
+		let mut quality = usize::try_from(track.duration().samples())
+			.map(|q| {
+				let q = TrackQuality::from(q);
+				(q, q)
+			})
+			.map_err(|_| RipRipError::RipOverflow)?;
+		let mut ar = None;
+		let mut ctdb = None;
+
+		// If we're resuming, try loading an existing state to update those
+		// defaults. If confirmed, we'll go ahead and extract the track and
+		// grab the third-party db stats too.
+		if opts.resume() {
+			if let Some(state) = RipState::from_file(toc, track, opts.reset())? {
+				let q = state.track_quality(opts.rereads());
+				if q.is_confirmed() {
+					(ar, ctdb) = verify_track(track, &state);
+					dst.replace(state.save_track()?);
+				}
+				quality = (q, q);
+			}
+		}
+
+		Ok(Self { dst, track, sectors, quality, ar, ctdb })
+	}
 }
 
 impl RipEntry {
@@ -392,7 +426,7 @@ impl RipEntry {
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
-		self.update_quality(state, opts);
+		self.quality.1 = state.track_quality(opts.rereads());
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
 			self.verify(state, opts, share.progress);
 		}
@@ -427,8 +461,8 @@ impl RipEntry {
 	/// sector skipping that would normally happen. Aside from avoiding an
 	/// unnecessary loop, this prevents us having to read/decompress/deserialize
 	/// the state data at all.
-	fn skippable(&self) -> bool {
-		self.dst.is_some() && self.quality.map_or(false, |(_, q)| q.is_confirmed())
+	const fn skippable(&self) -> bool {
+		self.dst.is_some() && self.quality.1.is_confirmed()
 	}
 
 	/// # Verify Entry.
@@ -447,20 +481,7 @@ impl RipEntry {
 		if self.track.is_htoa() { return false; }
 
 		// Check AccurateRip and CTDB in separate threads.
-		std::thread::scope(|s| {
-			let ar = s.spawn(|| chk_accuraterip(
-				state.toc(),
-				self.track,
-				state.track_slice(),
-			));
-			let ctdb = s.spawn(|| chk_ctdb(
-				state.toc(),
-				self.track,
-				state.rip_slice(),
-			));
-			self.ar = ar.join().ok().flatten();
-			self.ctdb = ctdb.join().ok().flatten();
-		});
+		(self.ar, self.ctdb) = verify_track(self.track, state);
 
 		// If we're confirmed and the state isn't, update the state and our
 		// quality snapshot.
@@ -468,28 +489,13 @@ impl RipEntry {
 		let verified =
 			self.ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
 			self.ctdb.map_or(false, |v| u16::from(conf) <= v);
-		if verified && ! self.quality.map_or(false, |(_, q)| q.is_confirmed()) {
+		if verified && ! self.quality.1.is_confirmed() {
 			state.confirm_track();
-			self.update_quality(state, opts);
+			self.quality.1 = state.track_quality(opts.rereads());
 		}
 
 		// Return the answer.
 		verified
-	}
-
-	/// # Update Quality.
-	///
-	/// Store the latest and greatest quality counts to the second slot, or if
-	/// no quality has been recorded yet, to both slots.
-	///
-	/// This is its own method only because it is kind of annoying to write to
-	/// only _part_ of an `Option<(a, b)>` pair. Haha.
-	fn update_quality(&mut self, state: &RipState, opts: &RipOptions) {
-		let new = state.track_quality(opts.rereads());
-		match self.quality.as_mut() {
-			Some((_, q2)) => { *q2 = new; },
-			None => { self.quality = Some((new, new)); },
-		}
 	}
 }
 
@@ -581,33 +587,6 @@ impl<'a> RipShare<'a> {
 	}
 }
 
-
-
-/// # Prune Invalid Tracks.
-///
-/// Make sure all tracks in the options are actually part of the disc, and
-/// print warnings if not.
-///
-/// If for some reason every track is invalid, an error will be returned.
-fn prune_tracks(old: &RipOptions, toc: &Toc) -> Result<RipOptions, RipRipError> {
-	let mut new = *old;
-	for t in old.tracks() {
-		if t == 0 {
-			if toc.htoa().is_none() {
-				new = new.without_track(0);
-				Msg::warning("This disc does not have an HTOA.").eprint();
-			}
-		}
-		else if toc.audio_track(usize::from(t)).is_none() {
-			new = new.without_track(t);
-			Msg::warning(format!("This disc does not have a track #{t}.")).eprint();
-		}
-	}
-
-	if new.has_tracks() { Ok(new) }
-	else { Err(RipRipError::Noop) }
-}
-
 /// # Rip Distance Iter.
 ///
 /// Depending on the read offset, some of the edgiest padding regions may not
@@ -652,4 +631,27 @@ fn set_progress_title(progress: &Progless, idx: u8, msg: &str) {
 const fn track_idx_to_bits(idx: u8) -> u128 {
 	if 99 < idx { 0 }
 	else { 2_u128.pow(idx as u32) }
+}
+
+/// # Verify Track.
+///
+/// Check the track rip against both the AccurateRip and CUETools databases.
+/// To improve performance, this performs each check in a separate thread.
+fn verify_track(track: Track, state: &RipState) -> (Option<(u8, u8)>, Option<u16>) {
+	std::thread::scope(|s| {
+		let ar = s.spawn(|| chk_accuraterip(
+			state.toc(),
+			track,
+			state.track_slice(),
+		));
+		let ctdb = s.spawn(|| chk_ctdb(
+			state.toc(),
+			track,
+			state.rip_slice(),
+		));
+		(
+			ar.join().ok().flatten(),
+			ctdb.join().ok().flatten(),
+		)
+	})
 }

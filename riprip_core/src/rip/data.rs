@@ -217,7 +217,7 @@ impl RipState {
 	/// This will return an error if the cache location cannot be determined,
 	/// the cache exists and cannot be deserialized, or the data is in someway
 	/// nonsensical.
-	fn from_file(toc: &Toc, track: Track, reset: bool)
+	pub(crate) fn from_file(toc: &Toc, track: Track, reset: bool)
 	-> Result<Option<Self>, RipRipError> {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
@@ -417,7 +417,7 @@ impl RipState {
 	/// range.
 	pub(super) fn track_quality(&self, rereads: (u8, u8)) -> TrackQuality {
 		let slice = self.track_slice();
-		TrackQuality::new(slice, rereads).unwrap_or_else(|| TrackQuality::from(slice.len()))
+		TrackQuality::new(slice, rereads)
 	}
 
 	/// # Track Slice.
