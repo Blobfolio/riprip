@@ -377,7 +377,7 @@ impl ContentiousSample {
 	/// # Reset Counts.
 	///
 	/// Drop all counts back to one.
-	pub(crate) fn reset_counts(&mut self) {
+	pub(crate) fn reset(&mut self) {
 		match self {
 			Self::Maybe1((_, count1)) => { *count1 = 1; },
 			Self::Maybe2(set) => {

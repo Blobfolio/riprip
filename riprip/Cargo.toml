@@ -58,8 +58,8 @@ long = "--no-summary"
 description = "Skip the drive and disc summary and jump straight to ripping."
 
 [[package.metadata.bashman.switches]]
-long = "--reset-counts"
-description = "Reset all previously-collected sample counts, allowing their sectors to be re-read/re-confirmed."
+long = "--reset"
+description = "Flip 'likely' samples back to 'maybe', keeping their values, but resetting all counts to one. This is a softer alternative to --no-resume, and will not affect tracks confirmed by AccurateRip/CUETools."
 
 [[package.metadata.bashman.switches]]
 long = "--strict-c2"

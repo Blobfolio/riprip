@@ -150,11 +150,11 @@ impl RipState {
 	/// This will return an error if the numbers can't fit in the necessary
 	/// integer types, the cache is invalid, or the cache is corrupt and the
 	/// user opts not to start over.
-	pub(crate) fn from_track(toc: &Toc, track: Track, resume: bool, reset_counts: bool)
+	pub(crate) fn from_track(toc: &Toc, track: Track, resume: bool, reset: bool)
 	-> Result<Self, RipRipError> {
 		// Should we pick up where we left off?
 		if resume {
-			match Self::from_file(toc, track, reset_counts) {
+			match Self::from_file(toc, track, reset) {
 				Ok(None) => {},
 				Ok(Some(out)) => return Ok(out),
 				Err(e) => return Err(e),
@@ -216,7 +216,7 @@ impl RipState {
 	/// This will return an error if the cache location cannot be determined,
 	/// the cache exists and cannot be deserialized, or the data is in someway
 	/// nonsensical.
-	fn from_file(toc: &Toc, track: Track, reset_counts: bool)
+	fn from_file(toc: &Toc, track: Track, reset: bool)
 	-> Result<Option<Self>, RipRipError> {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
@@ -228,8 +228,8 @@ impl RipState {
 			// Return the instance if it matches the info we're expecting.
 			if out.toc.eq(toc) && out.track == track {
 				// Reset the counts?
-				if reset_counts {
-					out.reset_counts();
+				if reset {
+					out.reset();
 					let _res = out.save_state();
 				}
 				Ok(Some(out))
@@ -261,10 +261,10 @@ impl RipState {
 	/// # Reset Counts.
 	///
 	/// Drop all maybe counts to one so their sectors can be reread.
-	pub(crate) fn reset_counts(&mut self) {
+	pub(crate) fn reset(&mut self) {
 		for v in &mut self.data {
 			if let RipSample::Maybe(v) = v {
-				v.reset_counts();
+				v.reset();
 			}
 		}
 	}

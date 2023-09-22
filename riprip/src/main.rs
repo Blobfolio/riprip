@@ -198,7 +198,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch2(b"--backwards", b"--backward"))
 		.with_flip_flop(args.switch(b"--flip-flop"))
-		.with_reset_counts(args.switch2(b"--reset-counts", b"--reset-count"))
+		.with_reset(args.switch(b"--reset"))
 		.with_resume(! args.switch(b"--no-resume"))
 		.with_strict_c2(args.switch2(b"--c2-strict", b"--strict-c2"))
 		.with_sync(args.switch(b"--sync"))
@@ -328,7 +328,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		"{}{}",
 		opts.passes(),
 		if opts.resume() {
-			if opts.reset_counts() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
+			if opts.reset() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
 			else { "" }
 		}
 		else { " \x1b[0;2m(\x1b[0;1;93mFrom Scratch\x1b[0;2m)" },
@@ -473,9 +473,10 @@ WHEN ALL ELSE FAILS:
                       effect unless -p/--passes is at least two.
         --no-resume   Ignore any previous rip states, starting over from
                       scratch.
-        --reset-counts
-                      Reset all previously-collected sample counts, allowing
-                      their sectors to be re-read/re-confirmed.
+        --reset       Flip "likely" samples back to "maybe", keeping their
+                      values, but resetting all counts to one. This is a softer
+                      alternative to --no-resume, and will not affect tracks
+                      confirmed by AccurateRip/CUETools.
         --strict-c2   Consider C2 errors an all-or-nothing proposition for the
                       sector as a whole, marking all samples bad if any of them
                       are bad. This is most effective when applied consistently

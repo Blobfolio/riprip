@@ -150,7 +150,7 @@ impl<'a> Ripper<'a> {
 			toc,
 			first_track.track,
 			self.opts.resume(), // Only false on the first pass.
-			self.opts.reset_counts(), // Only true on the first pass.
+			self.opts.reset(), // Only true on the first pass.
 		)?;
 
 		for pass in 1..=self.opts.passes() {
@@ -173,7 +173,7 @@ impl<'a> Ripper<'a> {
 						toc,
 						entry.track,
 						pass != 1 || self.opts.resume(), // Only false on the first pass.
-						pass == 1 && self.opts.reset_counts(), // Only true on the first pass.
+						pass == 1 && self.opts.reset(), // Only true on the first pass.
 					)?;
 				}
 

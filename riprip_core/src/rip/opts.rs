@@ -15,25 +15,25 @@ use super::track_idx_to_bits;
 
 
 /// # FLAG: Read Backwards.
-const FLAG_BACKWARDS: u8 =    0b0000_0001;
+const FLAG_BACKWARDS: u8 =  0b0000_0001;
 
 /// # FLAG: Flip Flop.
-const FLAG_FLIP_FLOP: u8 =    0b0000_0010;
+const FLAG_FLIP_FLOP: u8 =  0b0000_0010;
 
 /// # FLAG: Reset counts.
-const FLAG_RESET_COUNTS: u8 = 0b0000_0100;
+const FLAG_RESET: u8 =      0b0000_0100;
 
 /// # FLAG: Resume previous rip (when applicable).
-const FLAG_RESUME: u8 =       0b0000_1000;
+const FLAG_RESUME: u8 =     0b0000_1000;
 
 /// # FLAG: Strict C2 Mode.
-const FLAG_STRICT_C2: u8 =    0b0001_0000;
+const FLAG_STRICT_C2: u8 =  0b0001_0000;
 
 /// # FLAG: Subchannel Sync.
-const FLAG_SYNC: u8 =         0b0010_0000;
+const FLAG_SYNC: u8 =       0b0010_0000;
 
 /// # FLAG: Verbose.
-const FLAG_VERBOSE: u8 =      0b0100_0000;
+const FLAG_VERBOSE: u8 =    0b0100_0000;
 
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_RESUME;
@@ -264,8 +264,8 @@ impl RipOptions {
 	}
 
 	with_flag!(
-		with_reset_counts,
-		FLAG_RESET_COUNTS,
+		with_reset,
+		FLAG_RESET,
 		"# Reset Counts.",
 		"",
 		"When `true`, reset all previously-collected sample counts to 1,",
@@ -368,7 +368,7 @@ impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
 	get_flag!(strict_c2, FLAG_STRICT_C2, "Strict C2 Error Pointers");
 	get_flag!(flip_flop, FLAG_FLIP_FLOP, "Alternate Rip Read Order");
-	get_flag!(reset_counts, FLAG_RESET_COUNTS, "Reset Counts");
+	get_flag!(reset, FLAG_RESET, "Reset Counts");
 	get_flag!(resume, FLAG_RESUME, "Resume Previous Rip");
 	get_flag!(sync, FLAG_SYNC, "Subchannel Sync");
 	get_flag!(verbose, FLAG_VERBOSE, "Verbose (Log) Mode");
@@ -462,7 +462,7 @@ impl RipOptions {
 		opts.push(Cow::Owned(format!("-p{}", self.passes())));
 		let rr = self.rereads();
 		opts.push(Cow::Owned(format!("-r{},{}", rr.0, rr.1)));
-		if self.reset_counts() { opts.push(Cow::Borrowed("--reset-counts")); }
+		if self.reset() { opts.push(Cow::Borrowed("--reset-counts")); }
 		if self.strict_c2() { opts.push(Cow::Borrowed("--strict-c2")); }
 		if self.sync() { opts.push(Cow::Borrowed("--sync")); }
 
@@ -574,7 +574,7 @@ mod test {
 		let mut all = vec![
 			FLAG_BACKWARDS,
 			FLAG_FLIP_FLOP,
-			FLAG_RESET_COUNTS,
+			FLAG_RESET,
 			FLAG_RESUME,
 			FLAG_STRICT_C2,
 			FLAG_SYNC,
@@ -633,7 +633,7 @@ mod test {
 
 		t_flags!("backwards", with_backwards, backwards);
 		t_flags!("flip_flop", with_flip_flop, flip_flop);
-		t_flags!("reset_counts", with_reset_counts, reset_counts);
+		t_flags!("reset", with_reset, reset);
 		t_flags!("resume", with_resume, resume);
 		t_flags!("strict_c2", with_strict_c2, strict_c2);
 		t_flags!("sync", with_sync, sync);
