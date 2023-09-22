@@ -146,12 +146,7 @@ impl<'a> Ripper<'a> {
 		// Load the first track's state.
 		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
 		set_progress_title(progress, first_track.track.number(), "Initializing…");
-		let mut state = RipState::from_track(
-			toc,
-			first_track.track,
-			self.opts.resume(), // Only false on the first pass.
-			self.opts.reset(), // Only true on the first pass.
-		)?;
+		let mut state = RipState::from_track(toc, first_track.track, &self.opts)?;
 
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
@@ -169,12 +164,7 @@ impl<'a> Ripper<'a> {
 				// Switch states if needed.
 				if state.track() != entry.track {
 					set_progress_title(progress, entry.track.number(), "Initializing…");
-					state = RipState::from_track(
-						toc,
-						entry.track,
-						pass != 1 || self.opts.resume(), // Only false on the first pass.
-						pass == 1 && self.opts.reset(), // Only true on the first pass.
-					)?;
+					state = RipState::from_track(toc, entry.track, &self.opts)?;
 				}
 
 				// Run some initial tests to see if we need to do anything
@@ -190,6 +180,10 @@ impl<'a> Ripper<'a> {
 			// Flip the read order for next time?
 			if self.opts.flip_flop() {
 				self.opts = self.opts.with_backwards(! self.opts.backwards());
+			}
+			// After the first pass, always resume, never reset.
+			if pass == 1 {
+				self.opts = self.opts.with_resume(true).with_reset(false);
 			}
 		}
 
