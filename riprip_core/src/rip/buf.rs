@@ -104,7 +104,7 @@ impl RipBuffer {
 
 		// If we're in strict mode and there's any error, set all bits
 		// to error.
-		if opts.strict_c2() && ! good { self.set_bad(); }
+		if opts.strict() && ! good { self.set_bad(); }
 
 		Ok(good)
 	}

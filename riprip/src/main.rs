@@ -200,7 +200,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		.with_flip_flop(args.switch(b"--flip-flop"))
 		.with_reset(args.switch(b"--reset"))
 		.with_resume(! args.switch(b"--no-resume"))
-		.with_strict_c2(args.switch2(b"--c2-strict", b"--strict-c2"))
+		.with_strict(args.switch(b"--strict"))
 		.with_sync(args.switch(b"--sync"))
 		.with_verbose(args.switch2(b"-v", b"--verbose"));
 
@@ -307,7 +307,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict_c2() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
+		if opts.strict() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
 		else { "C2 Error Pointers \x1b[0;2m(\x1b[0;1mSample\x1b[0;2m)" }
 	);
 	let nice_cache = opts.cache().map_or(
@@ -477,7 +477,7 @@ WHEN ALL ELSE FAILS:
                       values, but resetting all counts to one. This is a softer
                       alternative to --no-resume, and will not affect tracks
                       confirmed by AccurateRip/CUETools.
-        --strict-c2   Consider C2 errors an all-or-nothing proposition for the
+        --strict      Consider C2 errors an all-or-nothing proposition for the
                       sector as a whole, marking all samples bad if any of them
                       are bad. This is most effective when applied consistently
                       from the initial rip and onward.

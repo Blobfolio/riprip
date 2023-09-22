@@ -62,7 +62,7 @@ long = "--reset"
 description = "Flip 'likely' samples back to 'maybe', keeping their values, but resetting all counts to one. This is a softer alternative to --no-resume, and will not affect tracks confirmed by AccurateRip/CUETools."
 
 [[package.metadata.bashman.switches]]
-long = "--strict-c2"
+long = "--strict"
 description = "Consider C2 errors an all-or-nothing proposition for the sector as a whole, marking all samples bad if any of them are bad. This is most effective when applied consistently from the initial rip and onward."
 
 [[package.metadata.bashman.switches]]
