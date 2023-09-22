@@ -262,6 +262,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	}
 
 	// Tracks are also kinda annoying.
+	let toc = disc.toc();
 	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
 		let v = v.trim();
 		if v.is_empty() { continue; }
@@ -290,11 +291,22 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		}
 	}
 
-	// If we didn't parse any tracks, add each track on the disc.
-	if ! opts.has_tracks() {
-		// Include the HTOA if we're ripping everything.
-		if disc.toc().htoa().is_some() { opts = opts.with_track(0); }
-		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
+	// Make sure the desired tracks are actually on the disc.
+	if opts.has_tracks() {
+		for idx in opts.tracks() {
+			// Make sure the track is valid.
+			let good =
+				if idx == 0 { toc.htoa().is_some() }
+				else { toc.audio_track(usize::from(idx)).is_some() };
+			if ! good {
+				return Err(RipRipError::NoTrack(idx));
+			}
+		}
+	}
+	// If no tracks were specified, DO IT ALL.
+	else {
+		if toc.htoa().is_some() { opts = opts.with_track(0); }
+		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
 	// Done!
