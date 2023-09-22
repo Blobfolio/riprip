@@ -49,6 +49,17 @@ use std::{
 
 
 
+/// # Clear a Line.
+const CLS: [u8; 10] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
+
+/// # Sassy Setup Messages.
+const STANDBY: [&str; 2] = [
+	"\x1b[1;96mReconnoitering the rip\x1b[0;1;34m",
+	"\x1b[1;96mRipticulating splines\x1b[0;1;34m",
+];
+
+
+
 /// # Rip Manager.
 ///
 /// This holds the disc details, ripping options, etc., to coordinate the rip
@@ -70,21 +81,40 @@ impl<'a> Ripper<'a> {
 	/// counts up the total number of sectors being traversed, but that's it.
 	/// The real work comes later.
 	pub(crate) fn new(disc: &'a Disc, opts: &RipOptions) -> Result<Self, RipRipError> {
-		// Build up a basic list of the tracks we're going to be working on,
-		// and add up their rippable sector counts to give us a grand total.
-		let toc = disc.toc();
+		use std::io::Write;
 
-		// Prepopulate the track entries. This potentially incurs a little
-		// overhead from an extra read, but allows us to find mean errors up
-		// front, which is useful.
-		let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
-		let tracks: BTreeMap<u8, RipEntry> = opts.tracks()
-			.map(|idx| RipEntry::new(toc, idx, padding, opts).map(|e| (idx, e)))
-			.collect::<Result<_, RipRipError>>()?;
+		// Build up entries for each track, prepopulating quality, etc., for
+		// existing entries. We'll also be printing a temporary message since
+		// it might take a while.
+		let tracks = {
+			let toc = disc.toc();
+			let writer = std::io::stderr();
+			let mut handle = writer.lock();
+
+			// Starter message.
+			let _res = handle.write_all(standby_msg()).and_then(|_| handle.flush());
+
+			// Loop through the tracks. We'll delay erroring until after we're
+			// outside this block.
+			let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
+			let tracks = opts.tracks()
+				.map(|idx| {
+					// Add a dot so we know something's happening.
+					let _res = handle.write_all(b".").and_then(|_| handle.flush());
+					RipEntry::new(toc, idx, padding, opts).map(|e| (idx, e))
+				})
+				.collect::<Result<BTreeMap<u8, RipEntry>, RipRipError>>();
+
+			// Clear the output.
+			let _res = handle.write_all(&CLS).and_then(|_| handle.flush());
+
+			tracks
+		}?;
 		if tracks.is_empty() { return Err(RipRipError::Noop); }
 
-		// We should check the total sector count will fit within our progress
-		// bar before we leave.
+		// Last but not least, add up all the sectors to give us a total for
+		// the progress bar during ripping. (The +1 is to leave room for some
+		// title changes after the last read operation.)
 		let total = tracks.values()
 			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
 			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
@@ -553,12 +583,11 @@ impl<'a> RipShare<'a> {
 	/// its own. (The flag exists so that we can clear the count straight away,
 	/// and deal with busting if and when we actually need to read something.)
 	fn bump_pass(&mut self, opts: &RipOptions) {
-		// Force a cache bust if we didn't read enough during the previous pass.
-		if self.pass != 0 {
-			let len = opts.cache_sectors();
-			self.force_bust = len != 0 && self.pass_reads < len;
-			self.pass_reads = 0;
-		}
+		// Force a cache bust if we didn't read enough during the previous pass
+		// or are just getting started.
+		let len = opts.cache_sectors();
+		self.force_bust = len != 0 && self.pass_reads < len;
+		self.pass_reads = 0;
 
 		// Bump the pass.
 		self.pass += 1;
@@ -617,6 +646,14 @@ fn set_progress_title(progress: &Progless, idx: u8, msg: &str) {
 		199,
 		msg
 	)));
+}
+
+/// # Stand By Message.
+///
+/// Pick a (reasonably) random message to display while setting up the rip.
+fn standby_msg() -> &'static [u8] {
+	let idx = usize::try_from(utc2k::unixtime()).map_or(0, |n| n % STANDBY.len());
+	STANDBY[idx].as_bytes()
 }
 
 /// # Track Number to Bitflag.
