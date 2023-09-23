@@ -157,20 +157,36 @@ impl<'a> Ripper<'a> {
 	/// and be returned.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
+		// Load the first non-skippable track's state, or leave early since
+		// we'd have nothing to work on!
+		let Some(first_track) = self.tracks.values()
+			.find_map(|v|
+				if v.skippable() { None }
+				else { Some(v.track) }
+			)
+			else { return Ok(()); };
+
+		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
 		let _res = progress.reset(self.total);
+		set_progress_title(progress, first_track.number(), "Initializing…");
+		let mut state = RipState::from_track(toc, first_track, &self.opts)?;
 		let mut share = RipShare::new(self.disc, progress, killed);
 
-		// Load the first track's state.
-		let (_, first_track) = self.tracks.first_key_value().ok_or(RipRipError::Noop)?;
-		set_progress_title(progress, first_track.track.number(), "Initializing…");
-		let mut state = RipState::from_track(toc, first_track.track, &self.opts)?;
-
+		// Loop each pass!
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
 			if self.opts.verbose() { share.log.bump_pass(); }
-			share.bump_pass(&self.opts);
 
+			// Bump the pass in our shared data. We can skip the initial cache
+			// bust if this entry is brand new, and we aren't no-resuming or
+			// anything like that.
+			share.bump_pass(&self.opts);
+			if pass == 1 && state.is_new() && self.opts.resume() {
+				share.force_bust = false;
+			}
+
+			// Loop each track!
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
