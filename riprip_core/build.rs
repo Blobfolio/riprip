@@ -143,7 +143,7 @@ fn out_path(name: &str) -> PathBuf {
 /// * 32 byte glumped vendor/model string
 /// * 01 byte string terminator
 /// * 01 byte u8 submission count
-/// * 33 bytes (unknown, but also irrelevant)
+/// * 33 bytes (unused by the look of it)
 ///
 /// We only care about the first two parts.
 fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {

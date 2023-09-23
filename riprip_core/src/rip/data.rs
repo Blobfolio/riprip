@@ -282,6 +282,11 @@ impl RipState {
 	///
 	/// This will bubble up any errors encountered along the way.
 	pub(crate) fn save_state(&self) -> Result<(), RipRipError> {
+		use bincode::{
+			DefaultOptions,
+			Options,
+		};
+
 		// The destination path.
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
@@ -290,15 +295,25 @@ impl RipState {
 		let mut writer = CacheWriter::new(&dst)?;
 		zstd::stream::Encoder::new(writer.writer(), 0).ok()
 			.and_then(|mut enc| {
-				// Try to parallelize, but don't die if it fails.
-				let _res = std::thread::available_parallelism()
-					.ok()
+				// The serializer.
+				let bc = DefaultOptions::new().with_fixint_encoding();
+
+				// Enable long distance matching.
+				let _res = enc.long_distance_matching(true);
+
+				// Let zstd know how much data to expect.
+				let _res = bc.serialized_size(self).ok()
+        			.and_then(|n| enc.set_pledged_src_size(Some(n)).ok())
+        			.and_then(|_| enc.include_contentsize(true).ok());
+
+				// Parallelize the encoding if possible.
+				let _res = std::thread::available_parallelism().ok()
 					.and_then(|n| u32::try_from(n.get()).ok())
 					.and_then(|par| enc.multithread(par).ok());
 
 				// Push the compressor into a BufWriter to make bincode's
 				// chunking more efficient. Both writers flush on drop.
-				bincode::serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
+				bc.serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
 			})
 			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
 
