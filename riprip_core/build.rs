@@ -28,18 +28,6 @@ use std::{
 /// This mirrors the DriveVendorModel type in the living program.
 type VendorModel = [u8; 24];
 
-/// # Known Drive Cache Sizes.
-///
-/// There isn't any database we can pull these from — that I know of — so we'll
-/// start our own list, and build it up extremely slowly over time. Haha.
-///
-/// If you're reading this and want your drive's buffer size included, just
-/// open an issue on Github linking to the manufacturer specifications.
-const CACHES: &[(&str, u16)] = &[
-	("PIONEER\0BD-RW   BDR-X13U", 4096),
-	("PIONEER\0BD-RW   BDR-XD05", 4096),
-];
-
 /// # The remote URL of the data.
 const DATA_URL: &str = "http://www.accuraterip.com/accuraterip/DriveOffsets.bin";
 
@@ -60,6 +48,7 @@ const MAX_MODEL_LEN: usize = 16;
 /// # Main.
 fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
+	println!("cargo:rerun-if-changed=skel");
 
 	let raw = fetch_offsets();
 	let offsets = parse_offsets(&raw);
@@ -189,7 +178,7 @@ fn out_path(name: &str) -> PathBuf {
 	out
 }
 
-/// # Parse Caches.
+/// # Parse Drive Caches.
 ///
 /// This essentially transforms our hard-coded `CACHES` array into a `BTreeMap`,
 /// but checks to make sure the values are present in the offset list first,
@@ -197,20 +186,45 @@ fn out_path(name: &str) -> PathBuf {
 fn parse_caches(offsets: &BTreeMap<VendorModel, i16>) -> BTreeMap<VendorModel, u16> {
 	let mut parsed: BTreeMap<VendorModel, u16> = BTreeMap::new();
 
-	for &(vm, kb) in CACHES {
-		let Ok(vm2) = vm.as_bytes().try_into() else {
-			panic!("Invalid cache vendor model: {vm}");
+	let raw = std::fs::read_to_string("skel/drive-cache.txt")
+		.expect("Unable to open skel/drive-cache.txt");
+	for line in raw.lines() {
+		if line.starts_with('#') { continue; }
+		let Some((vm, kb)) = parse_cache_line(line) else {
+			println!("cargo:warning=Invalid cache line: {line}.");
+			continue;
 		};
-		if offsets.contains_key(&vm2) { parsed.insert(vm2, kb); }
+		if offsets.contains_key(&vm) { parsed.insert(vm, kb); }
 		else {
-			println!("cargo:warning=Cache entry {vm} has no corresponding offset entry.");
+			println!("cargo:warning=Unknown cache vendor/model: {line}.");
 		}
 	}
 
 	parsed
 }
 
-/// # Parse Raw Data.
+/// # Parse a Single Cache Entry.
+///
+/// Tease out the vendor/model and cache size from the string and return them.
+fn parse_cache_line(line: &str) -> Option<(VendorModel, u16)> {
+	// To make the data file easier to read, null bytes are replaced with
+	// ellipses; first things first we need to convert those back. The result
+	// should be a line of ASCII, at least 24 (vm) + 1 (space) + 1 (size) long.
+	let line = line.replace('…', "\0");
+	if ! line.is_ascii() || line.len() < 26 { return None; }
+
+	// Parse the two halves.
+	let (vm, kb) = line.split_at(24);
+	let vm: VendorModel = vm.as_bytes().try_into().ok()?;
+	let kb: u16 = kb.trim().parse().ok()?;
+
+	// Cache can't be zero.
+	if kb == 0 { None }
+	//Otherwise return what we've got!
+	else { Some((vm, kb)) }
+}
+
+/// # Parse Drive Offsets.
 ///
 /// The raw bin data is stored in fixed-length chunks of 69 bytes that break
 /// down as follows:
@@ -236,9 +250,7 @@ fn parse_offsets(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 
 		// The drive ID may be null-padded on the end. Let's trim those away.
 		let mut drive_id = &chunk[2..34];
-		while let [ rest @ .., 0 ] = drive_id {
-			drive_id = rest;
-		}
+		while let [ rest @ .., 0 ] = drive_id { drive_id = rest; }
 
 		// Make sure it is valid UTF-8.
 		let Ok(drive_id) = std::str::from_utf8(drive_id) else { continue; };

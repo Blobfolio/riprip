@@ -293,6 +293,7 @@ mod test {
 		assert_eq!(vm.model(), "BD-RW   BDR-XD05");
 		assert_eq!(vm.to_string(), "PIONEER: BD-RW BDR-XD05");
 		assert_eq!(vm.detect_offset(), Some(ReadOffset(667)));
+		assert_eq!(vm.detect_cache(), Some(4096));
 	}
 
 	#[test]

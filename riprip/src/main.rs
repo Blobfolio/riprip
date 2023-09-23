@@ -168,7 +168,14 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 
 	// Drive.
 	if let Some(v) = disc.drive_vendor_model() {
-		let _res = writeln!(&mut handle, "## Drive: {v}");
+		let vendor = v.vendor();
+		let model = v.model();
+		if vendor.is_empty() {
+			let _res = writeln!(&mut handle, "## Drive: {model}");
+		}
+		else {
+			let _res = writeln!(&mut handle, "## Drive: [{vendor}] {model}");
+		}
 	}
 
 	// Everything else!
