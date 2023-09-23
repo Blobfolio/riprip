@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.1.2" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2023" "Rip Rip Hooray! v0.1.3" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.1.2.
+Rip Rip Hooray! \- Manual page for riprip v0.1.3.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -26,10 +26,10 @@ Print the basic drive and disc information to STDERR and exit (without ripping a
 \fB\-\-no\-summary\fR
 Skip the drive and disc summary and jump straight to ripping.
 .TP
-\fB\-\-reset\-counts\fR
-Reset all previously\-collected sample counts, allowing their sectors to be re\-read/re\-confirmed.
+\fB\-\-reset\fR
+Flip 'likely' samples back to 'maybe', keeping their values, but resetting all counts to one. This is a softer alternative to \-\-no\-resume, and will not affect tracks confirmed by AccurateRip/CUETools.
 .TP
-\fB\-\-strict\-c2\fR
+\fB\-\-strict\fR
 Consider C2 errors an all\-or\-nothing proposition for the sector as a whole, marking all samples bad if any of them are bad. This is most effective when applied consistently from the initial rip and onward.
 .TP
 \fBsync\fR
@@ -43,7 +43,7 @@ Print version information to STDOUT and exit.
 .SS OPTIONS:
 .TP
 \fB\-c\fR, \fB\-\-cache\fR <NUM>
-Drive cache can interfere with re\-read accuracy. If your drive caches data, use this option to specify its buffer size so Rip Rip can try to mitigate it. Values with an M suffix are treated as MiB, otherwise KiB are assumed. [default: 0; max: 65,535]
+Drive cache can interfere with re\-read accuracy. If your drive caches data, use this option to specify its buffer size so Rip Rip can try to mitigate it. Values with an M suffix are treated as MiB, otherwise KiB are assumed. [default: auto or 0; max: 65,535]
 .TP
 \fB\-\-confidence\fR <NUM>
 Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]

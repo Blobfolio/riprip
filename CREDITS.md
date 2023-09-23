@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.1.2
-    Generated: 2023-09-21 04:09:04 UTC
+    Version:   0.1.3
+    Generated: 2023-09-23 06:19:39 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -35,10 +35,10 @@
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.67 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [serde](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [serde_derive](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [sha1](https://github.com/RustCrypto/hashes) | 0.10.5 | RustCrypto Developers | Apache-2.0 or MIT |
+| [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | Apache-2.0 or MIT |
 | [syn](https://github.com/dtolnay/syn) | 2.0.37 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [tempfile](https://github.com/Stebalien/tempfile) | 3.8.0 | [Steven Allen](mailto:steven@stebalien.com), The Rust Project Developers, [Ashley Mannix](mailto:ashleymannix@live.com.au), and [Jason White](mailto:me@jasonwhite.io) | Apache-2.0 or MIT |
 | [term_size](https://github.com/kbknapp/term_size-rs.git) | 0.3.2 | [Kevin K.](mailto:kbknapp@gmail.com) and [Benjamin Sago](mailto:ogham@bsago.me) | Apache-2.0 or MIT |

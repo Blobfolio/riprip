@@ -13,8 +13,8 @@ _basher___riprip() {
 	[[ " ${COMP_LINE} " =~ " --no-resume " ]] || opts+=("--no-resume")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")
-	[[ " ${COMP_LINE} " =~ " --reset-counts " ]] || opts+=("--reset-counts")
-	[[ " ${COMP_LINE} " =~ " --strict-c2 " ]] || opts+=("--strict-c2")
+	[[ " ${COMP_LINE} " =~ " --reset " ]] || opts+=("--reset")
+	[[ " ${COMP_LINE} " =~ " --strict " ]] || opts+=("--strict")
 	[[ " ${COMP_LINE} " =~ " sync " ]] || opts+=("sync")
 	if [[ ! " ${COMP_LINE} " =~ " -v " ]] && [[ ! " ${COMP_LINE} " =~ " --verbose " ]]; then
 		opts+=("-v")
