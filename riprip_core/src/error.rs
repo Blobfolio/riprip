@@ -66,6 +66,9 @@ pub enum RipRipError {
 	/// # Noop.
 	Noop,
 
+	/// # No Track.
+	NoTrack(u8),
+
 	/// # Unable to obtain the number of tracks.
 	NumTracks,
 
@@ -147,6 +150,9 @@ impl fmt::Display for RipRipError {
 			Self::Killed => f.write_str("User abort."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
 			Self::Noop => f.write_str("There's nothing to do!"),
+			Self::NoTrack(n) =>
+				if *n == 0 { f.write_str("There is no HTOA on this disc.") }
+				else { write!(f, "There is no track #{n} on this disc.") },
 			Self::NumTracks => f.write_str("Unable to obtain the track total."),
 			Self::ReadOffset => f.write_str("Invalid read offset."),
 			Self::RipOverflow => f.write_str("The numbers are too big for this system architecture."),

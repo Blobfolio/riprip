@@ -12,6 +12,7 @@ use crate::{
 	NULL_SAMPLE,
 	ReadOffset,
 	RipRipError,
+	RipOptions,
 	RipSample,
 	SAMPLE_OVERREAD,
 	SAMPLES_PER_SECTOR,
@@ -150,11 +151,11 @@ impl RipState {
 	/// This will return an error if the numbers can't fit in the necessary
 	/// integer types, the cache is invalid, or the cache is corrupt and the
 	/// user opts not to start over.
-	pub(crate) fn from_track(toc: &Toc, track: Track, resume: bool, reset_counts: bool)
+	pub(crate) fn from_track(toc: &Toc, track: Track, opts: &RipOptions)
 	-> Result<Self, RipRipError> {
 		// Should we pick up where we left off?
-		if resume {
-			match Self::from_file(toc, track, reset_counts) {
+		if opts.resume() {
+			match Self::from_file(toc, track, opts.reset()) {
 				Ok(None) => {},
 				Ok(Some(out)) => return Ok(out),
 				Err(e) => return Err(e),
@@ -216,7 +217,7 @@ impl RipState {
 	/// This will return an error if the cache location cannot be determined,
 	/// the cache exists and cannot be deserialized, or the data is in someway
 	/// nonsensical.
-	fn from_file(toc: &Toc, track: Track, reset_counts: bool)
+	pub(crate) fn from_file(toc: &Toc, track: Track, reset: bool)
 	-> Result<Option<Self>, RipRipError> {
 		let src = state_path(toc, track)?;
 		if let Ok(file) = File::open(src) {
@@ -228,8 +229,8 @@ impl RipState {
 			// Return the instance if it matches the info we're expecting.
 			if out.toc.eq(toc) && out.track == track {
 				// Reset the counts?
-				if reset_counts {
-					out.reset_counts();
+				if reset {
+					out.reset();
 					let _res = out.save_state();
 				}
 				Ok(Some(out))
@@ -261,10 +262,10 @@ impl RipState {
 	/// # Reset Counts.
 	///
 	/// Drop all maybe counts to one so their sectors can be reread.
-	pub(crate) fn reset_counts(&mut self) {
+	pub(crate) fn reset(&mut self) {
 		for v in &mut self.data {
 			if let RipSample::Maybe(v) = v {
-				v.reset_counts();
+				v.reset();
 			}
 		}
 	}
@@ -281,6 +282,11 @@ impl RipState {
 	///
 	/// This will bubble up any errors encountered along the way.
 	pub(crate) fn save_state(&self) -> Result<(), RipRipError> {
+		use bincode::{
+			DefaultOptions,
+			Options,
+		};
+
 		// The destination path.
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
@@ -289,15 +295,25 @@ impl RipState {
 		let mut writer = CacheWriter::new(&dst)?;
 		zstd::stream::Encoder::new(writer.writer(), 0).ok()
 			.and_then(|mut enc| {
-				// Try to parallelize, but don't die if it fails.
-				let _res = std::thread::available_parallelism()
-					.ok()
+				// The serializer.
+				let bc = DefaultOptions::new().with_fixint_encoding();
+
+				// Enable long distance matching.
+				let _res = enc.long_distance_matching(true);
+
+				// Let zstd know how much data to expect.
+				let _res = bc.serialized_size(self).ok()
+        			.and_then(|n| enc.set_pledged_src_size(Some(n)).ok())
+        			.and_then(|_| enc.include_contentsize(true).ok());
+
+				// Parallelize the encoding if possible.
+				let _res = std::thread::available_parallelism().ok()
 					.and_then(|n| u32::try_from(n.get()).ok())
 					.and_then(|par| enc.multithread(par).ok());
 
 				// Push the compressor into a BufWriter to make bincode's
 				// chunking more efficient. Both writers flush on drop.
-				bincode::serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
+				bc.serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
 			})
 			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
 
@@ -416,7 +432,7 @@ impl RipState {
 	/// range.
 	pub(super) fn track_quality(&self, rereads: (u8, u8)) -> TrackQuality {
 		let slice = self.track_slice();
-		TrackQuality::new(slice, rereads).unwrap_or_else(|| TrackQuality::from(slice.len()))
+		TrackQuality::new(slice, rereads)
 	}
 
 	/// # Track Slice.

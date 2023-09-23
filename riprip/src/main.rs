@@ -198,9 +198,9 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	let mut opts = RipOptions::default()
 		.with_backwards(args.switch2(b"--backwards", b"--backward"))
 		.with_flip_flop(args.switch(b"--flip-flop"))
-		.with_reset_counts(args.switch2(b"--reset-counts", b"--reset-count"))
+		.with_reset(args.switch(b"--reset"))
 		.with_resume(! args.switch(b"--no-resume"))
-		.with_strict_c2(args.switch2(b"--c2-strict", b"--strict-c2"))
+		.with_strict(args.switch(b"--strict"))
 		.with_sync(args.switch(b"--sync"))
 		.with_verbose(args.switch2(b"-v", b"--verbose"));
 
@@ -222,6 +222,9 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 				|pos| u16::btou(v[..pos].trim()).and_then(|v| v.checked_mul(1024))
 			)
 			.ok_or(RipRipError::CliParse("-c/--cache"))?;
+		opts = opts.with_cache(v);
+	}
+	else if let Some(v) = drive.and_then(|vm| vm.detect_cache()) {
 		opts = opts.with_cache(v);
 	}
 
@@ -262,6 +265,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	}
 
 	// Tracks are also kinda annoying.
+	let toc = disc.toc();
 	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
 		let v = v.trim();
 		if v.is_empty() { continue; }
@@ -290,11 +294,22 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		}
 	}
 
-	// If we didn't parse any tracks, add each track on the disc.
-	if ! opts.has_tracks() {
-		// Include the HTOA if we're ripping everything.
-		if disc.toc().htoa().is_some() { opts = opts.with_track(0); }
-		for t in disc.toc().audio_tracks() { opts = opts.with_track(t.number()); }
+	// Make sure the desired tracks are actually on the disc.
+	if opts.has_tracks() {
+		for idx in opts.tracks() {
+			// Make sure the track is valid.
+			let good =
+				if idx == 0 { toc.htoa().is_some() }
+				else { toc.audio_track(usize::from(idx)).is_some() };
+			if ! good {
+				return Err(RipRipError::NoTrack(idx));
+			}
+		}
+	}
+	// If no tracks were specified, DO IT ALL.
+	else {
+		if toc.htoa().is_some() { opts = opts.with_track(0); }
+		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
 	// Done!
@@ -307,7 +322,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict_c2() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
+		if opts.strict() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
 		else { "C2 Error Pointers \x1b[0;2m(\x1b[0;1mSample\x1b[0;2m)" }
 	);
 	let nice_cache = opts.cache().map_or(
@@ -328,7 +343,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		"{}{}",
 		opts.passes(),
 		if opts.resume() {
-			if opts.reset_counts() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
+			if opts.reset() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
 			else { "" }
 		}
 		else { " \x1b[0;2m(\x1b[0;1;93mFrom Scratch\x1b[0;2m)" },
@@ -473,10 +488,11 @@ WHEN ALL ELSE FAILS:
                       effect unless -p/--passes is at least two.
         --no-resume   Ignore any previous rip states, starting over from
                       scratch.
-        --reset-counts
-                      Reset all previously-collected sample counts, allowing
-                      their sectors to be re-read/re-confirmed.
-        --strict-c2   Consider C2 errors an all-or-nothing proposition for the
+        --reset       Flip "likely" samples back to "maybe", keeping their
+                      values, but resetting all counts to one. This is a softer
+                      alternative to --no-resume, and will not affect tracks
+                      confirmed by AccurateRip/CUETools.
+        --strict      Consider C2 errors an all-or-nothing proposition for the
                       sector as a whole, marking all samples bad if any of them
                       are bad. This is most effective when applied consistently
                       from the initial rip and onward.
@@ -486,7 +502,7 @@ DRIVE SETTINGS:
                       drive caches data, use this option to specify its buffer
                       size so Rip Rip can try to mitigate it. Values with an
                       M suffix are treated as MiB, otherwise KiB are assumed.
-                      [default: 0; max: 65,535]
+                      [default: auto or 0; max: 65,535]
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
     -o, --offset <SAMPLES>

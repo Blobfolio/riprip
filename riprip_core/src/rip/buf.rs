@@ -22,6 +22,9 @@ use std::ops::Range;
 ///
 /// All sorts of different buffer sizes are needed for different contexts. This
 /// struct eliminates a lot of the headache of figuring all that out.
+///
+/// It is sized to accommodate the biggest dataset — audio + C2 — but gets
+/// sub-sliced for smaller reads too. One buffer for all!
 pub(crate) struct RipBuffer([u8; CD_DATA_C2_SIZE as usize]);
 
 /// # Setters.
@@ -53,7 +56,7 @@ impl RipBuffer {
 	/// Depending on the options, this will fetch some combination of audio
 	/// data, C2 error pointers, and subchannel (for timestamp verification).
 	///
-	/// Returns `true` if no C2 errors were reported.
+	/// Returns `true` if no C2 or sync errors were reported.
 	///
 	/// ## Errors
 	///
@@ -101,7 +104,7 @@ impl RipBuffer {
 
 		// If we're in strict mode and there's any error, set all bits
 		// to error.
-		if opts.strict_c2() && ! good { self.set_bad(); }
+		if opts.strict() && ! good { self.set_bad(); }
 
 		Ok(good)
 	}

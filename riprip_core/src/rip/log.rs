@@ -47,23 +47,17 @@ impl RipLog {
 
 	/// # New Pass!
 	///
-	/// This prints the contents of the previous pass, if any, and resets the
-	/// data so it can do it all over again.
-	///
-	/// There is no logic to ensure passes actually increment correctly, but
-	/// they do; this is only called from the `Ripper` loop, which is a simple
-	/// `i in 1..N` loop.
-	pub(super) fn pass(&mut self, pass: u8) {
+	/// This prints the contents of the previous pass, if any, and increments
+	/// the pass counter so it can start all over again.
+	pub(super) fn bump_pass(&mut self) {
 		self.flush();
 
 		// Unnecessary but unhurtful.
 		self.events.truncate(0);
 		self.sectors.truncate(0);
 
-		// This should never fail.
-		if let Some(pass) = NonZeroU8::new(pass) {
-			self.pass.replace((pass, Instant::now()));
-		}
+		let next = self.pass.map_or(NonZeroU8::MIN, |(p, _)| p.saturating_add(1));
+		self.pass.replace((next, Instant::now()));
 	}
 
 	/// # Add Cache Bust.
@@ -87,22 +81,33 @@ impl RipLog {
 		self.sectors.push((
 			track.number(),
 			lsn,
-			total,
+			u16::min(total, 588),
 			RipLogSampleKind::Bad,
 		));
 	}
 
 	/// # Add Confused Sample Count.
+	///
+	/// Record the number of confused samples (`total`) associated with `lsn`.
+	/// These are samples the drive can't seem to make its mind up about; at
+	/// least four different "good" values have to have been returned to
+	/// qualify.
 	pub(super) fn add_confused(&mut self, track: Track, lsn: i32, total: u16) {
 		self.sectors.push((
 			track.number(),
 			lsn,
-			total,
+			u16::min(total, 588),
 			RipLogSampleKind::Confused,
 		));
 	}
 
 	/// # Flush.
+	///
+	/// Print the held data, if any, to STDOUT, and drain it so a new pass can
+	/// start fresh.
+	///
+	/// This uses a locked writer so content should appear in the correct
+	/// order, but one never knows with terminals…
 	fn flush(&mut self) {
 		// Header.
 		let Some((pass, start)) = self.pass.take() else { return; };
@@ -148,6 +153,10 @@ impl RipLog {
 
 
 /// # Event Kind.
+///
+/// This is used to enable grouping of different kinds of "events", which at
+/// present are just "we busted the cache" and read-related errors. There might
+/// be more things to talk about some day.
 enum RipLogEventKind {
 	CacheBust,
 	Err((i32, RipRipError)),
@@ -166,6 +175,9 @@ impl fmt::Display for RipLogEventKind {
 
 #[derive(Debug, Clone, Copy)]
 /// # Sample Issue Kind.
+///
+/// As we're only logging problem sectors, the two main things worth mentioning
+/// are C2/read errors and major inconsistencies.
 enum RipLogSampleKind {
 	Bad,
 	Confused,
@@ -173,6 +185,9 @@ enum RipLogSampleKind {
 
 impl RipLogSampleKind {
 	/// # As Str.
+	///
+	/// This could be `Display`, but as they're just single words, `const`
+	/// seemed the better route.
 	const fn as_str(self) -> &'static str {
 		match self {
 			Self::Bad => "BAD",
