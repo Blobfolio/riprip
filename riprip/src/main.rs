@@ -224,6 +224,9 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 			.ok_or(RipRipError::CliParse("-c/--cache"))?;
 		opts = opts.with_cache(v);
 	}
+	else if let Some(v) = drive.and_then(|vm| vm.detect_cache()) {
+		opts = opts.with_cache(v);
+	}
 
 	if let Some(v) = args.option(b"--confidence") {
 		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
@@ -499,7 +502,7 @@ DRIVE SETTINGS:
                       drive caches data, use this option to specify its buffer
                       size so Rip Rip can try to mitigate it. Values with an
                       M suffix are treated as MiB, otherwise KiB are assumed.
-                      [default: 0; max: 65,535]
+                      [default: auto or 0; max: 65,535]
     -d, --dev <PATH>  The device path for the optical drive containing the CD
                       of interest, like /dev/cdrom. [default: auto]
     -o, --offset <SAMPLES>

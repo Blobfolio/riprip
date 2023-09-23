@@ -28,6 +28,18 @@ use std::{
 /// This mirrors the DriveVendorModel type in the living program.
 type VendorModel = [u8; 24];
 
+/// # Known Drive Cache Sizes.
+///
+/// There isn't any database we can pull these from — that I know of — so we'll
+/// start our own list, and build it up extremely slowly over time. Haha.
+///
+/// If you're reading this and want your drive's buffer size included, just
+/// open an issue on Github linking to the manufacturer specifications.
+const CACHES: &[(&str, u16)] = &[
+	("PIONEER\0BD-RW   BDR-X13U", 4096),
+	("PIONEER\0BD-RW   BDR-XD05", 4096),
+];
+
 /// # The remote URL of the data.
 const DATA_URL: &str = "http://www.accuraterip.com/accuraterip/DriveOffsets.bin";
 
@@ -47,11 +59,90 @@ const MAX_MODEL_LEN: usize = 16;
 
 /// # Main.
 fn main() {
-	use std::fmt::Write;
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
-	let raw = fetch();
-	let parsed = parse(&raw);
+	let raw = fetch_offsets();
+	let offsets = parse_offsets(&raw);
+	let caches = parse_caches(&offsets);
+
+	// Save the offsets.
+	let dst = out_path("drives.rs");
+	let data = [nice_caches(caches), nice_offsets(offsets)].concat();
+	File::create(dst)
+		.and_then(|mut f| f.write_all(data.as_bytes()).and_then(|_| f.flush()))
+		.expect("Unable to save drive data.");
+}
+
+
+
+/// # Download/Cache Raw Data.
+///
+/// This will try to pull the data from the build cache if it exists, otherwise
+/// it will download it fresh (and save it to the build cache for next time).
+fn fetch_offsets() -> Vec<u8> {
+	// Pull from cache?
+	let cache = out_path("DriveOffsets.bin");
+	if let Some(x) = try_cache(&cache) { return x; }
+
+	// Download it fresh.
+	let res = ureq::get(DATA_URL)
+		.set("user-agent", "Mozilla/5.0")
+		.call()
+		.expect("Unable to download AccurateRip drive offsets.");
+
+	let mut out: Vec<u8> = Vec::new();
+	res.into_reader().read_to_end(&mut out)
+		.expect("Unable to read the AccurateRip drive offset server response.");
+
+	if out.is_empty() {
+		panic!("The AccurateRip drive offset server response was empty.");
+	}
+
+	// Try to cache for next time.
+	let _res = File::create(cache)
+		.and_then(|mut f| f.write_all(&out).and_then(|_| f.flush()));
+
+	out
+}
+
+/// # Nice Drive Caches.
+///
+/// Reformat the cache sizes as Rust code that can be included directly in a
+/// library script.
+///
+/// The generated code takes the form of a static array, allowing for
+/// reasonably fast and straightforward binary search at runtime.
+fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
+	// Reformat the data into "code" for the array we're about to generate.
+	let nice = parsed.into_iter()
+		.map(|(vendormodel, size)| format!(
+			"(DriveVendorModel({vendormodel:?}), {size}_u16),"
+		))
+		.collect::<Vec<String>>();
+
+	println!("cargo:warning=Found {} drive caches in the database.", nice.len());
+
+	format!(
+		r#"
+/// # Drive Cache Sizes.
+const DRIVE_CACHES: [(DriveVendorModel, u16); {}] = [
+	{}
+];
+"#,
+		nice.len(),
+		nice.join(" "),
+	)
+}
+
+/// # Nice Drive Offsets.
+///
+/// Reformat the offsets as Rust code that can be included directly in a
+/// library script.
+///
+/// The generated code takes the form of a static array, allowing for
+/// reasonably fast and straightforward binary search at runtime.
+fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
+	use std::fmt::Write;
 
 	// Reformat the data into "code" for the array we're about to generate.
 	let mut min = i16::MAX;
@@ -85,43 +176,6 @@ const DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = ["#,
 
 	// Close out the array.
 	out.push_str("\n];\n");
-
-	// Save it.
-	let dst = out_path("drive-offsets.rs");
-	File::create(dst)
-		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|_| f.flush()))
-		.expect("Unable to save drive offsets.");
-}
-
-
-
-/// # Download/Cache Raw Data.
-///
-/// This will try to pull the data from the build cache if it exists, otherwise
-/// it will download it fresh (and save it to the build cache for next time).
-fn fetch() -> Vec<u8> {
-	// Pull from cache?
-	let cache = out_path("DriveOffsets.bin");
-	if let Some(x) = try_cache(&cache) { return x; }
-
-	// Download it fresh.
-	let res = ureq::get(DATA_URL)
-		.set("user-agent", "Mozilla/5.0")
-		.call()
-		.expect("Unable to download AccurateRip drive offsets.");
-
-	let mut out: Vec<u8> = Vec::new();
-	res.into_reader().read_to_end(&mut out)
-		.expect("Unable to read the AccurateRip drive offset server response.");
-
-	if out.is_empty() {
-		panic!("The AccurateRip drive offset server response was empty.");
-	}
-
-	// Try to cache for next time.
-	let _res = File::create(cache)
-		.and_then(|mut f| f.write_all(&out).and_then(|_| f.flush()));
-
 	out
 }
 
@@ -135,6 +189,27 @@ fn out_path(name: &str) -> PathBuf {
 	out
 }
 
+/// # Parse Caches.
+///
+/// This essentially transforms our hard-coded `CACHES` array into a `BTreeMap`,
+/// but checks to make sure the values are present in the offset list first,
+/// just to rule out typos or weird data.
+fn parse_caches(offsets: &BTreeMap<VendorModel, i16>) -> BTreeMap<VendorModel, u16> {
+	let mut parsed: BTreeMap<VendorModel, u16> = BTreeMap::new();
+
+	for &(vm, kb) in CACHES {
+		let Ok(vm2) = vm.as_bytes().try_into() else {
+			panic!("Invalid cache vendor model: {vm}");
+		};
+		if offsets.contains_key(&vm2) { parsed.insert(vm2, kb); }
+		else {
+			println!("cargo:warning=Cache entry {vm} has no corresponding offset entry.");
+		}
+	}
+
+	parsed
+}
+
 /// # Parse Raw Data.
 ///
 /// The raw bin data is stored in fixed-length chunks of 69 bytes that break
@@ -146,7 +221,7 @@ fn out_path(name: &str) -> PathBuf {
 /// * 33 bytes (unused by the look of it)
 ///
 /// We only care about the first two parts.
-fn parse(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
+fn parse_offsets(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 	let mut parsed: BTreeMap<VendorModel, i16> = BTreeMap::new();
 
 	// Run through each entry.
