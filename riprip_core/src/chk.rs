@@ -71,7 +71,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 -> Option<(u8, u8)> {
 	// Fetch/cache the checksums.
 	let ar = toc.accuraterip_id();
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", toc.cddb_id())).ok()?;
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", ar.cddb_id())).ok()?;
 	let chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = ar.checksum_url();
