@@ -47,6 +47,7 @@ pub use abort::KillSwitch;
 pub use barcode::Barcode;
 pub(crate) use cache::{
 	cache_path,
+	cache_prefix,
 	CacheWriter,
 	state_path,
 	track_path,

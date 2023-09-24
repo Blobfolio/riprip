@@ -5,6 +5,7 @@
 use crate::{
 	BYTES_PER_SAMPLE,
 	cache_path,
+	cache_prefix,
 	CACHE_SCRATCH,
 	CacheWriter,
 	RipSample,
@@ -71,7 +72,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 -> Option<(u8, u8)> {
 	// Fetch/cache the checksums.
 	let ar = toc.accuraterip_id();
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", ar.cddb_id())).ok()?;
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", cache_prefix(toc))).ok()?;
 	let chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = ar.checksum_url();
@@ -167,7 +168,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// less than `2` to avoid confusion.
 pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
 	// Fetch/cache the checksums.
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", toc.cddb_id())).ok()?;
+	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", cache_prefix(toc))).ok()?;
 	let mut chk = std::fs::read(&dst).ok()
 		.or_else(|| {
 			let url = toc.ctdb_checksum_url();

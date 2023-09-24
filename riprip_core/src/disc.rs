@@ -8,6 +8,7 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
+	cache_prefix,
 	CacheWriter,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
@@ -61,7 +62,7 @@ impl fmt::Display for Disc {
 		let mut kv: Vec<(&str, u8, String)> = vec![
 			("CDTOC:", 199, self.toc.to_string()),
 			("AccurateRip:", 4, self.toc.accuraterip_id().to_string()),
-			("CDDB:", 4, self.toc.cddb_id().to_string()),
+			("CDDB:", 4, cache_prefix(&self.toc).to_owned()),
 			("CUETools:", 4, self.toc.ctdb_id().to_string()),
 			("MusicBrainz:", 4, self.toc.musicbrainz_id().to_string()),
 		];
@@ -412,7 +413,7 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	}
 
 	// Save the cue sheet!
-	let dst = parent.join(format!("{}.cue", toc.cddb_id()));
+	let dst = parent.join(format!("{}.cue", cache_prefix(toc)));
 	{
 		use std::io::Write;
 		let mut writer = CacheWriter::new(&dst).ok()?;
