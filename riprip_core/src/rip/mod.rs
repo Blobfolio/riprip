@@ -54,8 +54,8 @@ const CLS: [u8; 10] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
 
 /// # Sassy Setup Messages.
 const STANDBY: [&str; 2] = [
-	"\x1b[1;96mReconnoitering the rip\x1b[0;1;34m",
-	"\x1b[1;96mRipticulating splines\x1b[0;1;34m",
+	"\x1b[1mReconnoitering the rip\x1b[38;5;199m",
+	"\x1b[1mRipticulating splines\x1b[38;5;199m",
 ];
 
 
@@ -116,7 +116,13 @@ impl<'a> Ripper<'a> {
 		// the progress bar during ripping. (The +1 is to leave room for some
 		// title changes after the last read operation.)
 		let total = tracks.values()
-			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
+			.try_fold(0_u32, |acc, e|
+				if e.skippable() {
+					happy_track_msg(e.track).eprint();
+					Some(acc)
+				}
+				else { acc.checked_add(e.sectors) }
+			)
 			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
 			.and_then(|n| n.checked_add(1))
 			.ok_or(RipRipError::RipOverflow)?;
@@ -190,7 +196,8 @@ impl<'a> Ripper<'a> {
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
-				if killed.killed() || entry.skippable() {
+				if entry.skippable() { continue; }
+				if killed.killed() {
 					progress.increment_n(entry.sectors);
 					continue;
 				}
@@ -201,8 +208,14 @@ impl<'a> Ripper<'a> {
 					state = RipState::from_track(toc, entry.track, &self.opts)?;
 				}
 
-				// Actual rip.
-				entry.rip(&mut share, &mut state, &self.opts)?;
+				// Rip it! If the result comes back confirmed and we were
+				// planning additional passes, we can increase the progress
+				// (remove them from the todo) accordingly.
+				if entry.rip(&mut share, &mut state, &self.opts)? {
+					let skip = u32::from(self.opts.passes() - pass) * entry.sectors;
+					if skip != 0 { progress.increment_n(skip); }
+					share.progress.push_msg(happy_track_msg(entry.track), true);
+				}
 			}
 
 			// Flip the read order for next time?
@@ -216,6 +229,10 @@ impl<'a> Ripper<'a> {
 		}
 
 		progress.finish();
+
+		// Add some line breaks if we printed any confirmation messages.
+		if self.tracks.values().any(RipEntry::skippable) { eprintln!("\n"); }
+
 		Ok(())
 	}
 }
@@ -367,13 +384,15 @@ impl RipEntry {
 	/// It also handles verbose logging, verification, and track export. (Plus
 	/// if there are changes, it will resave the state file.)
 	///
+	/// Returns `true` if the track has been confirmed.
+	///
 	/// ## Errors
 	///
 	/// This will bubble up any errors encountered, except run-of-the-mill
 	/// sector read or sync errors, which are simply recorded to the state as
 	/// "bad" and/or skipped.
 	fn rip(&mut self, share: &mut RipShare, state: &mut RipState, opts: &RipOptions)
-	-> Result<(), RipRipError> {
+	-> Result<bool, RipRipError> {
 		// Update the title.
 		let title = format!(
 			"{}{}{}…",
@@ -495,7 +514,7 @@ impl RipEntry {
 			self.dst.replace(state.save_track()?);
 		}
 
-		Ok(())
+		Ok(self.skippable())
 	}
 
 	/// # Skippable?
@@ -630,6 +649,20 @@ impl<'a> RipShare<'a> {
 		}
 		else { None }
 	}
+}
+
+
+
+/// # Happy Track Message.
+///
+/// This returns a message for a track that has been confirmed.
+fn happy_track_msg(track: Track) -> Msg {
+	Msg::custom(
+		"Accurate",
+		10,
+		&format!("Track #{} has been successfully rescued.", track.number()),
+	)
+		.with_newline(true)
 }
 
 /// # Rip Distance Iter.
