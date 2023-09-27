@@ -97,7 +97,6 @@ impl DriveVendorModel {
 		}
 	}
 
-	#[allow(unsafe_code)]
 	#[must_use]
 	/// # Vendor.
 	///
@@ -107,27 +106,18 @@ impl DriveVendorModel {
 		else {
 			let mut chunk = &self.0[..DRIVE_VENDOR_LEN];
 			while let [ rest @ .., 0 ] = chunk { chunk = rest; }
-
-			// Safety: the data is converted from &str slices for storage, so
-			// will be valid &str when converted back.
-			unsafe { std::str::from_utf8_unchecked(chunk) }
+			std::str::from_utf8(chunk).unwrap_or("")
 		}
 	}
 
-	#[allow(unsafe_code)]
 	#[must_use]
 	/// # Model.
 	///
 	/// A model number is always present.
 	pub fn model(&self) -> &str {
 		let mut chunk = &self.0[DRIVE_VENDOR_LEN..];
-		debug_assert!(chunk.len() == DRIVE_MODEL_LEN, "BUG: incorrect model slice.");
-
 		while let [ rest @ .., 0 ] = chunk { chunk = rest; }
-
-		// Safety: the data is converted from &str slices for storage, so will
-		// be valid &str when converted back.
-		unsafe { std::str::from_utf8_unchecked(chunk) }
+		std::str::from_utf8(chunk).unwrap_or("")
 	}
 
 	#[must_use]
@@ -303,6 +293,7 @@ mod test {
 		assert_eq!(vm.model(), "BD-RW   BDR-XD05");
 		assert_eq!(vm.to_string(), "PIONEER: BD-RW BDR-XD05");
 		assert_eq!(vm.detect_offset(), Some(ReadOffset(667)));
+		assert_eq!(vm.detect_cache(), Some(4096));
 	}
 
 	#[test]

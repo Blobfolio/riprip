@@ -21,7 +21,6 @@ use crate::{
 	Disc,
 	KillSwitch,
 	LibcdioInstance,
-	ReadOffset,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -37,12 +36,12 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
-use iter::ReadIter;
+use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
 use std::{
 	collections::BTreeMap,
-	ops::Range,
+	num::NonZeroU32,
 	path::PathBuf,
 	time::Instant,
 };
@@ -54,8 +53,8 @@ const CLS: [u8; 10] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
 
 /// # Sassy Setup Messages.
 const STANDBY: [&str; 2] = [
-	"\x1b[1;96mReconnoitering the rip\x1b[0;1;34m",
-	"\x1b[1;96mRipticulating splines\x1b[0;1;34m",
+	"\x1b[1mReconnoitering the rip\x1b[38;5;199m",
+	"\x1b[1mRipticulating splines\x1b[38;5;199m",
 ];
 
 
@@ -116,7 +115,13 @@ impl<'a> Ripper<'a> {
 		// the progress bar during ripping. (The +1 is to leave room for some
 		// title changes after the last read operation.)
 		let total = tracks.values()
-			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
+			.try_fold(0_u32, |acc, e|
+				if e.skippable() {
+					happy_track_msg(e.track).eprint();
+					Some(acc)
+				}
+				else { acc.checked_add(e.sectors) }
+			)
 			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
 			.and_then(|n| n.checked_add(1))
 			.ok_or(RipRipError::RipOverflow)?;
@@ -190,7 +195,8 @@ impl<'a> Ripper<'a> {
 			for entry in self.tracks.values_mut() {
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
-				if killed.killed() || entry.skippable() {
+				if entry.skippable() { continue; }
+				if killed.killed() {
 					progress.increment_n(entry.sectors);
 					continue;
 				}
@@ -201,8 +207,14 @@ impl<'a> Ripper<'a> {
 					state = RipState::from_track(toc, entry.track, &self.opts)?;
 				}
 
-				// Actual rip.
-				entry.rip(&mut share, &mut state, &self.opts)?;
+				// Rip it! If the result comes back confirmed and we were
+				// planning additional passes, we can increase the progress
+				// (remove them from the todo) accordingly.
+				if entry.rip(&mut share, &mut state, &self.opts)? {
+					let skip = u32::from(self.opts.passes() - pass) * entry.sectors;
+					if skip != 0 { progress.increment_n(skip); }
+					share.progress.push_msg(happy_track_msg(entry.track), true);
+				}
 			}
 
 			// Flip the read order for next time?
@@ -216,6 +228,10 @@ impl<'a> Ripper<'a> {
 		}
 
 		progress.finish();
+
+		// Add some line breaks if we printed any confirmation messages.
+		if self.tracks.values().any(RipEntry::skippable) { eprintln!("\n"); }
+
 		Ok(())
 	}
 }
@@ -324,12 +340,13 @@ impl RipEntry {
 
 		// Set some nothing defaults.
 		let mut dst = None;
-		let mut quality = usize::try_from(track.duration().samples())
-			.map(|q| {
-				let q = TrackQuality::from(q);
-				(q, q)
-			})
-			.map_err(|_| RipRipError::RipOverflow)?;
+		let samples = u32::try_from(track.duration().samples())
+			.ok()
+			.and_then(NonZeroU32::new)
+			.ok_or(RipRipError::RipOverflow)?;
+
+		let quality = TrackQuality::new_bad(samples);
+		let mut quality = (quality, quality);
 		let mut ar = None;
 		let mut ctdb = None;
 
@@ -338,12 +355,16 @@ impl RipEntry {
 		// grab the third-party db stats too.
 		if opts.resume() {
 			if let Some(state) = RipState::from_file(toc, track, opts.reset())? {
-				let q = state.track_quality(opts.rereads());
-				if q.is_confirmed() {
-					(ar, ctdb) = verify_track(track, &state);
+				(ar, ctdb) = verify_track(track, &state);
+				if opts.confidence() <= max_confidence(ar, ctdb) {
+					let tmp = TrackQuality::new_confirmed(samples);
+					quality = (tmp, tmp);
 					dst.replace(state.save_track()?);
 				}
-				quality = (q, q);
+				else {
+					let tmp = state.track_quality(opts.rereads());
+					quality = (tmp, tmp);
+				}
 			}
 		}
 
@@ -367,13 +388,15 @@ impl RipEntry {
 	/// It also handles verbose logging, verification, and track export. (Plus
 	/// if there are changes, it will resave the state file.)
 	///
+	/// Returns `true` if the track has been confirmed.
+	///
 	/// ## Errors
 	///
 	/// This will bubble up any errors encountered, except run-of-the-mill
 	/// sector read or sync errors, which are simply recorded to the state as
 	/// "bad" and/or skipped.
 	fn rip(&mut self, share: &mut RipShare, state: &mut RipState, opts: &RipOptions)
-	-> Result<(), RipRipError> {
+	-> Result<bool, RipRipError> {
 		// Update the title.
 		let title = format!(
 			"{}{}{}…",
@@ -386,13 +409,8 @@ impl RipEntry {
 		let mut any_read = false;
 		let before = state.quick_hash();
 		let rip_rng = state.sector_rip_range();
-		let lsn_start = rip_rng.start;
-		let dst_rng = rip_distance_iter(&rip_rng, opts.offset(), opts.backwards());
 
-		for k in dst_rng {
-			let read_lsn = lsn_start + k;
-			let sector = state.offset_sector_mut(read_lsn, opts.offset())?;
-
+		for (read_lsn, sector) in state.offset_rip_iter(opts)? {
 			// We can skip this block if the user aborted or there's
 			// nothing to refine.
 			if
@@ -495,7 +513,7 @@ impl RipEntry {
 			self.dst.replace(state.save_track()?);
 		}
 
-		Ok(())
+		Ok(self.skippable())
 	}
 
 	/// # Skippable?
@@ -531,13 +549,9 @@ impl RipEntry {
 
 		// If we're confirmed and the state isn't, update the state and our
 		// quality snapshot.
-		let conf = opts.confidence();
-		let verified =
-			self.ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
-			self.ctdb.map_or(false, |v| u16::from(conf) <= v);
+		let verified = opts.confidence() <= max_confidence(self.ar, self.ctdb);
 		if verified && ! self.quality.1.is_confirmed() {
-			state.confirm_track();
-			self.quality.1 = state.track_quality(opts.rereads());
+			self.quality.1 = TrackQuality::new_confirmed(self.quality.1.total());
 		}
 
 		// Return the answer.
@@ -632,24 +646,39 @@ impl<'a> RipShare<'a> {
 	}
 }
 
-/// # Rip Distance Iter.
+
+
+/// # Happy Track Message.
 ///
-/// Depending on the read offset, some of the edgiest padding regions may not
-/// be readable and/or writable. This returns an iterator of safe distances
-/// from the starting LSN where both can happen.
-fn rip_distance_iter(rng: &Range<i32>, offset: ReadOffset, backwards: bool)
--> ReadIter {
-	let mut rng_start: i32 = 0;
-	let mut rng_end: i32 = rng.end - rng.start;
-	let sectors_abs = i32::from(offset.sectors_abs());
+/// This returns a message for a track that has been confirmed.
+fn happy_track_msg(track: Track) -> Msg {
+	Msg::custom(
+		"Accurate",
+		10,
+		&format!("Track #{} has been successfully rescued.", track.number()),
+	)
+		.with_newline(true)
+}
 
-	// Negative offsets require the data be pushed forward to "start"
-	// at the right place.
-	if offset.is_negative() { rng_end -= sectors_abs; }
-	// Positive offsets require the data be pulled backward instead.
-	else { rng_start += sectors_abs; }
+#[allow(clippy::cast_possible_truncation)]
+/// # Max Confidence.
+///
+/// Return the largest confidence value.
+const fn max_confidence(ar: Option<(u8, u8)>, ctdb: Option<u16>) -> u8 {
+	let mut max = 0;
 
-	ReadIter::new(rng_start, rng_end, backwards)
+	if let Some(v1) = ctdb {
+		// AccurateRip tops out at 99, so we can leave early.
+		if 99 <= v1 { return 99; }
+		max = v1 as u8;
+	}
+
+	if let Some((v1, v2)) = ar {
+		if max < v1 { max = v1; }
+		if max < v2 { max = v2; }
+	}
+
+	max
 }
 
 /// # Set Progress Title.
@@ -703,8 +732,8 @@ fn verify_track(track: Track, state: &RipState) -> (Option<(u8, u8)>, Option<u16
 			state.rip_slice(),
 		));
 		(
-			ar.join().ok().flatten(),
-			ctdb.join().ok().flatten(),
+			ar.join().ok().flatten().map(|(v1, v2)| (v1.min(99), v2.min(99))),
+			ctdb.join().ok().flatten().map(|v1| v1.min(999)),
 		)
 	})
 }

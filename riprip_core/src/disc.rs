@@ -8,6 +8,7 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
+	cache_prefix,
 	CacheWriter,
 	CD_LEADIN,
 	CD_LEADOUT_LABEL,
@@ -61,7 +62,7 @@ impl fmt::Display for Disc {
 		let mut kv: Vec<(&str, u8, String)> = vec![
 			("CDTOC:", 199, self.toc.to_string()),
 			("AccurateRip:", 4, self.toc.accuraterip_id().to_string()),
-			("CDDB:", 4, self.toc.cddb_id().to_string()),
+			("CDDB:", 4, cache_prefix(&self.toc).to_owned()),
 			("CUETools:", 4, self.toc.ctdb_id().to_string()),
 			("MusicBrainz:", 4, self.toc.musicbrainz_id().to_string()),
 		];
@@ -202,12 +203,15 @@ impl Disc {
 
 impl Disc {
 	#[must_use]
-	/// # Table of Contents.
-	pub const fn toc(&self) -> &Toc { &self.toc }
-
-	#[must_use]
 	/// # Barcode.
 	pub const fn barcode(&self) -> Option<Barcode> { self.barcode }
+
+	#[must_use]
+	#[inline]
+	/// # Drive Vendor and Model.
+	pub fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		self.cdio.drive_vendor_model()
+	}
 
 	#[must_use]
 	/// # ISRC.
@@ -216,11 +220,8 @@ impl Disc {
 	}
 
 	#[must_use]
-	#[inline]
-	/// # Drive Vendor and Model.
-	pub fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-		self.cdio.drive_vendor_model()
-	}
+	/// # Table of Contents.
+	pub const fn toc(&self) -> &Toc { &self.toc }
 
 	#[must_use]
 	/// # Internal CDIO.
@@ -238,6 +239,8 @@ impl Disc {
 	/// This will bubble up any IO/rip/etc. errors encountered along the way.
 	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
+		use std::io::Write;
+
 		// Handle all the ripping business!
 		let mut rip = Ripper::new(self, opts)?;
 		rip.rip(progress, killed)?;
@@ -246,6 +249,8 @@ impl Disc {
 		// Mention all the file paths and statuses, and maybe build a cue
 		// sheet to go along with them.
 		if let Some(saved) = rip.finish() {
+			let writer = std::io::stderr();
+			let mut handle = writer.lock();
 			let mut total = 0;
 			let mut good = 0;
 
@@ -254,11 +259,12 @@ impl Disc {
 			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
 			let col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
-			eprintln!("\nThe fruits of your labor:");
+			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
 
 			// If we did all tracks, make a cue sheet.
 			if let Some(file) = save_cuesheet(&self.toc, &saved) {
-				eprintln!(
+				let _res = writeln!(
+					&mut handle,
 					"  \x1b[2m{}\x1b[0m",
 					file.to_string_lossy(),
 				);
@@ -268,7 +274,8 @@ impl Disc {
 				total += 1;
 				if ar.is_some() || ctdb.is_some() { good += 1; }
 
-				eprintln!(
+				let _res = writeln!(
+					&mut handle,
 					"  \x1b[2m{:<col1$}\x1b[0m{}{}",
 					file.to_string_lossy(),
 					if conf {
@@ -283,7 +290,8 @@ impl Disc {
 			}
 
 			// Add confirmation column headers.
-			eprintln!(
+			let _res = writeln!(
+				&mut handle,
 				"  {}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
 				" ".repeat(col1),
 				if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
@@ -291,18 +299,30 @@ impl Disc {
 
 			// Mention that the HTOA can't be verified but is probably okay.
 			if htoa_likely {
-				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,");
-				eprintln!("  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m");
+				let _res = writeln!(
+					&mut handle,
+					"\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,"
+				);
+				let _res = writeln!(
+					&mut handle,
+					"  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m"
+				);
 			}
 			// Mention that the HTOA can't be verified and should be reripped
 			// to increase certainty.
 			else if htoa_any {
-				eprintln!("\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB");
-				eprintln!("  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m");
+				let _res = writeln!(
+					&mut handle,
+					"\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB"
+				);
+				let _res = writeln!(
+					&mut handle,
+					"  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m"
+				);
 			}
 
 			// An extra line break for separation.
-			eprintln!();
+			let _res = writeln!(&mut handle).and_then(|_| handle.flush());
 		}
 
 		Ok(())
@@ -393,7 +413,7 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	}
 
 	// Save the cue sheet!
-	let dst = parent.join(format!("{}.cue", toc.cddb_id()));
+	let dst = parent.join(format!("{}.cue", cache_prefix(toc)));
 	{
 		use std::io::Write;
 		let mut writer = CacheWriter::new(&dst).ok()?;

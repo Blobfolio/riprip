@@ -19,6 +19,9 @@ use std::cmp::Ordering;
 ///
 /// This enum combines sample value(s) and their statuses.
 pub(crate) enum RipSample {
+	/// # Leadin/out.
+	Lead,
+
 	#[default]
 	/// # Unread samples.
 	Tbd,
@@ -28,11 +31,6 @@ pub(crate) enum RipSample {
 
 	/// Allegedly good sample(s).
 	Maybe(ContentiousSample),
-
-	/// Samples in the leadin/leadout — that we can't access and thus have to
-	/// assume are null — or ones that have been independently verified by
-	/// AccurateRip and/or CUETools.
-	Confirmed(Sample),
 }
 
 impl RipSample {
@@ -41,8 +39,8 @@ impl RipSample {
 	/// Return the most appropriate single sample 4-byte value as an array.
 	pub(crate) const fn as_array(&self) -> Sample {
 		match self {
-			Self::Tbd => NULL_SAMPLE,
-			Self::Bad(s) | Self::Confirmed(s) => *s,
+			Self::Tbd | Self::Lead => NULL_SAMPLE,
+			Self::Bad(s) => *s,
 			Self::Maybe(s) => s.as_array(),
 		}
 	}
@@ -52,8 +50,8 @@ impl RipSample {
 	/// Return the most appropriate single sample 4-byte value as a slice.
 	pub(crate) const fn as_slice(&self) -> &[u8] {
 		match self {
-			Self::Tbd => NULL_SAMPLE.as_slice(),
-			Self::Bad(s) | Self::Confirmed(s) => s.as_slice(),
+			Self::Tbd | Self::Lead => NULL_SAMPLE.as_slice(),
+			Self::Bad(s) => s.as_slice(),
 			Self::Maybe(s) => s.as_slice(),
 		}
 	}
@@ -62,9 +60,6 @@ impl RipSample {
 impl RipSample {
 	/// # Is Bad?
 	pub(crate) const fn is_bad(&self) -> bool { matches!(self, Self::Tbd | Self::Bad(_)) }
-
-	/// # Is Confirmed?
-	pub(crate) const fn is_confirmed(&self) -> bool { matches!(self, Self::Confirmed(_)) }
 
 	/// # Is Confused.
 	///
@@ -88,20 +83,21 @@ impl RipSample {
 		)
 	}
 
-	/// # Is Likely?
+	/// # Likeliness.
 	///
-	/// A "maybe" is "likely" if it has been returned at least `cutoff` times
-	/// and twice as much as any other competing value.
-	///
-	/// If this is called on `RipSample::Confirmed`, it will also return `true`.
-	pub(crate) fn is_likely(&self, rereads: (u8, u8)) -> bool {
+	/// Return the minimum reread abs/mul values to make the sample likely.
+	pub(crate) const fn is_likely(&self, rereads: (u8, u8)) -> bool {
 		match self {
-			Self::Tbd | Self::Bad(_) => false,
-			Self::Confirmed(_) => true,
+			// Leadin/out is always likely.
+			Self::Lead => true,
 			Self::Maybe(s) => {
-				let (a, b) = s.contention();
-				rereads.0 <= a && b.saturating_mul(rereads.1).min(254) < a
-			},
+				let (a, mut b) = s.contention();
+				b = b.saturating_mul(rereads.1);
+				if b == u8::MAX { b = u8::MAX - 1; }
+				rereads.0 <= a && b <= a
+			}
+			// Never likely.
+			_ => false,
 		}
 	}
 }
@@ -121,7 +117,7 @@ impl RipSample {
 	/// contention was a sync error and that is fixed by the new read, it is
 	/// changed to Maybe.)
 	///
-	/// Confirmed stay the same.
+	/// Leadin/out stays the same.
 	pub(crate) fn update(&mut self, new: Sample, err_c2: bool, all_good: bool) {
 		// Send bad samples to a different method to halve the onslaught of
 		// conditional handling. Haha.
@@ -140,8 +136,8 @@ impl RipSample {
 					s.add_good(new);
 				},
 
-			// Leave confirmed samples alone.
-			Self::Confirmed(_) => {},
+			// Leave leadin/out samples alone.
+			Self::Lead => {},
 		}
 	}
 
@@ -152,7 +148,7 @@ impl RipSample {
 	/// Maybe are decremented/downgraded if the value matches and there is no
 	/// sync weirdness.
 	///
-	/// Confirmed stay the same.
+	/// Leadin/out stays the same.
 	fn update_bad(&mut self, new: Sample) {
 		match self {
 			// Always update a TBD.
@@ -163,8 +159,8 @@ impl RipSample {
 				*self = boo;
 			},
 
-			// Leave confirmed samples alone.
-			Self::Confirmed(_) => {},
+			// Leave leadin/out samples alone.
+			Self::Lead => {},
 		}
 	}
 }

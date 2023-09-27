@@ -28,6 +28,11 @@ use tempfile::NamedTempFile;
 /// This will ultimately hold `CWD/CACHE_BASE`.
 static CACHE_ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
 
+/// # Cache Prefix.
+///
+/// The formatted CDDB ID for the current disc.
+static CACHE_PREFIX: OnceLock<String> = OnceLock::new();
+
 
 
 /// # Cache Writer.
@@ -111,6 +116,17 @@ where P: AsRef<Path> {
 	cache_root().map(|root| root.join(src))
 }
 
+/// # Cache Prefix.
+///
+/// All of the file names are prefixed with the disc's CDDB ID. This is
+/// unnecessarily complicated to generate — especially for such a tiny payload
+/// — so we'll do it once.
+///
+/// This also ensures we're handling the value consistently.
+pub(super) fn cache_prefix(toc: &Toc) -> &'static str {
+	CACHE_PREFIX.get_or_init(|| toc.cddb_id().to_string())
+}
+
 /// # State Path.
 ///
 /// Return the file path to save the state data to.
@@ -124,7 +140,11 @@ where P: AsRef<Path> {
 /// This will return an error if there are problems determining the cache
 /// location.
 pub(crate) fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	cache_path(format!("{CACHE_SCRATCH}/{}__{:02}.state", toc.cddb_id(), track.number()))
+	cache_path(format!(
+		"{CACHE_SCRATCH}/{}__{:02}.state",
+		cache_prefix(toc),
+		track.number()
+	))
 }
 
 /// # Track Path.
@@ -137,11 +157,7 @@ pub(crate) fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError
 /// This will return an error if there are problems determining the cache
 /// location.
 pub(crate) fn track_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	cache_path(format!(
-		"{}__{:02}.wav",
-		toc.cddb_id(),
-		track.number(),
-	))
+	cache_path(format!("{}__{:02}.wav", cache_prefix(toc), track.number()))
 }
 
 
