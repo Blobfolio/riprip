@@ -42,6 +42,7 @@ use log::RipLog;
 use quality::TrackQuality;
 use std::{
 	collections::BTreeMap,
+	num::NonZeroU32,
 	ops::Range,
 	path::PathBuf,
 	time::Instant,
@@ -341,12 +342,13 @@ impl RipEntry {
 
 		// Set some nothing defaults.
 		let mut dst = None;
-		let mut quality = usize::try_from(track.duration().samples())
-			.map(|q| {
-				let q = TrackQuality::from(q);
-				(q, q)
-			})
-			.map_err(|_| RipRipError::RipOverflow)?;
+		let samples = u32::try_from(track.duration().samples())
+			.ok()
+			.and_then(NonZeroU32::new)
+			.ok_or(RipRipError::RipOverflow)?;
+
+		let quality = TrackQuality::new_bad(samples);
+		let mut quality = (quality, quality);
 		let mut ar = None;
 		let mut ctdb = None;
 
@@ -355,12 +357,16 @@ impl RipEntry {
 		// grab the third-party db stats too.
 		if opts.resume() {
 			if let Some(state) = RipState::from_file(toc, track, opts.reset())? {
-				let q = state.track_quality(opts.rereads());
-				if q.is_confirmed() {
-					(ar, ctdb) = verify_track(track, &state);
+				(ar, ctdb) = verify_track(track, &state);
+				if opts.confidence() <= max_confidence(ar, ctdb) {
+					let tmp = TrackQuality::new_confirmed(samples);
+					quality = (tmp, tmp);
 					dst.replace(state.save_track()?);
 				}
-				quality = (q, q);
+				else {
+					let tmp = state.track_quality(opts.rereads());
+					quality = (tmp, tmp);
+				}
 			}
 		}
 
@@ -550,13 +556,9 @@ impl RipEntry {
 
 		// If we're confirmed and the state isn't, update the state and our
 		// quality snapshot.
-		let conf = opts.confidence();
-		let verified =
-			self.ar.map_or(false, |(v1, v2)| conf <= v1 || conf <= v2) ||
-			self.ctdb.map_or(false, |v| u16::from(conf) <= v);
+		let verified = opts.confidence() <= max_confidence(self.ar, self.ctdb);
 		if verified && ! self.quality.1.is_confirmed() {
-			state.confirm_track();
-			self.quality.1 = state.track_quality(opts.rereads());
+			self.quality.1 = TrackQuality::new_confirmed(self.quality.1.total());
 		}
 
 		// Return the answer.
@@ -665,6 +667,27 @@ fn happy_track_msg(track: Track) -> Msg {
 		.with_newline(true)
 }
 
+#[allow(clippy::cast_possible_truncation)]
+/// # Max Confidence.
+///
+/// Return the largest confidence value.
+const fn max_confidence(ar: Option<(u8, u8)>, ctdb: Option<u16>) -> u8 {
+	let mut max = 0;
+
+	if let Some(v1) = ctdb {
+		// AccurateRip tops out at 99, so we can leave early.
+		if 99 <= v1 { return 99; }
+		max = v1 as u8;
+	}
+
+	if let Some((v1, v2)) = ar {
+		if max < v1 { max = v1; }
+		if max < v2 { max = v2; }
+	}
+
+	max
+}
+
 /// # Rip Distance Iter.
 ///
 /// Depending on the read offset, some of the edgiest padding regions may not
@@ -736,8 +759,8 @@ fn verify_track(track: Track, state: &RipState) -> (Option<(u8, u8)>, Option<u16
 			state.rip_slice(),
 		));
 		(
-			ar.join().ok().flatten(),
-			ctdb.join().ok().flatten(),
+			ar.join().ok().flatten().map(|(v1, v2)| (v1.min(99), v2.min(99))),
+			ctdb.join().ok().flatten().map(|v1| v1.min(999)),
 		)
 	})
 }

@@ -9,10 +9,9 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
-	NULL_SAMPLE,
 	ReadOffset,
-	RipRipError,
 	RipOptions,
+	RipRipError,
 	RipSample,
 	SAMPLE_OVERREAD,
 	SAMPLES_PER_SECTOR,
@@ -190,9 +189,7 @@ impl RipState {
 
 		// Prepopulate the entries for each .
 		for v in rip_rng.clone() {
-			if v < 0 || leadout < v {
-				data.push(RipSample::Confirmed(NULL_SAMPLE));
-			}
+			if v < 0 || leadout <= v { data.push(RipSample::Lead); }
 			else { data.push(RipSample::Tbd); }
 		}
 
@@ -244,21 +241,6 @@ impl RipState {
 }
 
 impl RipState {
-	/// # Confirm Track.
-	///
-	/// Mark all track samples as confirmed.
-	///
-	/// This is called after AccurateRip and/or CUETools independently verify
-	/// the data we've collected. If they're happy, we're happy.
-	pub(crate) fn confirm_track(&mut self) {
-		let rng = self.inner_index_track_rng();
-		for v in &mut self.data[rng] {
-			if ! v.is_confirmed() {
-				*v = RipSample::Confirmed(v.as_array());
-			}
-		}
-	}
-
 	/// # Reset Counts.
 	///
 	/// Drop all maybe counts to one so their sectors can be reread.
@@ -450,37 +432,6 @@ impl RipState {
 	///
 	/// Returns `true` if the data was not seeded from a previous state.
 	pub(crate) const fn is_new(&self) -> bool { self.new }
-
-	/*
-	/// # Is Confirmed?
-	///
-	/// Returns `true` if the track has been independently confirmed by
-	/// AccurateRip and/or CUETools.
-	///
-	/// The padding data has no effect on the result.
-	pub(crate) fn is_confirmed(&self) -> bool {
-		self.track_slice()
-			.iter()
-			.all(RipSample::is_confirmed)
-	}
-
-	/// # Is Likely?
-	///
-	/// Returns true if all of the samples in the rippable range are likely or
-	/// better.
-	pub(crate) fn is_likely(&self, offset: ReadOffset, rereads: (u8, u8)) -> bool {
-		// We'll be missing bits at the beginning or end depending on the
-		// offset.
-		let samples_abs = usize::from(offset.samples_abs());
-		let len = self.data.len();
-		if len < samples_abs { return false; } // Shouldn't happen!
-		let slice =
-			if offset.is_negative() { &self.data[samples_abs..] }
-			else { &self.data[..len - samples_abs] };
-
-		slice.iter().all(|v| v.is_likely(rereads))
-	}
-	*/
 
 	/// # Quick Hash.
 	///

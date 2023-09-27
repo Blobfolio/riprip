@@ -19,6 +19,7 @@ use dactyl::{
 };
 use std::{
 	borrow::Cow,
+	num::NonZeroU32,
 	ops::Add,
 };
 
@@ -58,19 +59,6 @@ impl Add for TrackQuality {
 	}
 }
 
-impl From<usize> for TrackQuality {
-	fn from(src: usize) -> Self {
-		Self {
-			bad: u32::try_from(src.max(1)).unwrap_or(1),
-			maybe: 0,
-			likely: 0,
-			confirmed: 0,
-			contentious: 0,
-			confused: false,
-		}
-	}
-}
-
 impl TrackQuality {
 	/// # From Slice.
 	///
@@ -99,7 +87,7 @@ impl TrackQuality {
 		for v in src {
 			match v {
 				RipSample::Tbd | RipSample::Bad(_) => { bad += 1; },
-				RipSample::Confirmed(_) => { confirmed += 1; },
+				RipSample::Lead => { confirmed += 1; },
 				RipSample::Maybe(_) => {
 					if v.is_likely(rereads) { likely += 1; }
 					else { maybe += 1; }
@@ -114,14 +102,37 @@ impl TrackQuality {
 
 		Self { bad, maybe, likely, confirmed, contentious, confused }
 	}
+
+	/// # New Bad.
+	///
+	/// Mark num samples as bad.
+	pub(super) const fn new_bad(num: NonZeroU32) -> Self {
+		Self {
+			bad: num.get(),
+			maybe: 0,
+			likely: 0,
+			confirmed: 0,
+			contentious: 0,
+			confused: false,
+		}
+	}
+
+	/// # New Confirmed.
+	///
+	/// Mark num samples as confirmed.
+	pub(super) const fn new_confirmed(num: NonZeroU32) -> Self {
+		Self {
+			bad: 0,
+			maybe: 0,
+			likely: 0,
+			confirmed: num.get(),
+			contentious: 0,
+			confused: false,
+		}
+	}
 }
 
 impl TrackQuality {
-	/*
-	/// # Bad.
-	pub(super) const fn bad(&self) -> u32 { self.bad }
-	*/
-
 	/// # Maybe.
 	pub(super) const fn maybe(&self) -> u32 { self.maybe }
 
@@ -131,33 +142,27 @@ impl TrackQuality {
 	/// # Confirmed.
 	pub(super) const fn confirmed(&self) -> u32 { self.confirmed }
 
-	/*
-	/// # Is Bad?
-	pub(super) const fn is_bad(&self) -> bool {
-		self.bad() == self.total()
-	}
-	*/
-
 	/// # Is Likely/Confirmed?
 	pub(super) const fn is_likely(&self) -> bool {
-		self.likely() + self.confirmed() == self.total()
+		self.likely() + self.confirmed() == self.total().get()
 	}
 
 	/// # Is Confirmed?
 	pub(super) const fn is_confirmed(&self) -> bool {
-		self.confirmed() == self.total()
+		self.confirmed() == self.total().get()
 	}
 
 	/// # Percent Maybe.
 	pub(super) fn percent_maybe(&self) -> Option<f64> {
 		let v = self.maybe + self.likely + self.confirmed;
+		let total = self.total().get();
 		if v == 0 { None }
-		else if v == self.total() { Some(100.0) }
+		else if v == total { Some(100.0) }
 		else {
 			Some(
 				f64::from(self.maybe + self.likely + self.confirmed)
 				* 100.0
-				/ f64::from(self.total())
+				/ f64::from(total)
 			)
 		}
 	}
@@ -165,20 +170,25 @@ impl TrackQuality {
 	/// # Percent Likely.
 	pub(super) fn percent_likely(&self) -> Option<f64> {
 		let v = self.likely + self.confirmed;
+		let total = self.total().get();
 		if v == 0 { None }
-		else if v == self.total() { Some(100.0) }
+		else if v == total { Some(100.0) }
 		else {
 			Some(
 				f64::from(self.likely + self.confirmed)
 				* 100.0
-				/ f64::from(self.total())
+				/ f64::from(total)
 			)
 		}
 	}
 
 	/// # Total.
-	pub(super) const fn total(&self) -> u32 {
-		self.bad + self.maybe + self.likely + self.confirmed
+	pub(super) const fn total(&self) -> NonZeroU32 {
+		if let Some(total) = NonZeroU32::new(self.bad + self.maybe + self.likely + self.confirmed) {
+			total
+		}
+		// This should never happen.
+		else { NonZeroU32::MIN }
 	}
 }
 
@@ -202,7 +212,7 @@ impl TrackQuality {
 	/// Return a pretty bar representing the different states in relative
 	/// proportion.
 	pub(super) fn bar(&self) -> String {
-		let q_total = self.total();
+		let q_total = self.total().get();
 		let b_len = QUALITY_BAR.len() as f64;
 		let mut b_total = 0;
 		let mut b_max = 0;
