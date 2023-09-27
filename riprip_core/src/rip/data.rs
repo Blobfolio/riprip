@@ -9,7 +9,6 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
-	ReadOffset,
 	RipOptions,
 	RipRipError,
 	RipSample,
@@ -40,7 +39,10 @@ use std::{
 	ops::Range,
 	path::PathBuf,
 };
-use super::TrackQuality;
+use super::{
+	OffsetRipIter,
+	TrackQuality,
+};
 
 
 
@@ -352,37 +354,57 @@ impl RipState {
 		let end = self.data.len() - usize::from(SAMPLE_OVERREAD);
 		start..end
 	}
-
-	/// # Sample to Inner Index.
-	///
-	/// Return the index in `self.data` corresponding to a particular sample
-	/// number (relative to the start of the disc).
-	///
-	/// If for some reason the sample is out of range, `None` is returned.
-	fn sample_to_inner_index(&self, sample: i32) -> Option<usize> {
-		if self.rip_rng.contains(&sample) {
-			Some(usize::saturating_from(sample - self.rip_rng.start))
-		}
-		else { None }
-	}
 }
 
 impl RipState {
-	/// # Mutable Offset Sector.
+	/// # Offset Rip Iterator.
 	///
-	/// Return the mutable data corresponding to LSN at the provided offset,
-	/// or an empty slice if the result is out of range.
-	pub(crate) fn offset_sector_mut(&mut self, lsn: i32, offset: ReadOffset)
-	-> Result<&mut [RipSample], RipRipError> {
-		let start = lsn * i32::from(SAMPLES_PER_SECTOR) - i32::from(offset.samples());
-		if let Some(start) = self.sample_to_inner_index(start) {
-			let end = start + usize::from(SAMPLES_PER_SECTOR);
-			if end <= self.data.len() {
-				return Ok(&mut self.data[start..end]);
-			}
+	/// Return an offset-aware iterator of the sector LSNs to read from, and
+	/// the mutable slices to write the responses back to.
+	///
+	/// ## Errors.
+	///
+	/// This will return an error if there's a bug in the programming, but that
+	/// shouldn't happen. ;)
+	pub(super) fn offset_rip_iter(&mut self, opts: &RipOptions)
+	-> Result<OffsetRipIter, RipRipError> {
+		// Let's start with the read parts.
+		let sector_range = self.sector_rip_range();
+		let mut lsn_start = sector_range.start;
+		let mut lsn_end = sector_range.end;
+		let offset = opts.offset();
+		let sectors_abs = i32::from(offset.sectors_abs());
+
+		// Negative offsets require the data be pushed forward to "start" at
+		// the right place, so we can't read the very end.
+		if offset.is_negative() { lsn_end -= sectors_abs; }
+		// Positive offsets require data be pulled backward instead, so we have
+		// to skip the very beginning.
+		else { lsn_start += sectors_abs; }
+
+		// Now let's figure out where to slice from. Convert the start to
+		// samples, subtract the offset (which may be negative), then subtract
+		// the first sample in the full range to get the relative slice index.
+		let idx_start = usize::try_from(
+			lsn_start * i32::from(SAMPLES_PER_SECTOR)
+				- i32::from(offset.samples())
+				- self.rip_rng.start
+		)
+			.map_err(|_| RipRipError::Bug("Invalid OffsetRipIter starting index."))?;
+
+		// The end is easier; just convert the lsn range to samples and add it
+		// to our start.
+		let idx_end = idx_start + (lsn_start..lsn_end).len()
+			* usize::from(SAMPLES_PER_SECTOR);
+		if self.data.len() < idx_end {
+			return Err(RipRipError::Bug("Invalid OffsetRipIter ending index."));
 		}
 
-		Err(RipRipError::Bug("Offset sample out of range!"))
+		OffsetRipIter::new(
+			lsn_start..lsn_end,
+			&mut self.data[idx_start..idx_end],
+			opts.backwards(),
+		)
 	}
 
 	/// # Full Rip Slice.

@@ -21,7 +21,6 @@ use crate::{
 	Disc,
 	KillSwitch,
 	LibcdioInstance,
-	ReadOffset,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -37,13 +36,12 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
-use iter::ReadIter;
+use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
 use std::{
 	collections::BTreeMap,
 	num::NonZeroU32,
-	ops::Range,
 	path::PathBuf,
 	time::Instant,
 };
@@ -411,13 +409,8 @@ impl RipEntry {
 		let mut any_read = false;
 		let before = state.quick_hash();
 		let rip_rng = state.sector_rip_range();
-		let lsn_start = rip_rng.start;
-		let dst_rng = rip_distance_iter(&rip_rng, opts.offset(), opts.backwards());
 
-		for k in dst_rng {
-			let read_lsn = lsn_start + k;
-			let sector = state.offset_sector_mut(read_lsn, opts.offset())?;
-
+		for (read_lsn, sector) in state.offset_rip_iter(opts)? {
 			// We can skip this block if the user aborted or there's
 			// nothing to refine.
 			if
@@ -686,26 +679,6 @@ const fn max_confidence(ar: Option<(u8, u8)>, ctdb: Option<u16>) -> u8 {
 	}
 
 	max
-}
-
-/// # Rip Distance Iter.
-///
-/// Depending on the read offset, some of the edgiest padding regions may not
-/// be readable and/or writable. This returns an iterator of safe distances
-/// from the starting LSN where both can happen.
-fn rip_distance_iter(rng: &Range<i32>, offset: ReadOffset, backwards: bool)
--> ReadIter {
-	let mut rng_start: i32 = 0;
-	let mut rng_end: i32 = rng.end - rng.start;
-	let sectors_abs = i32::from(offset.sectors_abs());
-
-	// Negative offsets require the data be pushed forward to "start"
-	// at the right place.
-	if offset.is_negative() { rng_end -= sectors_abs; }
-	// Positive offsets require the data be pulled backward instead.
-	else { rng_start += sectors_abs; }
-
-	ReadIter::new(rng_start, rng_end, backwards)
 }
 
 /// # Set Progress Title.
