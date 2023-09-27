@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.1.3
-    Generated: 2023-09-23 06:19:39 UTC
+    Version:   0.1.4
+    Generated: 2023-09-27 04:10:16 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -19,11 +19,11 @@
 | [dactyl](https://github.com/Blobfolio/dactyl) | 0.5.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [digest](https://github.com/RustCrypto/traits) | 0.10.7 | RustCrypto Developers | Apache-2.0 or MIT |
 | [faster-hex](https://github.com/NervosFoundation/faster-hex) | 0.8.1 | [zhangsoledad](mailto:787953403@qq.com) | MIT |
-| [fastrand](https://github.com/smol-rs/fastrand) | 2.0.0 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 or MIT |
+| [fastrand](https://github.com/smol-rs/fastrand) | 2.0.1 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 or MIT |
 | [form_urlencoded](https://github.com/servo/rust-url) | 1.2.0 | The rust-url developers | Apache-2.0 or MIT |
 | [fyi_msg](https://github.com/Blobfolio/fyi) | 0.11.5 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [generic-array](https://github.com/fizyk20/generic-array.git) | 0.14.7 | [Bartłomiej Kamiński](mailto:fizyk20@gmail.com) and [Aaron Trent](mailto:novacrazy@gmail.com) | MIT |
-| [hound](https://github.com/ruuda/hound) | 3.5.0 | [Ruud van Asseldonk](mailto:dev@veniogames.com) | Apache-2.0 |
+| [hound](https://github.com/ruuda/hound) | 3.5.1 | [Ruud van Asseldonk](mailto:dev@veniogames.com) | Apache-2.0 |
 | [idna](https://github.com/servo/rust-url/) | 0.4.0 | The rust-url developers | Apache-2.0 or MIT |
 | [itoa](https://github.com/dtolnay/itoa) | 1.0.9 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [libc](https://github.com/rust-lang/libc) | 0.2.148 | The Rust Project Developers | Apache-2.0 or MIT |
@@ -35,7 +35,7 @@
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.67 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.33 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.4 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [serde](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [serde_derive](https://github.com/serde-rs/serde) | 1.0.188 | [Erick Tryzelaar](mailto:erick.tryzelaar@gmail.com) and [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | Apache-2.0 or MIT |
