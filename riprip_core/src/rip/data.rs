@@ -459,11 +459,11 @@ impl RipState {
 	///
 	/// Hash the contents of the ripped data. This provides an easy metric for
 	/// comparison to e.g. determine if anything changed between runs.
-	pub(crate) fn quick_hash(&self) -> u64 {
-		use std::hash::{BuildHasher, Hash, Hasher};
-		let mut hasher = crate::AHASHER.build_hasher();
+	pub(crate) fn quick_hash(&self) -> u32 {
+		use std::hash::Hash;
+		let mut hasher = crc32fast::Hasher::new();
 		self.data.hash(&mut hasher);
-		hasher.finish()
+		hasher.finalize()
 	}
 }
 

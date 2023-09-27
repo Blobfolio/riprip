@@ -173,9 +173,6 @@ const CD_DATA_SUBCHANNEL_SIZE: u16 = CD_DATA_SIZE + CD_SUBCHANNEL_SIZE;
 // Misc
 // ---------------
 
-/// # Static Hasher.
-const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(13, 19, 23, 71);
-
 /// # Number of lead-in sectors.
 ///
 /// All discs have a 2-second region at the start before any data. Different
