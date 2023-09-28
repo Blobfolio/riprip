@@ -17,7 +17,6 @@ use cdtoc::{
 	Track,
 };
 use crate::{
-	CD_LEADIN,
 	chk_accuraterip,
 	chk_ctdb,
 	Disc,
@@ -598,7 +597,7 @@ impl<'a> RipShare<'a> {
 		Self {
 			buf: RipBuffer::new(),
 			log: RipLog::new(),
-			leadout: disc.toc().audio_leadout() as i32 - CD_LEADIN as i32,
+			leadout: disc.toc().audio_leadout_normalized() as i32,
 			pass: 0,
 			pass_reads: 0,
 			force_bust: false,

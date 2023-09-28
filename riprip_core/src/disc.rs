@@ -10,7 +10,6 @@ use crate::{
 	Barcode,
 	cache_prefix,
 	CacheWriter,
-	CD_LEADIN,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
 	COLOR_BAD,
@@ -102,7 +101,7 @@ impl fmt::Display for Disc {
 			writeln!(
 				f,
 				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
-				self.toc.data_sector().unwrap_or_default().saturating_sub(u32::from(CD_LEADIN))
+				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
 		}
 
@@ -127,7 +126,7 @@ impl fmt::Display for Disc {
 			writeln!(
 				f,
 				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
-				self.toc.data_sector().unwrap_or_default().saturating_sub(u32::from(CD_LEADIN))
+				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
 		}
 
@@ -135,7 +134,7 @@ impl fmt::Display for Disc {
 		writeln!(
 			f,
 			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                      LEAD-OUT",
-			self.toc.leadout().saturating_sub(u32::from(CD_LEADIN)),
+			self.toc.leadout_normalized(),
 		)?;
 
 		// Close it off!

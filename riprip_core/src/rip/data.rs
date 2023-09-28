@@ -9,7 +9,6 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
-	CD_LEADIN,
 	RipOptions,
 	RipRipError,
 	RipSample,
@@ -108,11 +107,9 @@ impl RipState {
 
 		// The leadout needs to fit i32 in various places, so let's check for
 		// that now too.
-		let mut leadin = i32::try_from(toc.audio_leadin()).ok()
-			.and_then(|n| n.checked_sub(i32::from(CD_LEADIN)))
+		let mut leadin = i32::try_from(toc.audio_leadin_normalized()).ok()
 			.ok_or(RipRipError::RipOverflow)?;
-		let mut leadout = i32::try_from(toc.audio_leadout()).ok()
-			.and_then(|n| n.checked_sub(i32::from(CD_LEADIN)))
+		let mut leadout = i32::try_from(toc.audio_leadout_normalized()).ok()
 			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
 			.ok_or(RipRipError::RipOverflow)?;
 
