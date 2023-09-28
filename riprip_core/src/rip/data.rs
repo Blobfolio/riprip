@@ -201,11 +201,9 @@ impl RipState {
 				.ok_or(RipRipError::RipOverflow)?;
 		}
 
-		// If only there were a ::try_with_capacity()!
+		// Get the data started.
 		let mut data = Vec::new();
-		data.try_reserve(len).map_err(|_| RipRipError::RipOverflow)?;
-
-		// Prepopulate the entries for each .
+		data.try_reserve_exact(len).map_err(|_| RipRipError::RipOverflow)?;
 		for v in rip_rng.clone() {
 			if v < leadin || leadout <= v { data.push(RipSample::Lead); }
 			else { data.push(RipSample::Tbd); }
