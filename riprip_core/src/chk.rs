@@ -217,9 +217,11 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	// be dynamically resliced, but everything else (the middle) can be
 	// immediately crunched into a CRC32 since it will always be present at any
 	// offset.
-	let mut start = Vec::with_capacity(prefix * usize::from(BYTES_PER_SAMPLE));
+	let mut start = Vec::new();
+	start.reserve_exact(prefix * usize::from(BYTES_PER_SAMPLE));
 	let mut middle = Crc::new();
-	let mut end = Vec::with_capacity(suffix * usize::from(BYTES_PER_SAMPLE));
+	let mut end = Vec::new();
+	end.reserve_exact(suffix * usize::from(BYTES_PER_SAMPLE));
 	let end_starts = data.len() - suffix;
 	for (k, sample) in data.iter().enumerate() {
 		if k < prefix { start.extend_from_slice(sample.as_slice()); }

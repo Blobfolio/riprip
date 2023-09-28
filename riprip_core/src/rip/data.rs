@@ -20,17 +20,7 @@ use crate::{
 };
 use dactyl::traits::SaturatingFrom;
 use hound::WavWriter;
-use serde::{
-	de,
-	Deserialize,
-	ser::{
-		self,
-		SerializeStruct,
-	},
-	Serialize,
-};
 use std::{
-	fmt,
 	fs::File,
 	io::{
 		BufReader,
@@ -40,13 +30,14 @@ use std::{
 	path::PathBuf,
 };
 use super::{
+	DeSerialize,
 	OffsetRipIter,
 	TrackQuality,
 };
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 /// # The State Data.
 ///
 /// Because optical drives cannot be trusted to accurately account for the data
@@ -66,76 +57,11 @@ use super::{
 /// This structure gets saved to disk _en masse_ in a zstd-compressed binary
 /// format after each rip pass so operations can be resumed at a later date.
 pub(crate) struct RipState {
-	toc: Toc,
-	track: Track,
-	rip_rng: Range<i32>,
-	data: Vec<RipSample>,
-	new: bool,
-}
-
-impl<'de> Deserialize<'de> for RipState {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where D: de::Deserializer<'de> {
-		const FIELDS: &[&str] = &["toc", "track", "data"];
-		struct RipStateVisitor;
-
-		impl<'de> de::Visitor<'de> for RipStateVisitor {
-			type Value = RipState;
-
-			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-				formatter.write_str("struct RipState")
-			}
-
-			// Bincode is sequence-driven, so this is all we need.
-			fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
-            where V: de::SeqAccess<'de> {
-				let toc: Toc = seq.next_element()?
-					.ok_or_else(|| de::Error::invalid_length(0, &self))?;
-
-				// The track is stored by index number only; we need to fetch
-				// the corresponding object from the TOC.
-				let track = seq.next_element()?
-					.and_then(|n: u8|
-						if n == 0 { toc.htoa() }
-						else { toc.audio_track(usize::from(n)) }
-					)
-					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
-
-				// The rip_rng is derived from the track.
-				let rip_rng = track_rng_to_rip_range(track)
-					.ok_or_else(|| de::Error::invalid_length(1, &self))?;
-
-				// The data is a straightforward vec, but we need to check its
-				// length covers the full rip range.
-				let data = seq.next_element()?
-					.filter(|d: &Vec<RipSample>| d.len() == rip_rng.len())
-					.ok_or_else(|| de::Error::invalid_length(2, &self))?;
-
-				Ok(RipState {
-					toc,
-					track,
-					rip_rng,
-					data,
-					new: false,
-				})
-            }
-		}
-
-		deserializer.deserialize_struct("RipState", FIELDS, RipStateVisitor)
-	}
-}
-
-impl Serialize for RipState {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where S: ser::Serializer {
-		let mut state = serializer.serialize_struct("RipState", 3)?;
-
-		state.serialize_field("toc", &self.toc)?;
-		state.serialize_field("track", &self.track.number())?;
-		state.serialize_field("data", &self.data)?;
-
-		state.end()
-	}
+	pub(super) toc: Toc,
+	pub(super) track: Track,
+	pub(super) rip_rng: Range<i32>,
+	pub(super) data: Vec<RipSample>,
+	pub(super) new: bool,
 }
 
 impl RipState {
@@ -181,17 +107,28 @@ impl RipState {
 
 		// The leadout needs to fit i32 in various places, so let's check for
 		// that now too.
-		let leadout = i32::try_from(toc.audio_leadout()).ok()
+		let mut leadin = i32::try_from(toc.audio_leadin_normalized()).ok()
+			.ok_or(RipRipError::RipOverflow)?;
+		let mut leadout = i32::try_from(toc.audio_leadout_normalized()).ok()
 			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
 			.ok_or(RipRipError::RipOverflow)?;
 
-		// If only there were a ::try_with_capacity()!
-		let mut data = Vec::new();
-		data.try_reserve(len).map_err(|_| RipRipError::RipOverflow)?;
+		// Adjust the leadin/out for the read offset.
+		let offset = opts.offset();
+		if track.position().is_first() && offset.is_negative() {
+			leadin = leadin.checked_add(i32::from(offset.samples_abs()))
+				.ok_or(RipRipError::RipOverflow)?;
+		}
+		else if track.position().is_last() && ! offset.is_negative() {
+			leadout = leadout.checked_sub(i32::from(offset.samples_abs()))
+				.ok_or(RipRipError::RipOverflow)?;
+		}
 
-		// Prepopulate the entries for each .
+		// Get the data started.
+		let mut data = Vec::new();
+		data.try_reserve_exact(len).map_err(|_| RipRipError::RipOverflow)?;
 		for v in rip_rng.clone() {
-			if v < 0 || leadout <= v { data.push(RipSample::Lead); }
+			if v < leadin || leadout <= v { data.push(RipSample::Lead); }
 			else { data.push(RipSample::Tbd); }
 		}
 
@@ -222,7 +159,10 @@ impl RipState {
 		if let Ok(file) = File::open(src) {
 			// Read -> decompress -> deserialize.
 			let mut out: Self = zstd::stream::Decoder::new(file).ok()
-				.and_then(|dec| bincode::deserialize_from(BufReader::new(dec)).ok())
+				.and_then(|dec| {
+					let mut dec = BufReader::new(dec);
+					Self::deserialize_from(&mut dec)
+				})
 				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
 
 			// Return the instance if it matches the info we're expecting.
@@ -266,11 +206,6 @@ impl RipState {
 	///
 	/// This will bubble up any errors encountered along the way.
 	pub(crate) fn save_state(&self) -> Result<(), RipRipError> {
-		use bincode::{
-			DefaultOptions,
-			Options,
-		};
-
 		// The destination path.
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
@@ -279,15 +214,13 @@ impl RipState {
 		let mut writer = CacheWriter::new(&dst)?;
 		zstd::stream::Encoder::new(writer.writer(), 0).ok()
 			.and_then(|mut enc| {
-				// The serializer.
-				let bc = DefaultOptions::new().with_fixint_encoding();
-
 				// Enable long distance matching.
 				let _res = enc.long_distance_matching(true);
 
 				// Let zstd know how much data to expect.
-				let _res = bc.serialized_size(self).ok()
-        			.and_then(|n| enc.set_pledged_src_size(Some(n)).ok())
+				let _res = u64::try_from(self.serialized_len())
+					.ok()
+					.and_then(|n| enc.set_pledged_src_size(Some(n)).ok())
         			.and_then(|_| enc.include_contentsize(true).ok());
 
 				// Parallelize the encoding if possible.
@@ -295,9 +228,13 @@ impl RipState {
 					.and_then(|n| u32::try_from(n.get()).ok())
 					.and_then(|par| enc.multithread(par).ok());
 
-				// Push the compressor into a BufWriter to make bincode's
-				// chunking more efficient. Both writers flush on drop.
-				bc.serialize_into(BufWriter::new(enc.auto_finish()), self).ok()
+				// Push the compressor into a BufWriter to make the chunking
+				// more efficient. Both writers flush on drop.
+				let mut enc = BufWriter::with_capacity(
+					zstd::stream::Encoder::<File>::recommended_input_size(),
+					enc.auto_finish(),
+				);
+				self.serialize_into(&mut enc)
 			})
 			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
 
@@ -434,9 +371,9 @@ impl RipState {
 	///
 	/// Add up the bad, maybe, likely, and confirmed samples within the track
 	/// range.
-	pub(super) fn track_quality(&self, rereads: (u8, u8)) -> TrackQuality {
+	pub(super) fn track_quality(&self, opts: &RipOptions) -> TrackQuality {
 		let slice = self.track_slice();
-		TrackQuality::new(slice, rereads)
+		TrackQuality::new(slice, opts.rereads())
 	}
 
 	/// # Track Slice.
@@ -459,18 +396,18 @@ impl RipState {
 	///
 	/// Hash the contents of the ripped data. This provides an easy metric for
 	/// comparison to e.g. determine if anything changed between runs.
-	pub(crate) fn quick_hash(&self) -> u64 {
-		use std::hash::{BuildHasher, Hash, Hasher};
-		let mut hasher = crate::AHASHER.build_hasher();
+	pub(crate) fn quick_hash(&self) -> u32 {
+		use std::hash::Hash;
+		let mut hasher = crc32fast::Hasher::new();
 		self.data.hash(&mut hasher);
-		hasher.finish()
+		hasher.finalize()
 	}
 }
 
 
 
 /// # Track Range to Rip Range.
-fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
+pub(super) fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
 	let rng = track.sector_range_normalized();
 	let rng =
 		i32::try_from(rng.start).ok()

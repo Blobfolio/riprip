@@ -6,15 +6,11 @@ use crate::{
 	NULL_SAMPLE,
 	Sample,
 };
-use serde::{
-	Deserialize,
-	Serialize,
-};
 use std::cmp::Ordering;
 
 
 
-#[derive(Debug, Clone, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
 /// # Rip Sample.
 ///
 /// This enum combines sample value(s) and their statuses.
@@ -167,7 +163,7 @@ impl RipSample {
 
 
 
-#[derive(Debug, Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 /// # Contentious Rip Sample.
 ///
 /// This structure holds up to 3 sample values sorted by popularity and age.
