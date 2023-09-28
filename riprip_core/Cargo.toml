@@ -11,7 +11,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-bincode = "1.3.3"
+cdtoc = "0.2.*"
 crc32fast = "1.3.2"
 dactyl = "0.5.*"
 hound = "3.5.0"
@@ -23,10 +23,6 @@ utc2k = "0.6.*"
 version = "0.6.*"
 optional = true
 
-[dependencies.cdtoc]
-version = "0.2.*"
-features = [ "serde" ]
-
 [dependencies.fyi_msg]
 version = "0.11.*"
 features = [ "progress" ]
@@ -36,15 +32,11 @@ version = "=0.5.0"
 default-features = false
 features = [ "cdio" ]
 
-[dependencies.serde]
-version = "1.0.*"
-features = [ "derive" ]
-
 [dependencies.ureq]
 version = "2.7.0"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
-# reason so we don't need any ureq features at all.
+# reason so we don't need any ureq features at all!
 
 [dependencies.zstd]
 version="0.12.*"

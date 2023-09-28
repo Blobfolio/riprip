@@ -9,6 +9,7 @@ mod log;
 pub(super) mod opts;
 mod quality;
 pub(super) mod sample;
+mod serial;
 
 
 use cdtoc::{
@@ -40,6 +41,7 @@ use fyi_msg::{
 use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
+use serial::DeSerialize;
 use std::{
 	collections::BTreeMap,
 	num::NonZeroU32,
@@ -363,7 +365,7 @@ impl RipEntry {
 					dst.replace(state.save_track()?);
 				}
 				else {
-					let tmp = state.track_quality(opts.rereads());
+					let tmp = state.track_quality(opts);
 					quality = (tmp, tmp);
 				}
 			}
@@ -491,7 +493,7 @@ impl RipEntry {
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
-		self.quality.1 = state.track_quality(opts.rereads());
+		self.quality.1 = state.track_quality(opts);
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
 			self.verify(state, opts, share.progress);
 		}
