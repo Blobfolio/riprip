@@ -9,6 +9,7 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
+	CD_LEADIN,
 	RipOptions,
 	RipRipError,
 	RipSample,
@@ -181,9 +182,24 @@ impl RipState {
 
 		// The leadout needs to fit i32 in various places, so let's check for
 		// that now too.
-		let leadout = i32::try_from(toc.audio_leadout()).ok()
+		let mut leadin = i32::try_from(toc.audio_leadin()).ok()
+			.and_then(|n| n.checked_sub(i32::from(CD_LEADIN)))
+			.ok_or(RipRipError::RipOverflow)?;
+		let mut leadout = i32::try_from(toc.audio_leadout()).ok()
+			.and_then(|n| n.checked_sub(i32::from(CD_LEADIN)))
 			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
 			.ok_or(RipRipError::RipOverflow)?;
+
+		// Adjust the leadin/out for the read offset.
+		let offset = opts.offset();
+		if track.position().is_first() && offset.is_negative() {
+			leadin = leadin.checked_add(i32::from(offset.samples_abs()))
+				.ok_or(RipRipError::RipOverflow)?;
+		}
+		else if track.position().is_last() && ! offset.is_negative() {
+			leadout = leadout.checked_sub(i32::from(offset.samples_abs()))
+				.ok_or(RipRipError::RipOverflow)?;
+		}
 
 		// If only there were a ::try_with_capacity()!
 		let mut data = Vec::new();
@@ -191,7 +207,7 @@ impl RipState {
 
 		// Prepopulate the entries for each .
 		for v in rip_rng.clone() {
-			if v < 0 || leadout <= v { data.push(RipSample::Lead); }
+			if v < leadin || leadout <= v { data.push(RipSample::Lead); }
 			else { data.push(RipSample::Tbd); }
 		}
 
