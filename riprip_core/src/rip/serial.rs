@@ -394,9 +394,9 @@ mod test {
 	use crate::RipOptions;
 	use std::io::Cursor;
 
-	const SAMPLE1: Sample = [1, 1, 1, 1];
-	const SAMPLE2: Sample = [2, 2, 2, 2];
-	const SAMPLE3: Sample = [3, 3, 3, 3];
+	const SAMPLE1: Sample = [1, 2, 3, 4];
+	const SAMPLE2: Sample = [5, 6, 7, 8];
+	const SAMPLE3: Sample = [9, 10, 11, 12];
 
 	#[test]
 	fn t_deserial_ripsample() {
