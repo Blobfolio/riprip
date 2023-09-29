@@ -2,29 +2,18 @@
 # Rip Rip Hooray: De/Serialization
 */
 
-use cdtoc::Toc;
 use crate::{
 	NULL_SAMPLE,
 	RipSample,
 	Sample,
 };
-use super::{
-	RipState,
-	sample::ContentiousSample,
-};
+use super::sample::ContentiousSample;
 use std::io::{
 	Read,
 	Write,
 };
 
 
-
-/// # Magic Bytes.
-///
-/// This is used to identify `RipState` files, as well as the format "version"
-/// used at the time of their construction, making sure we don't waste time
-/// trying to shove bytes into the wrong format.
-const MAGIC: [u8; 8] = *b"RRip0001";
 
 /// # Size of Sample.
 const SIZE_SAMPLE: usize = std::mem::size_of::<Sample>();
@@ -35,9 +24,6 @@ const SIZE_SAMPLE_COUNT: usize = SIZE_SAMPLE + SIZE_U8;
 /// # Size Of u8.
 const SIZE_U8: usize = std::mem::size_of::<u8>();
 
-/// # Size Of u32.
-const SIZE_U32: usize = std::mem::size_of::<u32>();
-
 /// # Sample + Count Pair.
 type SampleCount = (Sample, u8);
 
@@ -47,11 +33,8 @@ type SampleCount = (Sample, u8);
 ///
 /// This trait is used for basic binary de/serialization support. All
 /// implementations ultimately serve to allow the `RipState` struct to be
-/// saved to and reloaded from disk.
-///
-/// This is used instead of `serde`/`bincode` primarily for quality-control
-/// reasons. We want to provide some basic sanity protections against changes
-/// in formatting, byte drift, etc.
+/// saved to and reloaded from disk, though `RipState` itself doesn't
+/// implement this trait.
 ///
 /// All operations are `Read`/`Write`-based to allow for flexible chaining.
 pub(super) trait DeSerialize: Sized {
@@ -204,73 +187,6 @@ impl DeSerialize for RipSample {
 	}
 }
 
-impl DeSerialize for RipState {
-	/// # Deserialize From Reader.
-	fn deserialize_from<R: Read>(r: &mut R) -> Option<Self> {
-		// Magic header.
-		let mut buf = [0u8; MAGIC.len()];
-		r.read_exact(&mut buf).ok()?;
-		if buf != MAGIC { return None; }
-
-		// CRC. We'll check this out later.
-		let hash = u32::deserialize_from(r)?;
-
-		// The TOC.
-		let toc = Toc::deserialize_from(r)?;
-
-		// The track.
-		let track = u8::deserialize_from(r)?;
-		let track =
-			if track == 0 { toc.htoa()? }
-			else { toc.audio_track(usize::from(track))? };
-
-		// Derive the rip range.
-		let rip_rng = super::data::track_rng_to_rip_range(track)?;
-
-		// The data should match the range count.
-		let len = rip_rng.len();
-		let mut data = Vec::new();
-		data.try_reserve_exact(len).ok()?;
-		for _ in 0..len {
-			let v = RipSample::deserialize_from(r)?;
-			data.push(v);
-		}
-
-		// Put it together.
-		let out = Self {
-			toc, track, rip_rng, data,
-			new: false,
-		};
-
-		// Check that hash from earlier, and return it if good.
-		if out.quick_hash() == hash { Some(out) }
-		else { None }
-	}
-
-	/// # Serialized Length.
-	fn serialized_len(&self) -> usize {
-		MAGIC.len() +                 // Magic bytes.
-		SIZE_U32 +                    // CRC32 rip slice hash.
-		self.toc().serialized_len() + // Table of Contents.
-		SIZE_U8 +                     // Track number.
-		self.rip_slice()              // All the data.
-			.iter()
-			.fold(0_usize, |acc, v| acc.saturating_add(v.serialized_len()))
-	}
-
-	/// # Serialize Into Writer.
-	fn serialize_into<W: Write>(&self, w: &mut W) -> Option<()> {
-		w.write_all(MAGIC.as_slice()).ok()?;
-		self.quick_hash().serialize_into(w)?;
-		self.toc().serialize_into(w)?;
-		self.track().number().serialize_into(w)?;
-		for v in self.rip_slice() {
-			v.serialize_into(w)?;
-		}
-		Some(())
-	}
-}
-
 impl DeSerialize for Sample {
 	/// # Deserialize From Reader.
 	fn deserialize_from<R: Read>(r: &mut R) -> Option<Self> {
@@ -308,52 +224,6 @@ impl DeSerialize for SampleCount {
 			self.0[0], self.0[1], self.0[2], self.0[3],
 			self.1,
 		]).ok()
-	}
-}
-
-impl DeSerialize for Toc {
-	/// # Deserialize From Reader.
-	fn deserialize_from<R: Read>(r: &mut R) -> Option<Self> {
-		// Read the audio parts.
-		let audio_len = u8::deserialize_from(r)?;
-		if audio_len == 0 || 99 < audio_len { return None; }
-		let mut audio: Vec<u32> = Vec::new();
-		audio.reserve_exact(usize::from(audio_len));
-		for _ in 0..audio_len {
-			let v = u32::deserialize_from(r)?;
-			audio.push(v);
-		}
-
-		// Read the data part.
-		let data = Option::<u32>::deserialize_from(r)?;
-
-		// Leadout.
-		let leadout = u32::deserialize_from(r)?;
-
-		// Put it all together!
-		Self::from_parts(audio, data, leadout).ok()
-	}
-
-	/// # Serialized Length.
-	fn serialized_len(&self) -> usize {
-		SIZE_U8                               // Number of audio tracks.
-		+ self.audio_len() * SIZE_U32         // Starting sector for each audio track.
-		+ self.data_sector().serialized_len() // Data starting sector, if any.
-		+ SIZE_U32                            // Leadout sector.
-	}
-
-	/// # Serialize Into Writer.
-	fn serialize_into<W: Write>(&self, w: &mut W) -> Option<()> {
-		// Audio first: length, each value.
-		let audio = self.audio_sectors();
-		u8::try_from(audio.len()).ok()?.serialize_into(w)?;
-		for a in audio { a.serialize_into(w)?; }
-
-		// Then data.
-		self.data_sector().serialize_into(w)?;
-
-		// And finally the leadout.
-		self.leadout().serialize_into(w)
 	}
 }
 
