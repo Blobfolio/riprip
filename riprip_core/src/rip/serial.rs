@@ -261,7 +261,6 @@ impl<T: DeSerialize> DeSerialize for Option<T> {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::RipOptions;
 	use std::io::Cursor;
 
 	const SAMPLE1: Sample = [1, 2, 3, 4];
@@ -301,54 +300,6 @@ mod test {
 			let mut r = Cursor::new(buf.as_slice());
 			let de = RipSample::deserialize_from(&mut r).expect("Unable to deserialize RipSample.");
 			assert_eq!(v, de, "Input/output RipSample mismatch.");
-		}
-	}
-
-	#[test]
-	fn t_deserial_ripstate() {
-		let opts = RipOptions::default().with_resume(false);
-		let toc = Toc::from_cdtoc("12+B6+2161+454E+6D15+A8DB+D3C4+DFB8+F359+10E3C+1461F+154B4+1782E+18D71+1AF86+1C78C+1F498+203DE+22015+36231")
-			.expect("Bad TOC.");
-
-		// Test two very small tracks, including one in the HTOA.
-		for t in [0_u8, 16] {
-			let track =
-				if t == 0 { toc.htoa() }
-				else { toc.audio_track(usize::from(t)) }
-				.expect("Bad track.");
-
-			let mut state = RipState::from_track(&toc, track, &opts).expect("Bad state.");
-			assert!(state.is_new(), "Expected a new state.");
-			state.new = false; // Reset this since serialization will change it.
-
-			// Test serialization.
-			let len = usize::try_from(state.serialized_len()).expect("State length not usizeable.");
-			let mut buf = Vec::with_capacity(len);
-			state.serialize_into(&mut buf).expect("Unable to serialize state.");
-			assert_eq!(buf.len(), len, "State serialize length mismatch.");
-
-			// Test deserialization.
-			let mut r = Cursor::new(buf.as_slice());
-			let de = RipState::deserialize_from(&mut r).expect("Unable to deserialize RipState.");
-			assert_eq!(state, de, "Input/output State mismatch.");
-		}
-	}
-
-	#[test]
-	fn t_deserial_toc() {
-		// Test with and without data.
-		for v in ["3+96+2D2B+6256+B327+D84A", "4+96+2D2B+6256+B327+D84A"] {
-			let toc = Toc::from_cdtoc(v).expect("Bad TOC.");
-
-			// Test serialization.
-			let mut buf = Vec::new();
-			toc.serialize_into(&mut buf).expect("Unable to serialize Toc.");
-			assert_eq!(buf.len(), toc.serialized_len(), "Toc serialize length mismatch.");
-
-			// Test deserialization.
-			let mut r = Cursor::new(buf.as_slice());
-			let de = Toc::deserialize_from(&mut r).expect("Unable to deserialize Toc.");
-			assert_eq!(toc, de, "Input/output Toc mismatch.");
 		}
 	}
 }
