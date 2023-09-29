@@ -74,7 +74,7 @@ Unlike traditional CD-rippers, Rip Rip Hooray! can't just react to data in realt
 
 This data is only needed while it's needed — you can delete the `_riprip` subfolder as soon as you've gotten what you wanted to reclaim the space — but is nonetheless hefty, generally about 1-3x the size of the original CD source.
 
-The peak memory usage of Rip Rip Hooray! is (surprisingly) comparable to some traditional CD-ripping software, albeit for completely different reasons. It will usually top out at around 1-2 GiB, but may require a little more in some cases.
+Its peak memory usage is also higher than most other CD-rippers, though it varies based on the length of the longest track being ripped. A few hundred megabytes of RAM will usually suffice, but in worst-case scenarios like the 74-minute single-track album [Delirium Cordia](https://www.allmusic.com/album/delirium-cordia-mw0000693555) by Fantômas, nearly 3GiB will be required!
 
 
 ### Expectations

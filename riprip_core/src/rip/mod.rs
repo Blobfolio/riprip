@@ -28,6 +28,7 @@ use crate::{
 	RipState,
 	SavedRips,
 	SECTOR_OVERREAD,
+	state_path,
 };
 use dactyl::{
 	NiceElapsed,
@@ -50,13 +51,10 @@ use std::{
 
 
 
-/// # Clear a Line.
-const CLS: [u8; 10] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
-
 /// # Sassy Setup Messages.
 const STANDBY: [&str; 2] = [
-	"\x1b[1mReconnoitering the rip\x1b[38;5;199m",
-	"\x1b[1mRipticulating splines\x1b[38;5;199m",
+	"Reconnoitering the rip…",
+	"Ripticulating splines…",
 ];
 
 
@@ -74,6 +72,7 @@ pub(crate) struct Ripper<'a> {
 }
 
 impl<'a> Ripper<'a> {
+	#[allow(clippy::cast_possible_truncation)]
 	/// # New!
 	///
 	/// Initialize from a disc and options.
@@ -82,50 +81,23 @@ impl<'a> Ripper<'a> {
 	/// counts up the total number of sectors being traversed, but that's it.
 	/// The real work comes later.
 	pub(crate) fn new(disc: &'a Disc, opts: &RipOptions) -> Result<Self, RipRipError> {
-		use std::io::Write;
-
 		// Build up entries for each track, prepopulating quality, etc., for
 		// existing entries. We'll also be printing a temporary message since
 		// it might take a while.
-		let tracks = {
-			let toc = disc.toc();
-			let writer = std::io::stderr();
-			let mut handle = writer.lock();
-
-			// Starter message.
-			let _res = handle.write_all(standby_msg()).and_then(|_| handle.flush());
-
-			// Loop through the tracks. We'll delay erroring until after we're
-			// outside this block.
-			let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
-			let tracks = opts.tracks()
-				.map(|idx| {
-					// Add a dot so we know something's happening.
-					let _res = handle.write_all(b".").and_then(|_| handle.flush());
-					RipEntry::new(toc, idx, padding, opts).map(|e| (idx, e))
-				})
-				.collect::<Result<BTreeMap<u8, RipEntry>, RipRipError>>();
-
-			// Clear the output.
-			let _res = handle.write_all(&CLS).and_then(|_| handle.flush());
-
-			tracks
-		}?;
+		let toc = disc.toc();
+		let padding = u32::from(SECTOR_OVERREAD) * 2 - u32::from(opts.offset().sectors_abs());
+		let tracks = opts.tracks()
+			.map(|idx| RipEntry::new(toc, idx, padding).map(|e| (idx, e)))
+			.collect::<Result<BTreeMap<u8, RipEntry>, RipRipError>>()?;
 		if tracks.is_empty() { return Err(RipRipError::Noop); }
 
 		// Last but not least, add up all the sectors to give us a total for
 		// the progress bar during ripping. (The +1 is to leave room for some
 		// title changes after the last read operation.)
 		let total = tracks.values()
-			.try_fold(0_u32, |acc, e|
-				if e.skippable() {
-					happy_track_msg(e.track).eprint();
-					Some(acc)
-				}
-				else { acc.checked_add(e.sectors) }
-			)
+			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
 			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
-			.and_then(|n| n.checked_add(1))
+			.and_then(|n| n.checked_add(1 + tracks.len() as u32))
 			.ok_or(RipRipError::RipOverflow)?;
 
 		Ok(Self {
@@ -137,6 +109,7 @@ impl<'a> Ripper<'a> {
 		})
 	}
 
+	#[allow(clippy::cast_possible_truncation)]
 	/// # Rip All Passes and Tracks!
 	///
 	/// This sets up some shared buffers, the progress bar, etc., then loops
@@ -164,21 +137,43 @@ impl<'a> Ripper<'a> {
 	/// and be returned.
 	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
 	-> Result<(), RipRipError> {
-		// Load the first non-skippable track's state, or leave early since
-		// we'd have nothing to work on!
-		let Some(first_track) = self.tracks.values()
-			.find_map(|v|
-				if v.skippable() { None }
-				else { Some(v.track) }
-			)
-			else { return Ok(()); };
+		// We should definitely have a first track, but if for some reason we
+		// don't there's nothing more to do!
+		let Some(first_track) = self.tracks.values().map(|t| t.track).next() else {
+			return Ok(());
+		};
 
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
 		let _res = progress.reset(self.total);
-		set_progress_title(progress, first_track.number(), "Initializing…");
-		let mut state = RipState::from_track(toc, first_track, &self.opts)?;
+		progress.set_title(Some(Msg::custom("Initializing", 199, standby_msg())));
+		let mut state = RipState::new(toc, first_track, &self.opts)?;
 		let mut share = RipShare::new(self.disc, progress, killed);
+
+		// Before we run through the passes, let's set up the initial quality,
+		// etc. But only if we're resuming.
+		if self.opts.resume() {
+			for entry in self.tracks.values_mut() {
+				if
+					! killed.killed() &&
+					state_path(toc, entry.track).map_or(false, |s| s.is_file())
+				{
+					state.replace(entry.track, &self.opts)?;
+					if entry.preverify(&mut state, &self.opts)? {
+						share.progress.push_msg(happy_track_msg(entry.track), true);
+						progress.increment_n(entry.sectors * u32::from(self.opts.passes()));
+					}
+				}
+
+				progress.increment();
+			}
+
+			// Disable the count-resetting option; that will have triggered
+			// during this pass if applicable.
+			self.opts = self.opts.with_reset(false);
+		}
+		// Otherwise we can skip this step.
+		else { progress.increment_n(self.tracks.len() as u32); }
 
 		// Loop each pass!
 		for pass in 1..=self.opts.passes() {
@@ -206,7 +201,7 @@ impl<'a> Ripper<'a> {
 				// Switch states if needed.
 				if state.track() != entry.track {
 					set_progress_title(progress, entry.track.number(), "Initializing…");
-					state = RipState::from_track(toc, entry.track, &self.opts)?;
+					state.replace(entry.track, &self.opts)?;
 				}
 
 				// Rip it! If the result comes back confirmed and we were
@@ -225,7 +220,7 @@ impl<'a> Ripper<'a> {
 			}
 			// After the first pass, always resume, never reset.
 			if pass == 1 {
-				self.opts = self.opts.with_resume(true).with_reset(false);
+				self.opts = self.opts.with_resume(true);
 			}
 		}
 
@@ -328,7 +323,7 @@ impl RipEntry {
 	///
 	/// This will return an error if the track is not in the TOC or the state
 	/// file exists but is corrupt.
-	fn new(toc: &Toc, idx: u8, padding: u32, opts: &RipOptions) -> Result<Self, RipRipError> {
+	fn new(toc: &Toc, idx: u8, padding: u32) -> Result<Self, RipRipError> {
 		let track =
 			if idx == 0 { toc.htoa() }
 			else { toc.audio_track(usize::from(idx)) }
@@ -340,37 +335,22 @@ impl RipEntry {
 			.and_then(|n| n.checked_add(padding))
 			.ok_or(RipRipError::RipOverflow)?;
 
-		// Set some nothing defaults.
-		let mut dst = None;
+		// Set the initial quality to bad; we'll fix this before getting
+		// started.
 		let samples = u32::try_from(track.duration().samples())
 			.ok()
 			.and_then(NonZeroU32::new)
 			.ok_or(RipRipError::RipOverflow)?;
-
 		let quality = TrackQuality::new_bad(samples);
-		let mut quality = (quality, quality);
-		let mut ar = None;
-		let mut ctdb = None;
 
-		// If we're resuming, try loading an existing state to update those
-		// defaults. If confirmed, we'll go ahead and extract the track and
-		// grab the third-party db stats too.
-		if opts.resume() {
-			if let Some(state) = RipState::from_file(toc, track, opts.reset())? {
-				(ar, ctdb) = verify_track(track, &state);
-				if opts.confidence() <= max_confidence(ar, ctdb) {
-					let tmp = TrackQuality::new_confirmed(samples);
-					quality = (tmp, tmp);
-					dst.replace(state.save_track()?);
-				}
-				else {
-					let tmp = state.track_quality(opts);
-					quality = (tmp, tmp);
-				}
-			}
-		}
-
-		Ok(Self { dst, track, sectors, quality, ar, ctdb })
+		Ok(Self {
+			dst: None,
+			track,
+			sectors,
+			quality: (quality, quality),
+			ar: None,
+			ctdb: None,
+		})
 	}
 }
 
@@ -559,6 +539,36 @@ impl RipEntry {
 		// Return the answer.
 		verified
 	}
+
+	/// # Pre-Verify Entry.
+	///
+	/// Check out the initial state of the rip before doing any new work. If
+	/// previous work was done, update the starting quality to match.
+	///
+	/// Returns `true` if the track is already confirmed w/ AccurateRip or
+	/// CUETools, `false` if not.
+	///
+	/// ## Errors
+	///
+	/// If the track is confirmed it will be exported here and now; an error
+	/// will be returned in the unlikely event that fails.
+	fn preverify(&mut self, state: &mut RipState, opts: &RipOptions)
+	-> Result<bool, RipRipError> {
+		if ! state.is_new() {
+			(self.ar, self.ctdb) = verify_track(self.track, state);
+			if opts.confidence() <= max_confidence(self.ar, self.ctdb) {
+				let tmp = TrackQuality::new_confirmed(self.quality.1.total());
+				self.quality = (tmp, tmp);
+				self.dst.replace(state.save_track()?);
+				return Ok(true);
+			}
+
+			let tmp = state.track_quality(opts);
+			self.quality = (tmp, tmp);
+		}
+
+		Ok(false)
+	}
 }
 
 
@@ -698,9 +708,9 @@ fn set_progress_title(progress: &Progless, idx: u8, msg: &str) {
 /// # Stand By Message.
 ///
 /// Pick a (reasonably) random message to display while setting up the rip.
-fn standby_msg() -> &'static [u8] {
+fn standby_msg() -> &'static str {
 	let idx = usize::try_from(utc2k::unixtime()).map_or(0, |n| n % STANDBY.len());
-	STANDBY[idx].as_bytes()
+	STANDBY[idx]
 }
 
 /// # Track Number to Bitflag.

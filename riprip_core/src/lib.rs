@@ -188,11 +188,3 @@ const CD_LEADOUT_LABEL: &str = "AA";
 ///
 /// Audio CD silence is typically literally nothing.
 const NULL_SAMPLE: Sample = [0, 0, 0, 0];
-
-/// # Wave Spec.
-const WAVE_SPEC: hound::WavSpec = hound::WavSpec {
-	channels: 2,
-	sample_rate: 44100,
-	bits_per_sample: 16,
-	sample_format: hound::SampleFormat::Int,
-};

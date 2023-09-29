@@ -4,11 +4,13 @@
 
 use cdtoc::{
 	Toc,
+	TocKind,
 	Track,
 };
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
+	ReadOffset,
 	RipOptions,
 	RipRipError,
 	RipSample,
@@ -16,10 +18,7 @@ use crate::{
 	SAMPLES_PER_SECTOR,
 	state_path,
 	track_path,
-	WAVE_SPEC,
 };
-use dactyl::traits::SaturatingFrom;
-use hound::WavWriter;
 use std::{
 	fs::File,
 	io::{
@@ -34,6 +33,40 @@ use super::{
 	OffsetRipIter,
 	TrackQuality,
 };
+
+
+
+/// # Buffer Size.
+///
+/// The buffer size to use for `BufReader`/`BufWriter` instances.
+const BUFFER_SIZE: usize = 16 * 1024;
+
+/// # Magic Bytes.
+///
+/// This is used to identify `RipState` files, as well as the format "version"
+/// used at the time of their construction, making sure we don't waste time
+/// trying to shove bytes into the wrong format.
+const MAGIC: [u8; 8] = *b"RRip0002";
+
+/// # Wave Header.
+///
+/// Every header is the same, except for two four-byte blocks specifying the
+/// file and data sizes.
+const WAVE_HEADER: [u8; 44] = [
+	82, 73, 70, 70,    // "RIFF"
+	0, 0, 0, 0,        // Total file size, minus RIFF and these four bytes
+	87, 65, 86, 69,    // "WAVE"
+	102, 109, 116, 32, // "fmt "
+	16, 0, 0, 0,       // 16: length of the above.
+	1, 0,              // 1: PCM format.
+	2, 0,              // 2: Number of channels.
+	68, 172, 0, 0,     // 44,100: Sample rate.
+	16, 177, 2, 0,     // 176,400: Sample rate * bps * channels / 8.
+	4, 0,              // 4: bps * channels / 8.
+	16, 0,             // 16: Bits per sample.
+	100, 97, 116, 97,  // "data"
+	0, 0, 0, 0,        // Size of the data portion (all that comes next).
+];
 
 
 
@@ -57,17 +90,19 @@ use super::{
 /// This structure gets saved to disk _en masse_ in a zstd-compressed binary
 /// format after each rip pass so operations can be resumed at a later date.
 pub(crate) struct RipState {
-	pub(super) toc: Toc,
-	pub(super) track: Track,
-	pub(super) rip_rng: Range<i32>,
-	pub(super) data: Vec<RipSample>,
-	pub(super) new: bool,
+	toc: Toc,
+	track: Track,
+	disc_rng: Range<i32>,
+	rip_rng: Range<i32>,
+	data: Vec<RipSample>,
+	new: bool,
 }
 
 impl RipState {
 	/// # New.
 	///
-	/// Resume or initialize a new data collection for the given track.
+	/// Begin or resume a state file for the given track, returning a new
+	/// instance.
 	///
 	/// This method also tests out all of the different integer type
 	/// conversions we'll need to use so that elsewhere we can safely
@@ -78,120 +113,132 @@ impl RipState {
 	/// This will return an error if the numbers can't fit in the necessary
 	/// integer types, the cache is invalid, or the cache is corrupt and the
 	/// user opts not to start over.
-	pub(crate) fn from_track(toc: &Toc, track: Track, opts: &RipOptions)
+	pub(crate) fn new(toc: &Toc, track: Track, opts: &RipOptions)
 	-> Result<Self, RipRipError> {
-		// Should we pick up where we left off?
-		if opts.resume() {
-			match Self::from_file(toc, track, opts.reset()) {
-				Ok(None) => {},
-				Ok(Some(out)) => return Ok(out),
-				Err(e) => return Err(e),
-			}
-		}
-
-		// Pad the LSN range by 10 sectors on either end and convert to
-		// samples.
-		let rip_rng = track_rng_to_rip_range(track)
+		let disc_rng = accessible_range(toc, opts.offset())
 			.ok_or(RipRipError::RipOverflow)?;
-
-		// The total length we might be ripping.
-		let len = usize::try_from(rip_rng.end - rip_rng.start)
-			.map_err(|_| RipRipError::RipOverflow)?;
-
-		// We should also make sure the rip range in bytes fits i32, u32, and
-		// usize. By testing for all three now, we can lazy-cast elsewhere.
-		(rip_rng.end - rip_rng.start).checked_mul(i32::from(BYTES_PER_SAMPLE))
-			.and_then(|n| u32::try_from(n).ok())
-			.and_then(|n| usize::try_from(n).ok())
-			.ok_or(RipRipError::RipOverflow)?;
-
-		// The leadout needs to fit i32 in various places, so let's check for
-		// that now too.
-		let mut leadin = i32::try_from(toc.audio_leadin_normalized()).ok()
-			.ok_or(RipRipError::RipOverflow)?;
-		let mut leadout = i32::try_from(toc.audio_leadout_normalized()).ok()
-			.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))
-			.ok_or(RipRipError::RipOverflow)?;
-
-		// Adjust the leadin/out for the read offset.
-		let offset = opts.offset();
-		if track.position().is_first() && offset.is_negative() {
-			leadin = leadin.checked_add(i32::from(offset.samples_abs()))
-				.ok_or(RipRipError::RipOverflow)?;
-		}
-		else if track.position().is_last() && ! offset.is_negative() {
-			leadout = leadout.checked_sub(i32::from(offset.samples_abs()))
-				.ok_or(RipRipError::RipOverflow)?;
-		}
-
-		// Get the data started.
-		let mut data = Vec::new();
-		data.try_reserve_exact(len).map_err(|_| RipRipError::RipOverflow)?;
-		for v in rip_rng.clone() {
-			if v < leadin || leadout <= v { data.push(RipSample::Lead); }
-			else { data.push(RipSample::Tbd); }
-		}
-
-		// Initialize without data!
-		Ok(Self {
+		let mut out = Self {
 			toc: toc.clone(),
 			track,
-			rip_rng,
-			data,
+			disc_rng,
+			rip_rng: 0..0,
+			data: Vec::new(),
 			new: true,
-		})
+		};
+		out.init(track, opts)?;
+		Ok(out)
 	}
 
-	/// # From File.
+	/// # Replace (Track).
 	///
-	/// Read, decompress, and deserialize the cached state, if any.
-	///
-	/// If there is no cached state, `None` will be returned.
+	/// Same as `RipState::new`, but re-use the existing instance's allocations
+	/// to reduce the memory overhead. If the track is the same as the one
+	/// already represented, it is left alone.
 	///
 	/// ## Errors
 	///
-	/// This will return an error if the cache location cannot be determined,
-	/// the cache exists and cannot be deserialized, or the data is in someway
-	/// nonsensical.
-	pub(crate) fn from_file(toc: &Toc, track: Track, reset: bool)
-	-> Result<Option<Self>, RipRipError> {
-		let src = state_path(toc, track)?;
-		if let Ok(file) = File::open(src) {
-			// Read -> decompress -> deserialize.
-			let mut out: Self = zstd::stream::Decoder::new(file).ok()
-				.and_then(|dec| {
-					let mut dec = BufReader::new(dec);
-					Self::deserialize_from(&mut dec)
-				})
-				.ok_or_else(|| RipRipError::StateCorrupt(track.number()))?;
+	/// This will return an error if the numbers can't fit in the necessary
+	/// integer types, the cache is invalid, or the cache is corrupt and the
+	/// user opts not to start over.
+	pub(crate) fn replace(&mut self, track: Track, opts: &RipOptions)
+	-> Result<(), RipRipError> {
+		if self.track == track { Ok(()) }
+		else { self.init(track, opts) }
+	}
 
-			// Return the instance if it matches the info we're expecting.
-			if out.toc.eq(toc) && out.track == track {
-				// Reset the counts?
-				if reset {
-					out.reset();
-					let _res = out.save_state();
+	/// # Initialize.
+	///
+	/// This does all the actual work for `RipState::new` and `RipState::replace`.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if the numbers can't fit in the necessary
+	/// integer types, the cache is invalid, or the cache is corrupt and the
+	/// user opts not to start over.
+	fn init(&mut self, track: Track, opts: &RipOptions) -> Result<(), RipRipError> {
+		use std::io::Read;
+
+		// Assume this is new until we learn differently.
+		self.new = true;
+		self.track = track;
+		self.rip_rng = track_rng_to_rip_range(track).ok_or(RipRipError::RipOverflow)?;
+
+		// Let's test the rip range as bytes in various integer sizes to make
+		// sure we can freely cast last on.
+		(self.rip_rng.end - self.rip_rng.start).checked_mul(i32::from(BYTES_PER_SAMPLE))
+			.and_then(|n| u32::try_from(n).ok())   // For wave.
+			.and_then(|n| usize::try_from(n).ok()) // For indexing.
+			.and_then(|n| isize::try_from(n).ok()) // For vector capacity.
+			.ok_or(RipRipError::RipOverflow)?;
+
+		// Reset the data.
+		self.data.truncate(0);
+		let len = self.rip_rng.len();
+		self.data.try_reserve_exact(len).map_err(|_| RipRipError::RipOverflow)?;
+
+		// Load it from a previous session?
+		if opts.resume() {
+			let idx = track.number();
+			let src = state_path(&self.toc, track)?;
+			if let Ok(file) = File::open(src) {
+				let mut file = BufReader::with_capacity(BUFFER_SIZE, file);
+
+				// Magic header.
+				let mut buf = [0u8; MAGIC.len()];
+				if file.read_exact(&mut buf).is_err() || buf != MAGIC {
+					return Err(RipRipError::StateCorrupt(idx));
 				}
-				Ok(Some(out))
-			}
-			else {
-				Err(RipRipError::StateCorrupt(track.number()))
+
+				// We'll check this after the data is read.
+				let hash = u32::deserialize_from(&mut file)
+					.ok_or(RipRipError::StateCorrupt(idx))?;
+
+				// Load the data.
+				for _ in 0..len {
+					let v = RipSample::deserialize_from(&mut file)
+						.ok_or(RipRipError::StateCorrupt(idx))?;
+					self.data.push(v);
+				}
+
+				// Check the hash now to verify the toc, track, data are
+				// (reasonably) what we expected.
+				if hash != self.quick_hash() {
+					return Err(RipRipError::StateCorrupt(idx));
+				}
+
+				// This isn't new, obviously.
+				self.new = false;
+
+				// Reset the data?
+				if opts.reset() && self.reset() { self.save_state()?; }
+
+				// We're good!
+				return Ok(());
 			}
 		}
-		else { Ok(None) }
+
+		// Prepopulate the data.
+		for v in self.rip_rng.clone() {
+			if self.disc_rng.contains(&v) { self.data.push(RipSample::Tbd); }
+			else { self.data.push(RipSample::Lead); }
+		}
+
+		// Done!
+		Ok(())
 	}
 }
 
 impl RipState {
 	/// # Reset Counts.
 	///
-	/// Drop all maybe counts to one so their sectors can be reread.
-	pub(crate) fn reset(&mut self) {
+	/// Drop all maybe counts to one so their sectors can be reread. Returns
+	/// `true` if anything winds up getting changed.
+	fn reset(&mut self) -> bool {
+		let before = self.quick_hash();
 		for v in &mut self.data {
-			if let RipSample::Maybe(v) = v {
-				v.reset();
-			}
+			if let RipSample::Maybe(v) = v { v.reset(); }
 		}
+		before != self.quick_hash()
 	}
 
 	/// # Save State.
@@ -206,38 +253,29 @@ impl RipState {
 	///
 	/// This will bubble up any errors encountered along the way.
 	pub(crate) fn save_state(&self) -> Result<(), RipRipError> {
+		use std::io::Write;
+
 		// The destination path.
 		let dst = state_path(&self.toc, self.track)
 			.map_err(|_| RipRipError::StateSave(self.track.number()))?;
 
 		// Serialize -> compress -> write to tmpfile.
 		let mut writer = CacheWriter::new(&dst)?;
-		zstd::stream::Encoder::new(writer.writer(), 0).ok()
-			.and_then(|mut enc| {
-				// Enable long distance matching.
-				let _res = enc.long_distance_matching(true);
+		{
+			let mut buf = BufWriter::with_capacity(BUFFER_SIZE, writer.writer());
+			let idx = self.track.number();
 
-				// Let zstd know how much data to expect.
-				let _res = u64::try_from(self.serialized_len())
-					.ok()
-					.and_then(|n| enc.set_pledged_src_size(Some(n)).ok())
-        			.and_then(|_| enc.include_contentsize(true).ok());
+			// The first twelve bytes are reserved for some magic header bits
+			// and a CRC32 hash of the toc, track, and data.
+			buf.write_all(MAGIC.as_slice()).ok()
+				.and_then(|_| self.quick_hash().serialize_into(&mut buf))
+				.ok_or(RipRipError::StateSave(idx))?;
 
-				// Parallelize the encoding if possible.
-				let _res = std::thread::available_parallelism().ok()
-					.and_then(|n| u32::try_from(n.get()).ok())
-					.and_then(|par| enc.multithread(par).ok());
-
-				// Push the compressor into a BufWriter to make the chunking
-				// more efficient. Both writers flush on drop.
-				let mut enc = BufWriter::with_capacity(
-					zstd::stream::Encoder::<File>::recommended_input_size(),
-					enc.auto_finish(),
-				);
-				self.serialize_into(&mut enc)
-			})
-			.ok_or_else(|| RipRipError::StateSave(self.track.number()))?;
-
+			// Everything else is the sample data…
+			for v in &self.data {
+				v.serialize_into(&mut buf).ok_or(RipRipError::StateSave(idx))?;
+			}
+		}
 		// Save the tmpfile to dst.
 		writer.finish()
 	}
@@ -252,32 +290,42 @@ impl RipState {
 	/// This will bubble up any I/O-related errors encountered, but should be
 	/// fine.
 	pub(crate) fn save_track(&self) -> Result<PathBuf, RipRipError> {
+		use std::io::Write;
+
 		let dst = track_path(&self.toc, self.track)?;
-		let samples = self.track_slice();
-		let mut writer = CacheWriter::new(&dst)?;
-		let mut wav = WavWriter::new(writer.writer(), WAVE_SPEC)
-			.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+		let data = self.track_slice();
 
-		// In CD contexts, a sample is general one L+R pair. In other
-		// contexts, like hound, L and R are each their own sample. (We
-		// need to double our internal count to match.)
-		{
-			let mut wav_writer = wav.get_i16_writer(u32::saturating_from(samples.len()) * 2);
-			for sample in samples {
-				let sample = sample.as_array();
-				wav_writer.write_sample(i16::from_le_bytes([sample[0], sample[1]]));
-				wav_writer.write_sample(i16::from_le_bytes([sample[2], sample[3]]));
-			}
-			wav_writer.flush().map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
-		}
-
-		// Finish up the wav.
-		wav.flush().ok()
-			.and_then(|_| wav.finalize().ok())
+		// The data length is easy: four bytes per sample.
+		let data_len = u32::try_from(data.len())
+			.ok()
+			.and_then(|n| n.checked_mul(u32::from(BYTES_PER_SAMPLE)))
 			.ok_or_else(|| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
 
-		// Save the file.
-		writer.finish().map(|_| dst)
+		// The file length excludes "RIFF" and the four bytes specifying the
+		// file length.
+		let file_len = 44 - 8 + data_len;
+
+		// Write the data!
+		let mut writer = CacheWriter::new(&dst)?;
+		{
+			let mut buf = BufWriter::with_capacity(BUFFER_SIZE, writer.writer());
+
+			// The header comes first; we just need to fill out the
+			// size-related blocks before pushing it.
+			let mut header = WAVE_HEADER;
+			header[4..8].copy_from_slice(file_len.to_le_bytes().as_slice());
+			header[40..].copy_from_slice(data_len.to_le_bytes().as_slice());
+			buf.write_all(header.as_slice())
+				.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+
+			// Now it's just straight PCM funtimes!
+			for v in data {
+				buf.write_all(v.as_slice())
+					.map_err(|_| RipRipError::Write(dst.to_string_lossy().into_owned()))?;
+			}
+		}
+		writer.finish()?;
+		Ok(dst)
 	}
 }
 
@@ -399,6 +447,8 @@ impl RipState {
 	pub(crate) fn quick_hash(&self) -> u32 {
 		use std::hash::Hash;
 		let mut hasher = crc32fast::Hasher::new();
+		self.toc.hash(&mut hasher);
+		self.track.hash(&mut hasher);
 		self.data.hash(&mut hasher);
 		hasher.finalize()
 	}
@@ -406,8 +456,40 @@ impl RipState {
 
 
 
+/// # Accessible Range.
+///
+/// Find the region of the disc (containing audio) that is accessible to the
+/// drive, given its offset.
+fn accessible_range(toc: &Toc, offset: ReadOffset) -> Option<Range<i32>> {
+	// The base leadin will usually be zero, but if there's a data session
+	// before the first track, we'll want to start with the actual audio.
+	let mut leadin =
+		if matches!(toc.kind(), TocKind::DataFirst) {
+			i32::try_from(toc.audio_leadin_normalized()).ok()
+				.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))?
+		}
+		else { 0 };
+
+	// The leadout is what it is.
+	let mut leadout = i32::try_from(toc.audio_leadout_normalized()).ok()
+		.and_then(|n| n.checked_mul(i32::from(SAMPLES_PER_SECTOR)))?;
+
+	// A negative offset won't be able to reach the beginning.
+	if offset.is_negative() {
+		leadin = leadin.checked_add(i32::from(offset.samples_abs()))?;
+	}
+	// A positive offset won't be able to reach the end.
+	else {
+		leadout = leadout.checked_sub(i32::from(offset.samples_abs()))?;
+	}
+
+	// Can't imagine this would ever not be the case, but might as well check.
+	if leadin < leadout { Some(leadin..leadout) }
+	else { None }
+}
+
 /// # Track Range to Rip Range.
-pub(super) fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
+fn track_rng_to_rip_range(track: Track) -> Option<Range<i32>> {
 	let rng = track.sector_range_normalized();
 	let rng =
 		i32::try_from(rng.start).ok()
