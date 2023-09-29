@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.1.5
-    Generated: 2023-09-28 06:28:29 UTC
+    Version:   0.1.6
+    Generated: 2023-09-29 18:25:16 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -22,17 +22,15 @@
 | [form_urlencoded](https://github.com/servo/rust-url) | 1.2.0 | The rust-url developers | Apache-2.0 or MIT |
 | [fyi_msg](https://github.com/Blobfolio/fyi) | 0.11.5 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [generic-array](https://github.com/fizyk20/generic-array.git) | 0.14.7 | [Bartłomiej Kamiński](mailto:fizyk20@gmail.com) and [Aaron Trent](mailto:novacrazy@gmail.com) | MIT |
-| [hound](https://github.com/ruuda/hound) | 3.5.1 | [Ruud van Asseldonk](mailto:dev@veniogames.com) | Apache-2.0 |
 | [idna](https://github.com/servo/rust-url/) | 0.4.0 | The rust-url developers | Apache-2.0 or MIT |
 | [itoa](https://github.com/dtolnay/itoa) | 1.0.9 | [David Tolnay](mailto:dtolnay@gmail.com) | Apache-2.0 or MIT |
-| [libc](https://github.com/rust-lang/libc) | 0.2.148 | The Rust Project Developers | Apache-2.0 or MIT |
 | [libcdio-sys](https://github.com/gmes78/libcdio-sys) | 0.5.0 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
 | [log](https://github.com/rust-lang/log) | 0.4.20 | The Rust Project Developers | Apache-2.0 or MIT |
 | [num-traits](https://github.com/rust-num/num-traits) | 0.2.16 | The Rust Project Developers | Apache-2.0 or MIT |
 | [once_cell](https://github.com/matklad/once_cell) | 1.18.0 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | Apache-2.0 or MIT |
 | [oxford_join](https://github.com/Blobfolio/oxford_join) | 0.2.8 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.5 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.6 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | Apache-2.0 or MIT |
 | [tempfile](https://github.com/Stebalien/tempfile) | 3.8.0 | [Steven Allen](mailto:steven@stebalien.com), The Rust Project Developers, [Ashley Mannix](mailto:ashleymannix@live.com.au), and [Jason White](mailto:me@jasonwhite.io) | Apache-2.0 or MIT |
 | [term_size](https://github.com/kbknapp/term_size-rs.git) | 0.3.2 | [Kevin K.](mailto:kbknapp@gmail.com) and [Benjamin Sago](mailto:ogham@bsago.me) | Apache-2.0 or MIT |
@@ -46,6 +44,3 @@
 | [ureq](https://github.com/algesten/ureq) | 2.7.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |
 | [url](https://github.com/servo/rust-url) | 2.4.1 | The rust-url developers | Apache-2.0 or MIT |
 | [utc2k](https://github.com/Blobfolio/utc2k) | 0.6.1 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
-| [zstd](https://github.com/gyscos/zstd-rs) | 0.12.4 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | MIT |
-| [zstd-safe](https://github.com/gyscos/zstd-rs) | 6.0.6 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |
-| [zstd-sys](https://github.com/gyscos/zstd-rs) | 2.0.8+zstd.1.5.5 | [Alexandre Bury](mailto:alexandre.bury@gmail.com) | Apache-2.0 or MIT |
