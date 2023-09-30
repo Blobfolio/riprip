@@ -29,8 +29,8 @@ use std::{
 	path::PathBuf,
 };
 use super::{
-	DeSerialize,
 	OffsetRipIter,
+	sample::RipSector,
 	TrackQuality,
 };
 
@@ -46,7 +46,7 @@ const BUFFER_SIZE: usize = 16 * 1024;
 /// This is used to identify `RipState` files, as well as the format "version"
 /// used at the time of their construction, making sure we don't waste time
 /// trying to shove bytes into the wrong format.
-const MAGIC: [u8; 8] = *b"RRip0002";
+const MAGIC: [u8; 8] = *b"RRip0003";
 
 /// # Wave Header.
 ///
@@ -190,14 +190,17 @@ impl RipState {
 				}
 
 				// We'll check this after the data is read.
-				let hash = u32::deserialize_from(&mut file)
-					.ok_or(RipRipError::StateCorrupt(idx))?;
+				let mut buf = [0_u8; 4];
+				file.read_exact(&mut buf)
+					.map_err(|_| RipRipError::StateCorrupt(idx))?;
+				let hash = u32::from_le_bytes(buf);
 
 				// Load the data.
-				for _ in 0..len {
-					let v = RipSample::deserialize_from(&mut file)
+				let mut sector = RipSector::new();
+				for _ in (0..len).step_by(usize::from(SAMPLES_PER_SECTOR)) {
+					let iter = sector.deserialize_from(&mut file)
 						.ok_or(RipRipError::StateCorrupt(idx))?;
-					self.data.push(v);
+					self.data.extend(iter);
 				}
 
 				// Check the hash now to verify the toc, track, data are
@@ -267,13 +270,14 @@ impl RipState {
 
 			// The first twelve bytes are reserved for some magic header bits
 			// and a CRC32 hash of the toc, track, and data.
-			buf.write_all(MAGIC.as_slice()).ok()
-				.and_then(|_| self.quick_hash().serialize_into(&mut buf))
-				.ok_or(RipRipError::StateSave(idx))?;
+			buf.write_all(MAGIC.as_slice())
+				.and_then(|_| buf.write_all(self.quick_hash().to_le_bytes().as_slice()))
+				.map_err(|_| RipRipError::StateSave(idx))?;
 
 			// Everything else is the sample data…
-			for v in &self.data {
-				v.serialize_into(&mut buf).ok_or(RipRipError::StateSave(idx))?;
+			let mut sector = RipSector::new();
+			for v in self.data.chunks_exact(usize::from(SAMPLES_PER_SECTOR)) {
+				sector.serialize_into(v, &mut buf).ok_or(RipRipError::StateSave(idx))?;
 			}
 		}
 		// Save the tmpfile to dst.

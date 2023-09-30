@@ -9,7 +9,6 @@ mod log;
 pub(super) mod opts;
 mod quality;
 pub(super) mod sample;
-mod serial;
 
 
 use cdtoc::{
@@ -41,7 +40,6 @@ use fyi_msg::{
 use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
-use serial::DeSerialize;
 use std::{
 	collections::BTreeMap,
 	num::NonZeroU32,

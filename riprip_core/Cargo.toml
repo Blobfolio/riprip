@@ -41,6 +41,9 @@ default-features = false
 version = "2.7.0"
 default-features = false
 
+[dev-dependencies]
+fastrand = "2.0.1"
+
 [features]
 default = []
 
