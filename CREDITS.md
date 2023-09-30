@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.1.6
-    Generated: 2023-09-29 18:25:16 UTC
+    Version:   0.1.7
+    Generated: 2023-09-30 05:52:37 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -30,7 +30,7 @@
 | [once_cell](https://github.com/matklad/once_cell) | 1.18.0 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | Apache-2.0 or MIT |
 | [oxford_join](https://github.com/Blobfolio/oxford_join) | 0.2.8 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.0 | The rust-url developers | Apache-2.0 or MIT |
-| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.6 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [riprip_core](https://github.com/Blobfolio/riprip) | 0.1.7 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | Apache-2.0 or MIT |
 | [tempfile](https://github.com/Stebalien/tempfile) | 3.8.0 | [Steven Allen](mailto:steven@stebalien.com), The Rust Project Developers, [Ashley Mannix](mailto:ashleymannix@live.com.au), and [Jason White](mailto:me@jasonwhite.io) | Apache-2.0 or MIT |
 | [term_size](https://github.com/kbknapp/term_size-rs.git) | 0.3.2 | [Kevin K.](mailto:kbknapp@gmail.com) and [Benjamin Sago](mailto:ogham@bsago.me) | Apache-2.0 or MIT |
