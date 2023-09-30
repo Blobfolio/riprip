@@ -5,15 +5,28 @@
 use crate::{
 	NULL_SAMPLE,
 	Sample,
+	SAMPLES_PER_SECTOR,
 };
-use std::cmp::Ordering;
+use std::{
+	cmp::Ordering,
+	io::{
+		Read,
+		Write,
+	},
+	ops::Range,
+};
+
+
+
+/// # `RipSample` Variant ID range.
+const DATA_KIND_RNG: Range<u8> = 1..9;
 
 
 
 #[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
 /// # Rip Sample.
 ///
-/// This enum combines sample value(s) and their statuses.
+/// This enum combines sample value(s) and status(es).
 pub(crate) enum RipSample {
 	/// # Leadin/out.
 	Lead,
@@ -49,6 +62,23 @@ impl RipSample {
 			Self::Tbd | Self::Lead => NULL_SAMPLE.as_slice(),
 			Self::Bad(s) => s.as_slice(),
 			Self::Maybe(s) => s.as_slice(),
+		}
+	}
+
+	/// # Data Kind.
+	///
+	/// Return the variant ID used for de/serialization.
+	const fn data_kind(&self) -> u8 {
+		match self {
+			Self::Lead => 1,
+			Self::Tbd => 2,
+			Self::Bad(_) => 3,
+			Self::Maybe(ContentiousSample::Maybe1((_, count))) =>
+				if 1 == *count { 4 } // Implicit count of one.
+				else { 5 },          // Explicit other count.
+			Self::Maybe(ContentiousSample::Maybe2(_)) => 6,
+			Self::Maybe(ContentiousSample::Maybe3(_)) => 7,
+			Self::Maybe(ContentiousSample::Strict(_)) => 8,
 		}
 	}
 }
@@ -158,6 +188,241 @@ impl RipSample {
 			// Leave leadin/out samples alone.
 			Self::Lead => {},
 		}
+	}
+}
+
+
+
+#[derive(Debug)]
+/// # Sector of Samples.
+///
+/// Sample de/serialization sucks because they're tiny and variable in size. To
+/// improve the efficiency a little bit — and reduce the disk space a touch —
+/// they're read/written in sector-sized bocks.
+///
+/// This struct serves as a buffer for both use cases.
+///
+/// Variant identifiers are stored and read/written separately from the actual
+/// data because they have a fixed size. The data portion has a variable
+/// length, but it can be derived from the identifiers, allowing us to reduce
+/// the total in/out operations to two instead of 588. Haha.
+///
+/// Lastly, because there are so many goddamn samples in a typical song, the
+/// variant IDs are stored in a packed `u4`-esque format to halve their size.
+pub(super) struct RipSector {
+	kind: [u8; (SAMPLES_PER_SECTOR as usize).wrapping_div(2)],
+	data: [u8; SAMPLES_PER_SECTOR as usize * 15],
+}
+
+impl RipSector {
+	/// # Deserialize From Reader.
+	///
+	/// Fill the buffers with data from a reader, then return an iterator over
+	/// those samples.
+	pub(super) fn deserialize_from<R: Read>(&mut self, r: &mut R) -> Option<RipSectorSamples> {
+		// Read and validate the type IDs, and calculate the expected data length.
+		r.read_exact(&mut self.kind).ok()?;
+		let mut len = 0;
+		for &v in &self.kind {
+			let (a, b) = u4_unpack(v);
+			if DATA_KIND_RNG.contains(&a) && DATA_KIND_RNG.contains(&b) {
+				len += usize::from(data_len_by_kind(a));
+				len += usize::from(data_len_by_kind(b));
+			}
+			else { return None; }
+		}
+
+		// Read the data, then return an iterator over the samples.
+		r.read_exact(&mut self.data[..len]).ok()?;
+		Some(RipSectorSamples {
+			kind: &self.kind,
+			data: &self.data,
+			pos: 0,
+		})
+	}
+
+	#[allow(unused_assignments)] // It's called "initialization". Haha.
+	/// # Serialize Into Writer.
+	///
+	/// Fill the buffers with the sample data from `src`, then write them into
+	/// the writer.
+	///
+	/// The type information is written first in a packed format — two `u4`
+	/// per byte — followed by the data, whose length will be variable
+	/// depending on the sample variants used.
+	pub(super) fn serialize_into<W: Write>(&mut self, src: &[RipSample], w: &mut W)
+	-> Option<()> {
+		// Sanity check: this should never fail, but just in case.
+		if src.len() != usize::from(SAMPLES_PER_SECTOR) { return None; }
+
+		// Set the type headers.
+		for (k, v) in self.kind.iter_mut().zip(src.chunks_exact(2)) {
+			*k = u4_pack(v[0].data_kind(), v[1].data_kind());
+		}
+
+		// Set the data. We might as well just work with subslices for this
+		// instead of Read/Write, since we've already got the buffer handy.
+		// While we're at it, let's also find out how much data we've populated
+		// so we can write the right amount.
+		let len = self.data.len() - {
+			let mut data: &mut [u8] = &mut self.data;
+			let mut current: &mut [u8] = &mut [];
+			for v in src {
+				match v {
+					RipSample::Bad(s) => {
+						(current, data) = data.split_at_mut(4);
+						current.copy_from_slice(s.as_slice());
+					},
+					RipSample::Maybe(ContentiousSample::Maybe1(pair)) =>
+						if 1 == pair.1 {
+							(current, data) = data.split_at_mut(4);
+							current.copy_from_slice(pair.0.as_slice());
+						}
+						else {
+							(current, data) = data.split_at_mut(5);
+							current[..4].copy_from_slice(pair.0.as_slice());
+							current[4] = pair.1;
+						},
+					RipSample::Maybe(ContentiousSample::Maybe2(set)) => {
+						(current, data) = data.split_at_mut(10);
+						current[..4].copy_from_slice(set[0].0.as_slice());
+						current[4] = set[0].1;
+						current[5..9].copy_from_slice(set[1].0.as_slice());
+						current[9] = set[1].1;
+					},
+					RipSample::Maybe(ContentiousSample::Maybe3(set) | ContentiousSample::Strict(set)) => {
+						(current, data) = data.split_at_mut(15);
+						current[..4].copy_from_slice(set[0].0.as_slice());
+						current[4] = set[0].1;
+						current[5..9].copy_from_slice(set[1].0.as_slice());
+						current[9] = set[1].1;
+						current[10..14].copy_from_slice(set[2].0.as_slice());
+						current[14] = set[2].1;
+					},
+					_ => {},
+				}
+			}
+
+			// Return the leftover data so we can figure out how much was
+			// written to.
+			data.len()
+		};
+
+		// Write the types and data!
+		w.write_all(self.kind.as_slice()).ok()?;
+		w.write_all(&self.data[..len]).ok()
+	}
+}
+
+impl RipSector {
+	/// # New.
+	pub(super) const fn new() -> Self {
+		Self {
+			kind: [0_u8; (SAMPLES_PER_SECTOR as usize).wrapping_div(2)],
+			data: [0_u8; SAMPLES_PER_SECTOR as usize * 15],
+		}
+	}
+}
+
+
+
+#[derive(Debug)]
+/// # Sector Sample Iterator.
+///
+/// This iterator returns each sample stored in the `RipSector`. There should
+/// always be exactly `588` of them.
+pub(super) struct RipSectorSamples<'a> {
+	kind: &'a [u8],
+	data: &'a [u8],
+	pos: u16,
+}
+
+impl<'a> Iterator for RipSectorSamples<'a> {
+	type Item = RipSample;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let idx = usize::from(self.pos.wrapping_div(2));
+		if self.kind.len() <= idx { None }
+		else {
+			// Tease out the kind.
+			let kind =
+				if 0 == self.pos & 1 { u4_unpack_lhs(self.kind[idx]) }
+				else { u4_unpack_rhs(self.kind[idx]) };
+			self.pos += 1;
+
+			// Parse it!
+			match kind {
+				1 => Some(RipSample::Lead),
+				2 => Some(RipSample::Tbd),
+				3 =>
+					if 4 <= self.data.len() {
+						let (data, rest) = self.data.split_at(4);
+						self.data = rest;
+						Some(RipSample::Bad([data[0], data[1], data[2], data[3]]))
+					}
+					else { None },
+				4 =>
+					if 4 <= self.data.len() {
+						let (data, rest) = self.data.split_at(4);
+						self.data = rest;
+						Some(RipSample::Maybe(ContentiousSample::Maybe1((
+							[data[0], data[1], data[2], data[3]],
+							1,
+						))))
+					}
+					else { None },
+				5 =>
+					if 5 <= self.data.len() {
+						let (data, rest) = self.data.split_at(5);
+						self.data = rest;
+						Some(RipSample::Maybe(ContentiousSample::Maybe1((
+							[data[0], data[1], data[2], data[3]],
+							data[4],
+						))))
+					}
+					else { None },
+				6 =>
+					if 10 <= self.data.len() {
+						let (data, rest) = self.data.split_at(10);
+						self.data = rest;
+						Some(RipSample::Maybe(ContentiousSample::Maybe2([
+							([data[0], data[1], data[2], data[3]], data[4]),
+							([data[5], data[6], data[7], data[8]], data[9]),
+						])))
+					}
+					else { None },
+				7 | 8 =>
+					if 15 <= self.data.len() {
+						let (data, rest) = self.data.split_at(15);
+						self.data = rest;
+						let set = [
+							([data[0],  data[1],  data[2],  data[3]],  data[4]),
+							([data[5],  data[6],  data[7],  data[8]],  data[9]),
+							([data[10], data[11], data[12], data[13]], data[14]),
+						];
+						if kind == 7 {
+							Some(RipSample::Maybe(ContentiousSample::Maybe3(set)))
+						}
+						else {
+							Some(RipSample::Maybe(ContentiousSample::Strict(set)))
+						}
+					}
+					else { None },
+				// This shouldn't be reachable.
+				_ => None,
+			}
+		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let len = self.len();
+		(len, Some(len))
+	}
+}
+
+impl<'a> ExactSizeIterator for RipSectorSamples<'a> {
+	fn len(&self) -> usize {
+		usize::from(SAMPLES_PER_SECTOR.saturating_sub(self.pos))
 	}
 }
 
@@ -399,6 +664,20 @@ impl ContentiousSample {
 
 
 
+/// # Data Length by ID.
+///
+/// Return the length of the data portion of the `RipSample` corresponding to
+/// this de/serialization ID.
+const fn data_len_by_kind(kind: u8) -> u8 {
+	match kind {
+		3 | 4 => 4,
+		5 => 5,
+		6 => 10,
+		7 | 8 => 15,
+		_ => 0,
+	}
+}
+
 #[allow(clippy::trivially_copy_pass_by_ref)] // This is a callback.
 #[inline]
 /// # Sort Sample Count Tuple.
@@ -409,11 +688,117 @@ impl ContentiousSample {
 /// different sizes.
 fn sort_sample_count(a: &(Sample, u8), b: &(Sample, u8)) -> Ordering { b.1.cmp(&a.1) }
 
+/// # Pack Two `u4` into `u8`.
+///
+/// Pack two (small) integers into a single byte.
+///
+/// This is used for our sample type de/serialization, which codes the variant
+/// identifiers as a number between `1..=8`.
+const fn u4_pack(a: u8, b: u8) -> u8 { a | b << 4 }
+
+/// # Unpack `u8` into Two `u4`.
+const fn u4_unpack(c: u8) -> (u8, u8) { (u4_unpack_lhs(c), u4_unpack_rhs(c)) }
+
+/// # Unpack First `u4` in `u8`.
+const fn u4_unpack_lhs(c: u8) -> u8 { c & 0b0000_1111 }
+
+/// # Unpack Second `u4` in `u8`.
+const fn u4_unpack_rhs(c: u8) -> u8 { (c >> 4) & 0b0000_1111 }
+
 
 
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	/// # Random Sample.
+	fn random_sample() -> Sample {
+		let a = fastrand::u8(..);
+		let b = fastrand::u8(..);
+		let c = fastrand::u8(..);
+		let d = fastrand::u8(..);
+		[a, b, c, d]
+	}
+
+	#[test]
+	fn t_pack() {
+		// Test all combinations of left/right variant pairs we expect to see.
+		for i in DATA_KIND_RNG {
+			for j in DATA_KIND_RNG {
+				let c = u4_pack(i, j);
+				let (a, b) = u4_unpack(c);
+				assert_eq!(i, a, "Left side unpacking failed.");
+				assert_eq!(i, u4_unpack_lhs(c), "Left side unpacking failed.");
+				assert_eq!(j, b, "Right side unpacking failed.");
+				assert_eq!(j, u4_unpack_rhs(c), "Right side unpacking failed.");
+			}
+		}
+	}
+
+	#[test]
+	fn t_ripsector() {
+		// Build up four randomish sectors worth of data using all the
+		// different sample types.
+		let mut data = Vec::with_capacity(usize::from(SAMPLES_PER_SECTOR * 4));
+		for _ in 0..SAMPLES_PER_SECTOR.wrapping_div(3) {
+			// Eight doesn't divide evenly into 588, so let's use the zero-size
+			// entries for padding.
+			data.push(RipSample::Lead);
+			data.push(RipSample::Lead);
+			data.push(RipSample::Lead);
+			data.push(RipSample::Tbd);
+			data.push(RipSample::Tbd);
+			data.push(RipSample::Tbd);
+
+			data.push(RipSample::Bad(random_sample()));
+			data.push(RipSample::Maybe(ContentiousSample::Maybe1((random_sample(), 1))));
+			data.push(RipSample::Maybe(ContentiousSample::Maybe1((random_sample(), fastrand::u8(1..)))));
+
+
+			let mut set = [
+				(random_sample(), fastrand::u8(1..)),
+				(random_sample(), fastrand::u8(1..)),
+			];
+			set.sort_unstable_by(sort_sample_count);
+			data.push(RipSample::Maybe(ContentiousSample::Maybe2(set)));
+
+			let mut set = [
+				(random_sample(), fastrand::u8(1..)),
+				(random_sample(), fastrand::u8(1..)),
+				(random_sample(), fastrand::u8(1..)),
+			];
+			set.sort_unstable_by(sort_sample_count);
+			data.push(RipSample::Maybe(ContentiousSample::Maybe3(set)));
+
+			let mut set = [
+				(random_sample(), fastrand::u8(1..)),
+				(random_sample(), fastrand::u8(1..)),
+				(random_sample(), fastrand::u8(1..)),
+			];
+			set.sort_unstable_by(sort_sample_count);
+			data.push(RipSample::Maybe(ContentiousSample::Strict(set)));
+		}
+		assert_eq!(data.len(), usize::from(SAMPLES_PER_SECTOR * 4), "You fucked up the sector length.");
+
+		// Test the sector de/serialization.
+		let mut sector = RipSector::new();
+		for v in data.chunks_exact_mut(usize::from(SAMPLES_PER_SECTOR)) {
+			// Make sure there isn't any bias in our population ordering.
+			fastrand::shuffle(v);
+
+			// Serialize it.
+			let mut buf = Vec::new();
+			sector.serialize_into(v, &mut buf).expect("Serialization failed.");
+
+			// Deserialize it.
+			let de = sector.deserialize_from(&mut buf.as_slice())
+				.expect("Deserialization failed.")
+				.collect::<Vec<_>>();
+
+			// The output should have us back where we started.
+			assert_eq!(v, de, "Deserialized samples do not match the original.");
+		}
+	}
 
 	#[test]
 	fn t_update() {

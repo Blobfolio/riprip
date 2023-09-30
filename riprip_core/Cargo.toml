@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.1.6"
+version = "0.1.7"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -40,6 +40,9 @@ default-features = false
 [build-dependencies.ureq]
 version = "2.7.0"
 default-features = false
+
+[dev-dependencies]
+fastrand = "2.0.1"
 
 [features]
 default = []

@@ -9,7 +9,6 @@ mod log;
 pub(super) mod opts;
 mod quality;
 pub(super) mod sample;
-mod serial;
 
 
 use cdtoc::{
@@ -41,7 +40,6 @@ use fyi_msg::{
 use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
-use serial::DeSerialize;
 use std::{
 	collections::BTreeMap,
 	num::NonZeroU32,
@@ -153,6 +151,7 @@ impl<'a> Ripper<'a> {
 		// Before we run through the passes, let's set up the initial quality,
 		// etc. But only if we're resuming.
 		if self.opts.resume() {
+			let mut first_track = None;
 			for entry in self.tracks.values_mut() {
 				if
 					! killed.killed() &&
@@ -165,12 +164,28 @@ impl<'a> Ripper<'a> {
 					}
 				}
 
+				// Note the first non-skippable track so we can reset afterward.
+				if first_track.is_none() && ! entry.skippable() {
+					first_track.replace(entry.track);
+				}
+
 				progress.increment();
 			}
 
 			// Disable the count-resetting option; that will have triggered
 			// during this pass if applicable.
 			self.opts = self.opts.with_reset(false);
+
+			// Reset the loaded track to the first one we'll actually be
+			// ripping.
+			if let Some(first_track) = first_track {
+				state.replace(first_track, &self.opts)?;
+			}
+			// Nothing to do!
+			else {
+				progress.finish();
+				return Ok(());
+			}
 		}
 		// Otherwise we can skip this step.
 		else { progress.increment_n(self.tracks.len() as u32); }
