@@ -127,7 +127,7 @@ argyle = "0.6.*"
 ctrlc = "3.4.*"
 dactyl = "0.5"
 oxford_join = "0.2.*"
-trimothy = "0.1.*"
+trimothy = "0.2.*"
 utc2k = "0.6.*"
 
 [dependencies.fyi_msg]

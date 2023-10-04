@@ -11,6 +11,7 @@ use std::{
 	fmt,
 	ops::RangeInclusive,
 };
+use trimothy::NormalizeWhitespace;
 
 
 
@@ -57,13 +58,13 @@ impl fmt::Display for DriveVendorModel {
 
 		// Model by itself.
 		if vendor.is_empty() {
-			for c in NormalizeWhitespace::new(model) { write!(f, "{c}")?; }
+			for c in model.normalized_whitespace() { write!(f, "{c}")?; }
 		}
 		// Vendor: Model.
 		else {
-			for c in NormalizeWhitespace::new(vendor)
+			for c in vendor.normalized_whitespace()
 				.chain([':', ' '])
-				.chain(NormalizeWhitespace::new(model))
+				.chain(model.normalized_whitespace())
 			{
 				write!(f, "{c}")?;
 			}
@@ -232,49 +233,6 @@ impl ReadOffset {
 
 
 
-/// # Normalize Whitespace.
-///
-/// This `char` iterator replaces all inner contiguous whitespace with a single
-/// horizontal space.
-///
-/// It is only used by [`DriveVendorModel::to_string`], but feels worth the
-/// effort as the spacing used by those pairs can be really awkward. Haha.
-struct NormalizeWhitespace<'a> {
-	iter: std::str::Chars<'a>,
-	ws: bool,
-}
-
-impl<'a> Iterator for NormalizeWhitespace<'a> {
-	type Item = char;
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			let next = self.iter.next()?;
-			if next.is_whitespace() {
-				if ! self.ws {
-					self.ws = true;
-					return Some(' ');
-				}
-			}
-			else {
-				self.ws = false;
-				return Some(next);
-			}
-		}
-	}
-}
-
-impl<'a> NormalizeWhitespace<'a> {
-	/// # New.
-	fn new(src: &'a str) -> Self {
-		Self {
-			iter: src.trim().chars(),
-			ws: false,
-		}
-	}
-}
-
-
-
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -325,19 +283,5 @@ mod test {
 		assert!(ReadOffset::try_from(*OFFSET_RNG.start() - 1).is_err());
 		assert!(ReadOffset::try_from(*OFFSET_RNG.end()).is_ok());
 		assert!(ReadOffset::try_from(*OFFSET_RNG.end() + 1).is_err());
-	}
-
-	#[test]
-	fn t_normalize_whitespace() {
-		for (raw, expected) in [
-			("", ""),
-			(" ", ""),
-			(" FOO \nBAR  ", "FOO BAR"),
-		] {
-			assert_eq!(
-				NormalizeWhitespace::new(raw).collect::<String>(),
-				expected,
-			);
-		}
 	}
 }
