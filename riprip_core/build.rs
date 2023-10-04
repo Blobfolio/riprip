@@ -5,6 +5,7 @@ This downloads and parses the AccurateRip drive offset list into a constant
 array that can be easily searched at runtime.
 */
 
+use cdtoc::AccurateRip;
 use std::{
 	collections::BTreeMap,
 	fs::{
@@ -28,21 +29,6 @@ use std::{
 /// This mirrors the DriveVendorModel type in the living program.
 type VendorModel = [u8; 24];
 
-/// # The remote URL of the data.
-const DATA_URL: &str = "http://www.accuraterip.com/accuraterip/DriveOffsets.bin";
-
-/// # Min Offset.
-const MIN_OFFSET: i16 = -5880;
-
-/// # Max Offset.
-const MAX_OFFSET: i16 = 5880;
-
-/// # Max Vendor Length.
-const MAX_VENDOR_LEN: usize = 8;
-
-/// # Max Model Length.
-const MAX_MODEL_LEN: usize = 16;
-
 
 
 /// # Main.
@@ -54,10 +40,14 @@ fn main() {
 	let offsets = parse_offsets(&raw);
 	let caches = parse_caches(&offsets);
 
-	// Save the offsets.
-	let dst = out_path("drives.rs");
+	// Announce the totals for reference.
+	let len = offsets.len().to_string().len();
+	println!("cargo:warning=Read Offsets: {}", offsets.len());
+	println!("cargo:warning=Cache Sizes:  {:>len$}", caches.len());
+
+	// Save it!
 	let data = [nice_caches(caches), nice_offsets(offsets)].concat();
-	File::create(dst)
+	File::create(out_path("drives.rs"))
 		.and_then(|mut f| f.write_all(data.as_bytes()).and_then(|_| f.flush()))
 		.expect("Unable to save drive data.");
 }
@@ -74,7 +64,7 @@ fn fetch_offsets() -> Vec<u8> {
 	if let Some(x) = try_cache(&cache) { return x; }
 
 	// Download it fresh.
-	let res = ureq::get(DATA_URL)
+	let res = ureq::get(AccurateRip::DRIVE_OFFSET_URL)
 		.set("user-agent", "Mozilla/5.0")
 		.call()
 		.expect("Unable to download AccurateRip drive offsets.");
@@ -109,8 +99,6 @@ fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
 		))
 		.collect::<Vec<String>>();
 
-	println!("cargo:warning=Found {} drive caches in the database.", nice.len());
-
 	format!(
 		r#"
 /// # Drive Cache Sizes.
@@ -134,21 +122,11 @@ fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
 	use std::fmt::Write;
 
 	// Reformat the data into "code" for the array we're about to generate.
-	let mut min = i16::MAX;
-	let mut max = i16::MIN;
 	let nice = parsed.into_iter()
-		.map(|(vendormodel, offset)| {
-			if offset < min { min = offset; }
-			if offset > max { max = offset; }
+		.map(|(vendormodel, offset)|
 			format!("(DriveVendorModel({vendormodel:?}), ReadOffset({offset})),")
-		})
+		)
 		.collect::<Vec<String>>();
-
-	// Announce the count so the builder can see what's going on under the
-	// hood. There should be a few thousand.
-	println!("cargo:warning=Found {} drive offsets in the database.", nice.len());
-	println!("cargo:warning=Min offset: {min}.");
-	println!("cargo:warning=Max offset:  {max}.");
 
 	// Start the array.
 	let mut out = format!(
@@ -236,94 +214,31 @@ fn parse_cache_line(line: &str) -> Option<(VendorModel, u16)> {
 ///
 /// We only care about the first two parts.
 fn parse_offsets(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
-	let mut parsed: BTreeMap<VendorModel, i16> = BTreeMap::new();
-
-	// Run through each entry.
-	for chunk in raw.chunks_exact(69) {
-		// Parsing numbers is so nice!
-		let offset = i16::from_le_bytes([chunk[0], chunk[1]]);
-
-		// Ignore entries with an offset of zero (our default) as well as
-		// anything beyond our supported range, although at present no entries
-		// come close to that.
-		if offset == 0 || ! (MIN_OFFSET..=MAX_OFFSET).contains(&offset) { continue; }
-
-		// The drive ID may be null-padded on the end. Let's trim those away.
-		let mut drive_id = &chunk[2..34];
-		while let [ rest @ .., 0 ] = drive_id { drive_id = rest; }
-
-		// Make sure it is valid UTF-8.
-		let Ok(drive_id) = std::str::from_utf8(drive_id) else { continue; };
-
-		// Both the vendor and model have fixed lengths on the hardware side;
-		// we can store them together to make the search more efficient. This
-		// structure matches `DriveVendorModel` in our source.
-		let mut vendormodel = VendorModel::default();
-
-		// AccurateRip doesn't take advantage of the inherent field sizes. It
-		// concatenates the two with " - " instead, or "- " in cases where the
-		// vendor part is absent.
-
-		// Let's check for no-vendor first.
-		if let Some(mut model) = drive_id.strip_prefix("- ") {
-			model = model.trim();
-
-			// Model is required and must fit within its maximum length.
-			if (1..=MAX_MODEL_LEN).contains(&model.len()) {
-				// Pretty sure these have to be ASCII.
-				if ! model.is_ascii() {
-					println!("cargo:warning=Non-ASCII model {model}.");
-					continue;
-				}
-
-				for (b, v) in vendormodel.iter_mut().skip(MAX_VENDOR_LEN).zip(model.bytes()) {
-					*b = v.to_ascii_uppercase();
-				}
-				if let Some(offset1) = parsed.insert(vendormodel, offset) {
-					if offset1 != offset {
-						println!("cargo:warning=Multiple offsets: [no vendor] / {model} ({offset1}, {offset}).");
+	// CDTOC does most of the work for us, but we can ignore 0-offset entries,
+	// and will uppercase the vendor/model pairs for case-insensitive
+	// searching.
+	let parsed: BTreeMap<VendorModel, i16> = AccurateRip::parse_drive_offsets(raw)
+		.expect("Unable to parse drive offsets.")
+		.into_iter()
+		.filter_map(|((v, m), o)|
+			if o == 0 { None }
+			else {
+				// Reformat the vendor/model pairs into our array.
+				let mut vm = VendorModel::default();
+				if ! v.is_empty() {
+					for (old, new) in vm.iter_mut().zip(v.bytes()) {
+						*old = new.to_ascii_uppercase();
 					}
 				}
-			}
-			else {
-				println!("cargo:warning=Invalid: [no vendor] / {model}.");
-			}
-		}
-		// Otherwise it will look like "VENDOR - MODEL".
-		else {
-			let mut split = drive_id.splitn(2, " - ");
-			let Some(mut vendor) = split.next() else { continue; };
-			let Some(mut model) = split.next() else { continue; };
-			vendor = vendor.trim();
-			model = model.trim();
-
-			// Both are required and must fit within their maximum lengths.
-			if (1..=MAX_VENDOR_LEN).contains(&vendor.len()) && (1..=MAX_MODEL_LEN).contains(&model.len()) {
-				// Pretty sure these have to be ASCII.
-				if ! vendor.is_ascii() || ! model.is_ascii() {
-					println!("cargo:warning=Non-ASCII vendor/model {vendor} / {model}.");
-					continue;
+				for (old, new) in vm.iter_mut().skip(8).zip(m.bytes()) {
+					*old = new.to_ascii_uppercase();
 				}
 
-				for (b, v) in vendormodel.iter_mut().zip(vendor.bytes()) {
-					*b = v.to_ascii_uppercase();
-				}
-				for (b, v) in vendormodel.iter_mut().skip(MAX_VENDOR_LEN).zip(model.bytes()) {
-					*b = v.to_ascii_uppercase();
-				}
-
-				// Add it!
-				if let Some(offset1) = parsed.insert(vendormodel, offset) {
-					if offset1 != offset {
-						println!("cargo:warning=Multiple offsets: {vendor} / {model} ({offset1}, {offset}).");
-					}
-				}
+				// And return!
+				Some((vm, o))
 			}
-			else {
-				println!("cargo:warning=Invalid: {vendor} / {model}.");
-			}
-		}
-	}
+		)
+		.collect();
 
 	// Make sure we parsed something.
 	if parsed.is_empty() { panic!("No drive offsets could be parsed."); }
