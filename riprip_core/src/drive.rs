@@ -319,6 +319,12 @@ mod test {
 			assert_eq!(offset.sectors(), sectors);
 			assert_eq!(offset.sectors_abs(), sectors_abs);
 		}
+
+		// Make sure the min and max both work, but no more.
+		assert!(ReadOffset::try_from(*OFFSET_RNG.start()).is_ok());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.start() - 1).is_err());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.end()).is_ok());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.end() + 1).is_err());
 	}
 
 	#[test]
