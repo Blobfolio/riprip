@@ -7,15 +7,21 @@ use crate::{
 	SAMPLES_PER_SECTOR,
 };
 use dactyl::traits::BytesToSigned;
-use std::fmt;
+use std::{
+	fmt,
+	ops::RangeInclusive,
+};
 
 
 
-/// # Min Offset.
-const MIN_OFFSET: i16 = -5880;
-
-/// # Max Offset.
-const MAX_OFFSET: i16 = 5880;
+#[allow(clippy::cast_possible_wrap)] // It fits.
+/// # Offset Range.
+///
+/// Ranges outside the ignorable regions in the AccurateRip/CTDB algorithms
+/// don't make any practical sense.
+const OFFSET_RNG: RangeInclusive<i16> =
+	SAMPLES_PER_SECTOR as i16 * -5..=
+	SAMPLES_PER_SECTOR as i16 * 5;
 
 /// # Max Drive Vendor Length.
 const DRIVE_VENDOR_LEN: usize = 8;
@@ -148,13 +154,13 @@ impl DriveVendorModel {
 /// This holds a read offset in samples, but can return values in various other
 /// useful formats.
 ///
-/// For historical reasons, values are restricted to `-5880..=5880`.
+/// For functional reasons, values are restricted to `-2940..=2940`.
 pub struct ReadOffset(i16);
 
 impl TryFrom<i16> for ReadOffset {
 	type Error = RipRipError;
 	fn try_from(src: i16) -> Result<Self, Self::Error> {
-		if (MIN_OFFSET..=MAX_OFFSET).contains(&src) { Ok(Self(src)) }
+		if OFFSET_RNG.contains(&src) { Ok(Self(src)) }
 		else { Err(RipRipError::ReadOffset) }
 	}
 }
