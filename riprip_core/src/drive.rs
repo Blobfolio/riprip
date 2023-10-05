@@ -7,15 +7,22 @@ use crate::{
 	SAMPLES_PER_SECTOR,
 };
 use dactyl::traits::BytesToSigned;
-use std::fmt;
+use std::{
+	fmt,
+	ops::RangeInclusive,
+};
+use trimothy::NormalizeWhitespace;
 
 
 
-/// # Min Offset.
-const MIN_OFFSET: i16 = -5880;
-
-/// # Max Offset.
-const MAX_OFFSET: i16 = 5880;
+#[allow(clippy::cast_possible_wrap)] // It fits.
+/// # Offset Range.
+///
+/// Ranges outside the ignorable regions in the AccurateRip/CTDB algorithms
+/// don't make any practical sense.
+const OFFSET_RNG: RangeInclusive<i16> =
+	SAMPLES_PER_SECTOR as i16 * -5..=
+	SAMPLES_PER_SECTOR as i16 * 5;
 
 /// # Max Drive Vendor Length.
 const DRIVE_VENDOR_LEN: usize = 8;
@@ -46,19 +53,8 @@ pub struct DriveVendorModel([u8; 24]);
 
 impl fmt::Display for DriveVendorModel {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let vendor = self.vendor();
-		let model = self.model();
-
-		// Model by itself.
-		if vendor.is_empty() {
-			for c in NormalizeWhitespace::new(model) { write!(f, "{c}")?; }
-		}
-		// Vendor: Model.
-		else {
-			for c in NormalizeWhitespace::new(vendor)
-				.chain([':', ' '])
-				.chain(NormalizeWhitespace::new(model))
-			{
+		if let Ok(raw) = std::str::from_utf8(&self.0) {
+			for c in raw.chars().normalized_control_and_whitespace() {
 				write!(f, "{c}")?;
 			}
 		}
@@ -148,13 +144,13 @@ impl DriveVendorModel {
 /// This holds a read offset in samples, but can return values in various other
 /// useful formats.
 ///
-/// For historical reasons, values are restricted to `-5880..=5880`.
+/// For functional reasons, values are restricted to `-2940..=2940`.
 pub struct ReadOffset(i16);
 
 impl TryFrom<i16> for ReadOffset {
 	type Error = RipRipError;
 	fn try_from(src: i16) -> Result<Self, Self::Error> {
-		if (MIN_OFFSET..=MAX_OFFSET).contains(&src) { Ok(Self(src)) }
+		if OFFSET_RNG.contains(&src) { Ok(Self(src)) }
 		else { Err(RipRipError::ReadOffset) }
 	}
 }
@@ -208,62 +204,9 @@ impl ReadOffset {
 	/// # Sectors (Absolute).
 	///
 	/// Return the minimum containing sector amount.
-	///
-	/// TODO: use div_ceil as soon as that is stabilized!
 	pub const fn sectors_abs(self) -> u16 {
 		if self.0 == 0 { return 0; }
-
-		let samples_abs = self.samples_abs();
-
-		// Floor.
-		let div = samples_abs.wrapping_div(SAMPLES_PER_SECTOR);
-
-		// Add one if there's a remainder.
-		if 0 == samples_abs % SAMPLES_PER_SECTOR { div }
-		else { div + 1 }
-	}
-}
-
-
-
-/// # Normalize Whitespace.
-///
-/// This `char` iterator replaces all inner contiguous whitespace with a single
-/// horizontal space.
-///
-/// It is only used by [`DriveVendorModel::to_string`], but feels worth the
-/// effort as the spacing used by those pairs can be really awkward. Haha.
-struct NormalizeWhitespace<'a> {
-	iter: std::str::Chars<'a>,
-	ws: bool,
-}
-
-impl<'a> Iterator for NormalizeWhitespace<'a> {
-	type Item = char;
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			let next = self.iter.next()?;
-			if next.is_whitespace() {
-				if ! self.ws {
-					self.ws = true;
-					return Some(' ');
-				}
-			}
-			else {
-				self.ws = false;
-				return Some(next);
-			}
-		}
-	}
-}
-
-impl<'a> NormalizeWhitespace<'a> {
-	/// # New.
-	fn new(src: &'a str) -> Self {
-		Self {
-			iter: src.trim().chars(),
-			ws: false,
-		}
+		self.samples_abs().div_ceil(SAMPLES_PER_SECTOR)
 	}
 }
 
@@ -291,7 +234,7 @@ mod test {
 			.expect("Unable to create DriveVendorModel.");
 		assert_eq!(vm.vendor(), "PIONEER");
 		assert_eq!(vm.model(), "BD-RW   BDR-XD05");
-		assert_eq!(vm.to_string(), "PIONEER: BD-RW BDR-XD05");
+		assert_eq!(vm.to_string(), "PIONEER BD-RW BDR-XD05");
 		assert_eq!(vm.detect_offset(), Some(ReadOffset(667)));
 		assert_eq!(vm.detect_cache(), Some(4096));
 	}
@@ -313,19 +256,11 @@ mod test {
 			assert_eq!(offset.sectors(), sectors);
 			assert_eq!(offset.sectors_abs(), sectors_abs);
 		}
-	}
 
-	#[test]
-	fn t_normalize_whitespace() {
-		for (raw, expected) in [
-			("", ""),
-			(" ", ""),
-			(" FOO \nBAR  ", "FOO BAR"),
-		] {
-			assert_eq!(
-				NormalizeWhitespace::new(raw).collect::<String>(),
-				expected,
-			);
-		}
+		// Make sure the min and max both work, but no more.
+		assert!(ReadOffset::try_from(*OFFSET_RNG.start()).is_ok());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.start() - 1).is_err());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.end()).is_ok());
+		assert!(ReadOffset::try_from(*OFFSET_RNG.end() + 1).is_err());
 	}
 }

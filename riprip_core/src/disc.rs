@@ -321,7 +321,7 @@ impl Disc {
 			}
 
 			// An extra line break for separation.
-			let _res = writeln!(&mut handle).and_then(|_| handle.flush());
+			let _res = writeln!(&mut handle).and_then(|()| handle.flush());
 		}
 
 		Ok(())

@@ -158,7 +158,7 @@ impl<'a> Ripper<'a> {
 					state_path(toc, entry.track).map_or(false, |s| s.is_file())
 				{
 					state.replace(entry.track, &self.opts)?;
-					if entry.preverify(&mut state, &self.opts)? {
+					if entry.preverify(&state, &self.opts)? {
 						share.progress.push_msg(happy_track_msg(entry.track), true);
 						progress.increment_n(entry.sectors * u32::from(self.opts.passes()));
 					}
@@ -534,7 +534,7 @@ impl RipEntry {
 	/// skip any further work on it.
 	///
 	/// This will return `true` if verified.
-	fn verify(&mut self, state: &mut RipState, opts: &RipOptions, progress: &Progless)
+	fn verify(&mut self, state: &RipState, opts: &RipOptions, progress: &Progless)
 	-> bool {
 		set_progress_title(progress, self.track.number(), "Verifying the rip…");
 
@@ -567,7 +567,7 @@ impl RipEntry {
 	///
 	/// If the track is confirmed it will be exported here and now; an error
 	/// will be returned in the unlikely event that fails.
-	fn preverify(&mut self, state: &mut RipState, opts: &RipOptions)
+	fn preverify(&mut self, state: &RipState, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		if ! state.is_new() {
 			(self.ar, self.ctdb) = verify_track(self.track, state);

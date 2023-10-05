@@ -271,7 +271,7 @@ impl RipState {
 			// The first twelve bytes are reserved for some magic header bits
 			// and a CRC32 hash of the toc, track, and data.
 			buf.write_all(MAGIC.as_slice())
-				.and_then(|_| buf.write_all(self.quick_hash().to_le_bytes().as_slice()))
+				.and_then(|()| buf.write_all(self.quick_hash().to_le_bytes().as_slice()))
 				.map_err(|_| RipRipError::StateSave(idx))?;
 
 			// Everything else is the sample data…

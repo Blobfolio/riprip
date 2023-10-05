@@ -447,7 +447,7 @@ impl LibcdioInstance {
 		while from < to && 0 < *todo {
 			if killed.killed() { break; }
 			if
-				! SHITLIST.with(|q| q.borrow().contains(&from)) &&
+				! SHITLIST.with_borrow(|q| q.contains(&from)) &&
 				self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
 			{ *todo -= 1; }
 			from += 1;
