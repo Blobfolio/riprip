@@ -204,19 +204,9 @@ impl ReadOffset {
 	/// # Sectors (Absolute).
 	///
 	/// Return the minimum containing sector amount.
-	///
-	/// TODO: use div_ceil as soon as that is stabilized!
 	pub const fn sectors_abs(self) -> u16 {
 		if self.0 == 0 { return 0; }
-
-		let samples_abs = self.samples_abs();
-
-		// Floor.
-		let div = samples_abs.wrapping_div(SAMPLES_PER_SECTOR);
-
-		// Add one if there's a remainder.
-		if 0 == samples_abs % SAMPLES_PER_SECTOR { div }
-		else { div + 1 }
+		self.samples_abs().div_ceil(SAMPLES_PER_SECTOR)
 	}
 }
 

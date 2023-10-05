@@ -381,11 +381,9 @@ impl RipOptions {
 	/// # Cache Sectors.
 	///
 	/// Return the cache size in sectors, rounded up.
-	///
-	/// TODO: use `div_ceil` once it becomes available.
 	pub const fn cache_sectors(&self) -> u32 {
 		if let Some(c) = self.cache {
-			(c.get() as u32 * 1024).wrapping_div(CD_DATA_SIZE as u32) + 1
+			(c.get() as u32 * 1024).div_ceil(CD_DATA_SIZE as u32)
 		}
 		else { 0 }
 	}
