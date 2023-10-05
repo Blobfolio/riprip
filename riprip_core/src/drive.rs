@@ -53,19 +53,8 @@ pub struct DriveVendorModel([u8; 24]);
 
 impl fmt::Display for DriveVendorModel {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let vendor = self.vendor();
-		let model = self.model();
-
-		// Model by itself.
-		if vendor.is_empty() {
-			for c in model.normalized_whitespace() { write!(f, "{c}")?; }
-		}
-		// Vendor: Model.
-		else {
-			for c in vendor.normalized_whitespace()
-				.chain([':', ' '])
-				.chain(model.normalized_whitespace())
-			{
+		if let Ok(raw) = std::str::from_utf8(&self.0) {
+			for c in raw.chars().normalized_control_and_whitespace() {
 				write!(f, "{c}")?;
 			}
 		}
@@ -255,7 +244,7 @@ mod test {
 			.expect("Unable to create DriveVendorModel.");
 		assert_eq!(vm.vendor(), "PIONEER");
 		assert_eq!(vm.model(), "BD-RW   BDR-XD05");
-		assert_eq!(vm.to_string(), "PIONEER: BD-RW BDR-XD05");
+		assert_eq!(vm.to_string(), "PIONEER BD-RW BDR-XD05");
 		assert_eq!(vm.detect_offset(), Some(ReadOffset(667)));
 		assert_eq!(vm.detect_cache(), Some(4096));
 	}
