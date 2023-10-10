@@ -33,9 +33,9 @@ Beyond that, it supports all the good things:
 * Sample re/confirmation
 * Backwards ripping
 * Good ol' WAV output
-* CUE sheet generation (when ripping the whole disc)
+* Cue sheet generation (when ripping the whole disc)
 
-Rip Rip Hooray! _does not_ aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
+Rip Rip Hooray! **does not** aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
 
 But it does print a nice little summary of the disc's table of contents and its various TOC-derived and encoded identifiers:
 
@@ -59,13 +59,15 @@ Rip Rip Hooray! is a command line utility built for and tested on x86-64 Linux s
 
 Because of its focus on _recovery_, Rip Rip Hooray! imposes stricter requirements on optical drives than most CD-ripping software. To work with this program, your drive will need to support:
 
-* "AccurateStream" (most modern drives qualify)
+* Accurate Stream (most modern drives qualify)
 * SCSI/MMC 2+ (again, most modern drives qualify)
 * C2 Error Pointers
 
 The drive will also need a known [read offset](http://www.accuraterip.com/driveoffsets.htm) to be auto-detected, or you'll need to know and enter the appropriate value using the `-o`/`--offset` option.
 
-If your drive has a read buffer cache, you'll need to know and enter that value with the `-c`/`--cache` option so Rip Rip can mitigate its effects.
+If your drive has a read buffer cache that isn't auto-detected, enter its size in kilobytes with the `-c`/`--cache` option so Rip Rip can try to mitigate its effects.
+
+Programmatic detection of cache sizes is unreliable, so Rip Rip maintains its own manual list. To have your drive included, simply open an [issue](https://github.com/Blobfolio/riprip/issues) with the drive's vendor/model string — as displayed in the Rip Rip summary — along with a link to the manufacturer's spec page or manual (showing the buffer size).
 
 
 ### Disk/RAM
@@ -83,7 +85,7 @@ Rip Rip Hooray! does its best to _mitigate_ drive confusion and inconsistency, b
 
 When a disc's surface is as pocked and cratered as the moon's, or disc rot has started to take hold, chances are some of that data will remain inaccessible, no matter how many times a drive, or multiple drives, attempts to re-read it.
 
-(The unaffiliated) [CUETools](http://cue.tools/wiki/Main_Page)'s repair feature can be instrumental in filling in those final bits. If Rip Rip Hooray! can't confirm the rips, toss them into CUETools to see if they're _close enough_ for automatic repair. If not, re-Rip Rip and try again.
+(The unaffiliated) [CUETools](http://cue.tools/wiki/Main_Page)'s repair feature can be instrumental in filling in those final bits. If Rip Rip can't confirm the rips, toss them into CUETools to see if they're _close enough_ for automatic repair. If not, re-Rip Rip and try again.
 
 Hopefully with a little back-and-forth, you'll wind up with perfect rips, one way or another.
 
@@ -106,7 +108,7 @@ First things first, rip the entire disc and see what happens!
 
 Because Rip Rip Hooray! is optimized for _recovery_ rather than quick, efficient transfers, you may want to use a traditional — but _accuate_ — CD ripper for the first pass, like [fre:ac](https://github.com/enzo1982/freac/) or [EAC](https://www.exactaudiocopy.de/). Just be sure to disable their advanced error recovery features, or you'll be in for a _very long ride_. Haha.
 
-From there, re-rip the problem tracks with Rip Rip Hooray!:
+From there, re-rip the problem tracks with Rip Rip:
 
 ```bash
 # Say you need 2, 3, 4 and 10. Use the -t/--tracks argument.
@@ -117,22 +119,22 @@ riprip -t 2-4,10
 # -t 2 -t 3 -t 4 -t 10
 ```
 
-If you'd rather stick with one program to keep things simple, that's fine too. Rip Rip Hooray! will rip an entire disc, including the HTOA (if any), by default, and generate a helpful cue sheet at the end of the process too:
+If you'd rather stick with one program to keep things simple, that's fine too. Rip Rip will rip an entire disc, including the HTOA (if any), by default, and generate a helpful cue sheet at the end of the process too:
 
 ```bash
 # Rip the whole disc!
 riprip
 ```
 
-Whether you're ripping a few tracks or all tracks, Rip Rip Hooray! will check them against both the [AccurateRip](http://accuraterip.com/) and [CUETools](http://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they'll speed things up too.
+Whether you're ripping a few tracks or all tracks, Rip Rip will check them against both the [AccurateRip](http://accuraterip.com/) and [CUETools](http://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they'll speed things up too.
 
-If any tracks _don't_ verify after the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip Hooray! partially recovered. (If the whole disc was ripped by Rip Rip Hooray!, just open the cue sheet it generated.)
+If any tracks _don't_ verify after the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip partially recovered, otherwise you can just open the Rip Rip's cue sheet directly.
 
 If automatic repair works, great! You're done!
 
 If not, _iterate!_
 
-Simply re-run Rip Rip Hooray!. It will pick up from where it left off, (re)reading any sectors that have room for improvement, skipping the rest.
+Simply re-run Rip Rip. It will pick up from where it left off, (re)reading any sectors that have room for improvement, skipping the rest.
 
 ```bash
 # Refine the original rip.
@@ -142,11 +144,15 @@ riprip
 riprip -t 2-4,10
 ```
 
-You can do this as many or as few times as needed. If you know you'll need several passes to get the data good enough for CUETools, you can automate that with the `-p`/`--passes` option, like:
+You can do this as many or as few times as needed. If you know you'll need several passes to get the data good enough for CUETools, you can automate them with the `-p`/`--passes` option, like:
 
 ```bash
 # Run through each track up to three times, if needed.
-riprip --passes 3
+riprip -p3
+
+# Automation also allows for other fun things, like alternating between
+# forward and backward traversal:
+riprip -p3 --flip-flop
 ```
 
 If problem tracks remain, recheck the refined album rip with CUETools repair. Rinse and repeat until everything is perfect, or the drive has clearly read everything it's ever going to read.
@@ -161,7 +167,7 @@ Good luck!
 
 Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page.
 
-While specifically written for use on x86-64 Linux systems, both Rust and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
+While specifically written for use on x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
 
 ```bash
 # Clone the repository:

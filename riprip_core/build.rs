@@ -8,6 +8,7 @@ array that can be easily searched at runtime.
 use cdtoc::AccurateRip;
 use std::{
 	collections::BTreeMap,
+	env,
 	fs::{
 		File,
 		Metadata,
@@ -41,9 +42,11 @@ fn main() {
 	let caches = parse_caches(&offsets);
 
 	// Announce the totals for reference.
-	let len = offsets.len().to_string().len();
-	println!("cargo:warning=Read Offsets: {}", offsets.len());
-	println!("cargo:warning=Cache Sizes:  {:>len$}", caches.len());
+	if env::var("SHOW_TOTALS").is_ok() {
+		let len = offsets.len().to_string().len();
+		println!("cargo:warning=Read Offsets: {}", offsets.len());
+		println!("cargo:warning=Cache Sizes:  {:>len$}", caches.len());
+	}
 
 	// Save it!
 	let data = [nice_caches(caches), nice_offsets(offsets)].concat();
@@ -150,7 +153,7 @@ const DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = ["#,
 ///
 /// This generates a (file/dir) path relative to `OUT_DIR`.
 fn out_path(name: &str) -> PathBuf {
-	let dir = std::env::var("OUT_DIR").expect("Missing OUT_DIR.");
+	let dir = env::var("OUT_DIR").expect("Missing OUT_DIR.");
 	let mut out = std::fs::canonicalize(dir).expect("Missing OUT_DIR.");
 	out.push(name);
 	out

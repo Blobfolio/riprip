@@ -30,7 +30,7 @@ release_dir := justfile_directory() + "/release"
 
 # Build Release!
 @build:
-	cargo build \
+	env SHOW_TOTALS=1 cargo build \
 		--bin "{{ pkg_id }}" \
 		-p "{{ pkg_id }}" \
 		--release \
