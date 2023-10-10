@@ -119,7 +119,7 @@ impl RipSample {
 			Self::Maybe(s) => {
 				let (a, mut b) = s.contention();
 				b = b.saturating_mul(rereads.1);
-				if b == u8::MAX { b = u8::MAX - 1; }
+				if b == u8::MAX { b -= 1; }
 				rereads.0 <= a && b <= a
 			}
 			// Never likely.
