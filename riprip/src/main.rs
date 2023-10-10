@@ -256,16 +256,16 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
 			let tmp = &v[..pos];
 			if ! tmp.is_empty() {
-				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
 			}
 			let tmp = &v[pos + 1..];
 			if ! tmp.is_empty() {
-				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
 			}
 		}
 		// A number by itself affects only the first part.
 		else {
-			a = u8::btou(v).ok_or(RipRipError::CliParse("-r,--rereads"))?;
+			a = u8::btou(v).ok_or(RipRipError::CliParse("-r/--rereads"))?;
 		}
 
 		opts = opts.with_rereads(a, b);
