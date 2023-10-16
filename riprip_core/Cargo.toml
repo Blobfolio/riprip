@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 cdtoc = "0.3.*"
 crc32fast = "1.3.2"
-dactyl = "0.5.*"
+dactyl = "0.6.*"
 tempfile = "3.8.0"
 trimothy = "0.2.*"
 utc2k = "0.7.*"
