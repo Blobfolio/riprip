@@ -46,9 +46,16 @@ use std::{
 	},
 	path::Path,
 	sync::Once,
+	time::{
+		Duration,
+		Instant,
+	},
 };
 
 
+
+/// # Cache Bust Timeout.
+const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// # Initialization Counter.
 static LIBCDIO_INIT: Once = Once::new();
@@ -418,15 +425,17 @@ impl LibcdioInstance {
 		killed: &KillSwitch,
 	) {
 		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
+			let now = Instant::now();
+
 			// If we're moving backwards, try after, then before.
 			if backwards {
-				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
-				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
+				self._cache_bust(buf, rng.end, leadout, &mut todo, now, killed);
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, now, killed);
 			}
 			// Otherwise before, then after.
 			else {
-				self._cache_bust(buf, 0, rng.start - 1, &mut todo, killed);
-				self._cache_bust(buf, rng.end, leadout, &mut todo, killed);
+				self._cache_bust(buf, 0, rng.start - 1, &mut todo, now, killed);
+				self._cache_bust(buf, rng.end, leadout, &mut todo, now, killed);
 			}
 		}
 	}
@@ -442,10 +451,14 @@ impl LibcdioInstance {
 		mut from: i32,
 		to: i32,
 		todo: &mut u32,
+		now: Instant,
 		killed: &KillSwitch,
 	) {
 		while from < to && 0 < *todo {
-			if killed.killed() { break; }
+			if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {
+				*todo = 0;
+				break;
+			}
 			if
 				! SHITLIST.with_borrow(|q| q.contains(&from)) &&
 				self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
