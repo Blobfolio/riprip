@@ -18,6 +18,10 @@ use cdtoc::{
 use crate::{
 	chk_accuraterip,
 	chk_ctdb,
+	COLOR_BAD,
+	COLOR_CONFIRMED,
+	COLOR_LIKELY,
+	COLOR_MAYBE,
 	Disc,
 	KillSwitch,
 	LibcdioInstance,
@@ -31,6 +35,8 @@ use crate::{
 };
 use dactyl::{
 	NiceElapsed,
+	NiceU32,
+	NiceU8,
 	traits::NiceInflection,
 };
 use fyi_msg::{
@@ -41,6 +47,7 @@ use iter::OffsetRipIter;
 use log::RipLog;
 use quality::TrackQuality;
 use std::{
+	borrow::Cow,
 	collections::BTreeMap,
 	num::NonZeroU32,
 	path::PathBuf,
@@ -246,6 +253,41 @@ impl<'a> Ripper<'a> {
 
 		Ok(())
 	}
+
+	#[allow(clippy::cast_possible_truncation)]
+	/// # Status.
+	///
+	/// Check the status of each track and nothing else.
+	pub(crate) fn status(&mut self, progress: &Progless, killed: &KillSwitch)
+	-> Result<(), RipRipError> {
+		// We should definitely have a first track, but if for some reason we
+		// don't there's nothing more to do!
+		let Some(first_track) = self.tracks.values().map(|t| t.track).next() else {
+			return Err(RipRipError::FirstTrackNum);
+		};
+
+		// Load a bunch of other stuff!
+		let toc = self.disc.toc();
+		let _res = progress.reset(self.tracks.len() as u32);
+		progress.set_title(Some(Msg::custom("Analyzing", 199, standby_msg())));
+		let mut state = RipState::new(toc, first_track, &self.opts)?;
+
+		// Take a look!
+		for entry in self.tracks.values_mut() {
+			if killed.killed() { return Err(RipRipError::Killed); }
+
+			if state_path(toc, entry.track).map_or(false, |s| s.is_file()) {
+				state.replace(entry.track, &self.opts)?;
+				entry.preverify(&state, &self.opts)?;
+			}
+
+			progress.increment();
+		}
+
+		progress.finish();
+
+		Ok(())
+	}
 }
 
 impl<'a> Ripper<'a> {
@@ -283,6 +325,102 @@ impl<'a> Ripper<'a> {
 		// An extra line to give some separation between this task and the
 		// next.
 		eprintln!();
+	}
+
+	#[allow(clippy::type_complexity)]
+	#[allow(clippy::option_if_let_else)]
+	/// # Summarize Per-Track Status.
+	///
+	/// Print a simple table of each track and its status.
+	pub(crate) fn summarize_status(&self) {
+		use std::io::Write;
+
+		let writer = std::io::stderr();
+		let mut handle = writer.lock();
+
+		let conf = self.opts.confidence();
+		let zero = NiceU32::from(0_u32);
+
+		//             Idx Bad      Maybe    Likely,  AR                CTDB.
+		let rows: Vec<(u8, NiceU32, NiceU32, NiceU32, Option<(u8, u8)>, Option<u16>)> =
+			self.tracks.values()
+			.map(|t| {
+				let idx = t.track.number();
+				let (_, q) = t.quality;
+				let ar = t.ar.filter(|&(v1, v2)| conf <= v1 || conf <= v2);
+				let ctdb = t.ctdb.filter(|&v1| u16::from(conf) <= v1);
+				let likely = NiceU32::from(q.confirmed() + q.likely());
+				let maybe = NiceU32::from(q.maybe());
+				let bad =
+					if maybe == zero && likely == zero { zero }
+					else { NiceU32::from(q.bad()) };
+
+				(idx, bad, maybe, likely, ar, ctdb)
+			})
+			.collect();
+
+		// Find the max widths so we can align pretty.
+		let mut any_ar = false;
+		let mut any_ctdb = false;
+		let mut wbad: usize = 3;
+		let mut wmaybe: usize = 5;
+		let mut wlikely: usize = 6;
+		for (_, bad, maybe, likely, ar, ctdb) in &rows {
+			any_ar = any_ar || ar.is_some();
+			any_ctdb = any_ctdb || ctdb.is_some();
+
+			wbad = usize::max(wbad, bad.len());
+			wmaybe = usize::max(wmaybe, maybe.len());
+			wlikely = usize::max(wlikely, likely.len());
+		}
+
+		// Print each track.
+		for (idx, bad, maybe, likely, ar, ctdb) in rows {
+			// No status?
+			if bad == zero && maybe == zero && likely == zero {
+				writeln!(
+					&mut handle,
+					"{idx:02}  \x1b[2m{:>wbad$}  {:>wmaybe$}  {:>wlikely$}\x1b[0m",
+					"--",
+					"--",
+					"--",
+				).unwrap();
+			}
+			// Status!
+			else {
+				writeln!(
+					&mut handle,
+					"{idx:02}  \x1b[{COLOR_BAD}m{:>wbad$}  \x1b[0;{COLOR_MAYBE}m{:>wmaybe$}  \x1b[0;{}m{:>wlikely$}\x1b[0m{}{}",
+					bad.as_str(),
+					maybe.as_str(),
+					if ar.is_some() || ctdb.is_some() { COLOR_CONFIRMED } else { COLOR_LIKELY },
+					likely.as_str(),
+					if let Some((v1, v2)) = ar {
+						let nice_v1 = NiceU8::from(v1.min(99));
+						let nice_v2 = NiceU8::from(v2.min(99));
+						Cow::Owned(format!(
+							"        \x1b[1;{COLOR_CONFIRMED}m{}\x1b[0;2m/\x1b[0;1;{COLOR_CONFIRMED}m{}\x1b[0m",
+							if v1 == 0 { "--" } else { nice_v1.as_str2() },
+							if v2 == 0 { "--" } else { nice_v2.as_str2() },
+						))
+					}
+					else if any_ar { Cow::Borrowed("             ") }
+					else { Cow::Borrowed("") },
+					if let Some(v1) = ctdb {
+						Cow::Owned(format!(
+							"       \x1b[1;{COLOR_CONFIRMED}m{:03}\x1b[0m",
+							v1.min(999),
+						))
+					}
+					else if any_ctdb { Cow::Borrowed("          ") }
+					else { Cow::Borrowed("") },
+				).unwrap();
+			}
+		}
+
+		// One more line for good measure.
+		writeln!(&mut handle).unwrap();
+		handle.flush().unwrap();
 	}
 
 	/// # Finish.
