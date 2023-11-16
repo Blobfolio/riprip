@@ -127,13 +127,18 @@ fn _main() -> Result<(), RipRipError> {
 	// Go ahead and leave if there's no ripping to do.
 	if args.switch(b"--no-rip") { return Ok(()); }
 
-	// Set up the ripper!
-	let opts = parse_rip_options(&args, drivevendormodel, &disc)?;
+	// Set up progress and killswitch in case they're needed.
 	let progress = Progless::default();
 	let killed = KillSwitch::default();
 	sigint(killed.inner(), Some(progress.clone()));
 
-	// Summarize.
+	// Just checking the status?
+	if let Some(opts) = parse_rip_status_options(&args, &disc)? {
+		return disc.status(&opts, &progress, &killed);
+	}
+
+	// Parse the options.
+	let opts = parse_rip_options(&args, drivevendormodel, &disc)?;
 	rip_summary(&disc, &opts)?;
 
 	// Log header.
@@ -235,9 +240,8 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		opts = opts.with_cache(v);
 	}
 
-	if let Some(v) = args.option(b"--confidence") {
-		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
-		opts = opts.with_confidence(confidence);
+	if let Some(v) = parse_rip_option_confidence(args)? {
+		opts = opts.with_confidence(v);
 	}
 
 	if let Some(v) = args.option2(b"-p", b"--passes").or_else(|| args.option(b"--pass")) {
@@ -245,29 +249,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 		opts = opts.with_passes(passes);
 	}
 
-	// Rereads are kinda annoying.
-	if let Some(v) = args.option2(b"-r", b"--rereads").or_else(|| args.option(b"--reread")) {
-		// Default.
-		let mut a = 2;
-		let mut b = 2;
-
-		// If there's a comma, there could be up to two values. Keep the
-		// default if either is omitted.
-		if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
-			let tmp = &v[..pos];
-			if ! tmp.is_empty() {
-				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-			}
-			let tmp = &v[pos + 1..];
-			if ! tmp.is_empty() {
-				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-			}
-		}
-		// A number by itself affects only the first part.
-		else {
-			a = u8::btou(v).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-		}
-
+	if let Some((a, b)) = parse_rip_option_reread(args)? {
 		opts = opts.with_rereads(a, b);
 	}
 
@@ -321,6 +303,72 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 
 	// Done!
 	Ok(opts)
+}
+
+/// # Parse Rip (Status) Options.
+///
+/// Return (mostly) default options if `--status` is set.
+fn parse_rip_status_options(args: &Argue, disc: &Disc)
+-> Result<Option<RipOptions>, RipRipError> {
+	if args.switch(b"--status") {
+		// Make a generic options with all the tracks.
+		let mut opts = RipOptions::default();
+
+		if let Some(v) = parse_rip_option_confidence(args)? {
+			opts = opts.with_confidence(v);
+		}
+
+		if let Some((a, b)) = parse_rip_option_reread(args)? {
+			opts = opts.with_rereads(a, b);
+		}
+
+		// Add all tracks from the disc.
+		let toc = disc.toc();
+		if toc.htoa().is_some() { opts = opts.with_track(0); }
+		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
+
+		Ok(Some(opts))
+	}
+	else { Ok(None) }
+}
+
+/// # Parse Confidence Option.
+fn parse_rip_option_confidence(args: &Argue) -> Result<Option<u8>, RipRipError> {
+	if let Some(v) = args.option(b"--confidence") {
+		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
+		Ok(Some(confidence))
+	}
+	else { Ok(None) }
+}
+
+/// # Parse Re-read Option.
+fn parse_rip_option_reread(args: &Argue) -> Result<Option<(u8, u8)>, RipRipError> {
+	// Rereads are kinda annoying.
+	if let Some(v) = args.option2(b"-r", b"--rereads").or_else(|| args.option(b"--reread")) {
+		// Default.
+		let mut a = 2;
+		let mut b = 2;
+
+		// If there's a comma, there could be up to two values. Keep the
+		// default if either is omitted.
+		if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
+			let tmp = &v[..pos];
+			if ! tmp.is_empty() {
+				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
+			}
+			let tmp = &v[pos + 1..];
+			if ! tmp.is_empty() {
+				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
+			}
+		}
+		// A number by itself affects only the first part.
+		else {
+			a = u8::btou(v).ok_or(RipRipError::CliParse("-r/--rereads"))?;
+		}
+
+		Ok(Some((a, b)))
+	}
+	else { Ok(None) }
 }
 
 /// # Rip Summary.
@@ -542,6 +590,10 @@ MISCELLANEOUS:
                       exit (without ripping anything).
         --no-summary  Skip the drive and disc summary and jump straight to
                       ripping.
+        --status      Print the status of the individual track rips (that you
+                      presumably already started) to STDERR and exit. Note that
+                      only the --no-summary, --confidence, and -r/--rereads
+                      options have any meaning in this mode.
 
 EARLY EXIT:
     If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop

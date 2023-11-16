@@ -326,6 +326,23 @@ impl Disc {
 
 		Ok(())
 	}
+
+	/// # Status.
+	///
+	/// Print the status information for each track, if any.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if there are I/O problems or the user aborts.
+	pub fn status(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
+	-> Result<(), RipRipError> {
+		// Load the ripper.
+		let mut rip = Ripper::new(self, opts)?;
+		rip.status(progress, killed)?;
+		rip.summarize_status();
+
+		Ok(())
+	}
 }
 
 

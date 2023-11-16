@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "November 2023" "Rip Rip Hooray! v0.2.1" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "November 2023" "Rip Rip Hooray! v0.2.2" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.2.1.
+Rip Rip Hooray! \- Manual page for riprip v0.2.2.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -28,6 +28,9 @@ Skip the drive and disc summary and jump straight to ripping.
 .TP
 \fB\-\-reset\fR
 Flip 'likely' samples back to 'maybe', keeping their values, but resetting all counts to one. This is a softer alternative to \-\-no\-resume, and will not affect tracks confirmed by AccurateRip/CUETools.
+.TP
+\fB\-\-status\fR
+Print the status of the individual track rips (that you presumably already started) to STDERR and exit. Note that only the \-\-no\-summary, \-\-confidence, and \-r/\-\-rereads options have any meaning in this mode.
 .TP
 \fB\-\-strict\fR
 Consider C2 errors an all\-or\-nothing proposition for the sector as a whole, marking all samples bad if any of them are bad. This is most effective when applied consistently from the initial rip and onward.

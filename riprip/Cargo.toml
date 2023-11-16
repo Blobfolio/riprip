@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.2.1"
+version = "0.2.2"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -60,6 +60,10 @@ description = "Skip the drive and disc summary and jump straight to ripping."
 [[package.metadata.bashman.switches]]
 long = "--reset"
 description = "Flip 'likely' samples back to 'maybe', keeping their values, but resetting all counts to one. This is a softer alternative to --no-resume, and will not affect tracks confirmed by AccurateRip/CUETools."
+
+[[package.metadata.bashman.switches]]
+long = "--status"
+description = "Print the status of the individual track rips (that you presumably already started) to STDERR and exit. Note that only the --no-summary, --confidence, and -r/--rereads options have any meaning in this mode."
 
 [[package.metadata.bashman.switches]]
 long = "--strict"

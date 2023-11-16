@@ -133,6 +133,9 @@ impl TrackQuality {
 }
 
 impl TrackQuality {
+	/// # Bad.
+	pub(super) const fn bad(&self) -> u32 { self.bad }
+
 	/// # Maybe.
 	pub(super) const fn maybe(&self) -> u32 { self.maybe }
 
