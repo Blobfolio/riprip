@@ -14,6 +14,7 @@ _basher___riprip() {
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")
 	[[ " ${COMP_LINE} " =~ " --reset " ]] || opts+=("--reset")
+	[[ " ${COMP_LINE} " =~ " --status " ]] || opts+=("--status")
 	[[ " ${COMP_LINE} " =~ " --strict " ]] || opts+=("--strict")
 	[[ " ${COMP_LINE} " =~ " sync " ]] || opts+=("sync")
 	if [[ ! " ${COMP_LINE} " =~ " -v " ]] && [[ ! " ${COMP_LINE} " =~ " --verbose " ]]; then
