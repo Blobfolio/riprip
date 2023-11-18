@@ -92,7 +92,7 @@ description = "Drive cache can interfere with re-read accuracy. If your drive ca
 [[package.metadata.bashman.options]]
 long = "--confidence"
 label = "<NUM>"
-description = "Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]"
+description = "Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 1..=10]"
 
 [[package.metadata.bashman.options]]
 short = "-d"

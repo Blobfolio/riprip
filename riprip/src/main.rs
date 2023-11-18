@@ -572,7 +572,7 @@ UNUSUAL SETTINGS:
                       confidence of at least <NUM>. Raise this value if you
                       personally fucked up the database(s) with prior bad rips,
                       otherwise the default should be fine. Haha.
-                      [default: 3; range: 3..=10]
+                      [default: 3; range: 1..=10]
         --sync        Confirm sector positioning with subchannel data (when
                       available) to make sure the drive is actually reading
                       from the right place, and ignore the data if not. This is
