@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "November 2023" "Rip Rip Hooray! v0.2.2" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "December 2023" "Rip Rip Hooray! v0.2.3" "User Commands"
 .SH NAME
-Rip Rip Hooray! \- Manual page for riprip v0.2.2.
+Rip Rip Hooray! \- Manual page for riprip v0.2.3.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -49,7 +49,7 @@ Print version information to STDOUT and exit.
 Drive cache can interfere with re\-read accuracy. If your drive caches data, use this option to specify its buffer size so Rip Rip can try to mitigate it. Values with an M suffix are treated as MiB, otherwise KiB are assumed. [default: auto or 0; max: 65,535]
 .TP
 \fB\-\-confidence\fR <NUM>
-Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 3..=10]
+Consider a track accurately ripped — i.e. stop working on it — AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 1..=10]
 .TP
 \fB\-d\fR, \fB\-\-dev\fR <PATH>
 The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]

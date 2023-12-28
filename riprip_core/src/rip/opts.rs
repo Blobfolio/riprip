@@ -39,7 +39,7 @@ const FLAG_VERBOSE: u8 =    0b0100_0000;
 const FLAG_DEFAULT: u8 = FLAG_RESUME;
 
 /// # Minimum Confidence.
-const CONFIDENCE_MIN: u8 = 3;
+const CONFIDENCE_MIN: u8 = 1;
 
 /// # Maximum Confidence.
 const CONFIDENCE_MAX: u8 = 10;
