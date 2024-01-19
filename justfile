@@ -26,6 +26,8 @@ data_dir    := "/tmp/bench-data"
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
+export RUSTFLAGS := "-C target-cpu=x86-64-v3"
+
 
 
 # Build Release!
