@@ -1,13 +1,13 @@
 # Project Dependencies
     Package:   riprip
     Version:   0.2.3
-    Generated: 2023-12-28 19:36:37 UTC
+    Generated: 2024-01-20 06:06:41 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
-| [ahash](https://github.com/tkaitchuck/ahash) | 0.8.6 | [Tom Kaitchuck](mailto:tom.kaitchuck@gmail.com) | Apache-2.0 or MIT |
+| [ahash](https://github.com/tkaitchuck/ahash) | 0.8.7 | [Tom Kaitchuck](mailto:tom.kaitchuck@gmail.com) | Apache-2.0 or MIT |
 | [argyle](https://github.com/Blobfolio/argyle) | 0.6.8 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
-| [base64](https://github.com/marshallpierce/rust-base64) | 0.21.5 | [Alice Maz](mailto:alice@alicemaz.com) and [Marshall Pierce](mailto:marshall@mpierce.org) | Apache-2.0 or MIT |
+| [base64](https://github.com/marshallpierce/rust-base64) | 0.21.7 | [Alice Maz](mailto:alice@alicemaz.com) and [Marshall Pierce](mailto:marshall@mpierce.org) | Apache-2.0 or MIT |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.10.4 | RustCrypto Developers | Apache-2.0 or MIT |
 | [bytecount](https://github.com/llogiq/bytecount) | 0.6.7 | [Andre Bogus](mailto:bogusandre@gmail.de) and [Joshua Landau](mailto:joshua@landau.ws) | Apache-2.0 or MIT |
 | [cdtoc](https://github.com/Blobfolio/cdtoc) | 0.3.4 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
@@ -37,7 +37,7 @@
 | [tinyvec_macros](https://github.com/Soveu/tinyvec_macros) | 0.1.1 | [Soveu](mailto:marx.tomasz@gmail.com) | Apache-2.0, MIT, or Zlib |
 | [trimothy](https://github.com/Blobfolio/trimothy) | 0.2.2 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [typenum](https://github.com/paholg/typenum) | 1.17.0 | [Paho Lurie-Gregg](mailto:paho@paholg.com) and [Andre Bogus](mailto:bogusandre@gmail.com) | Apache-2.0 or MIT |
-| [unicode-bidi](https://github.com/servo/unicode-bidi) | 0.3.14 | The Servo Project Developers | Apache-2.0 or MIT |
+| [unicode-bidi](https://github.com/servo/unicode-bidi) | 0.3.15 | The Servo Project Developers | Apache-2.0 or MIT |
 | [unicode-normalization](https://github.com/unicode-rs/unicode-normalization) | 0.1.22 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.1.11 | [kwantam](mailto:kwantam@gmail.com) and [Manish Goregaokar](mailto:manishsmail@gmail.com) | Apache-2.0 or MIT |
 | [ureq](https://github.com/algesten/ureq) | 2.9.1 | [Martin Algesten](mailto:martin@algesten.se) and [Jacob Hoffman-Andrews](mailto:ureq@hoffman-andrews.com) | Apache-2.0 or MIT |

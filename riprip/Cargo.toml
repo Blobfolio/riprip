@@ -14,14 +14,14 @@ publish = false
 maintainer = "Josh Stoik <hello@blobfolio.com>"
 copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
-revision = "1"
+revision = "2"
 depends = "$auto"
 section = "sound"
 extended-description = """\
 .\n\
 Rip Rip Hooray! is an audio CD-ripper optimized for incremental data recovery."""
 assets = [
-    ["../target/x86_64-unknown-linux-gnu/release/riprip", "usr/bin/", "755"],
+    ["../target/release/riprip", "usr/bin/", "755"],
     ["../release/completions/riprip.bash", "etc/bash_completion.d/", "644"],
     ["../release/man/riprip.1.gz", "usr/share/man/man1/", "644"],
 ]
