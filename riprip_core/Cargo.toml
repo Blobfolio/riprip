@@ -19,7 +19,7 @@ trimothy = "0.2.*"
 utc2k = "0.7.*"
 
 [dependencies.argyle]
-version = "0.6.*"
+version = "0.7.*"
 optional = true
 
 [dependencies.fyi_msg]
