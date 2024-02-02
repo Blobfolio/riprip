@@ -31,19 +31,19 @@ version = "=0.5.0"
 default-features = false
 features = [ "cdio" ]
 
-[dependencies.ureq]
-version = "2.7.0"
+[dependencies.minreq]
+version = "2.11.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
-# reason so we don't need any ureq features at all!
+# reason so we don't need any minreq features at all!
 
 [build-dependencies.cdtoc]
 version = "0.3.*"
 default-features = false
 features = [ "accuraterip" ]
 
-[build-dependencies.ureq]
-version = "2.7.0"
+[build-dependencies.minreq]
+version = "2.11.*"
 default-features = false
 
 [dev-dependencies]
