@@ -132,7 +132,7 @@ ctrlc = "3.4.*"
 dactyl = "0.7.*"
 oxford_join = "0.2.*"
 trimothy = "0.2.*"
-utc2k = "0.7.*"
+utc2k = "0.8.*"
 
 [dependencies.fyi_msg]
 version = "0.11.*"

@@ -16,7 +16,7 @@ crc32fast = "1.3.2"
 dactyl = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.2.*"
-utc2k = "0.7.*"
+utc2k = "0.8.*"
 
 [dependencies.argyle]
 version = "0.7.*"
