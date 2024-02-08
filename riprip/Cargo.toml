@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.2.3"
+version = "0.2.4"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -14,7 +14,7 @@ publish = false
 maintainer = "Josh Stoik <hello@blobfolio.com>"
 copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
-revision = "2"
+revision = "1"
 depends = "$auto"
 section = "sound"
 extended-description = """\
