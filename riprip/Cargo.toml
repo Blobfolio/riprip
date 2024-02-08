@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.2.3"
+version = "0.2.4"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -12,7 +12,7 @@ publish = false
 
 [package.metadata.deb]
 maintainer = "Josh Stoik <hello@blobfolio.com>"
-copyright = "2022, Blobfolio, LLC <hello@blobfolio.com>"
+copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
 depends = "$auto"
@@ -21,7 +21,7 @@ extended-description = """\
 .\n\
 Rip Rip Hooray! is an audio CD-ripper optimized for incremental data recovery."""
 assets = [
-    ["../target/x86_64-unknown-linux-gnu/release/riprip", "usr/bin/", "755"],
+    ["../target/release/riprip", "usr/bin/", "755"],
     ["../release/completions/riprip.bash", "etc/bash_completion.d/", "644"],
     ["../release/man/riprip.1.gz", "usr/share/man/man1/", "644"],
 ]
@@ -127,15 +127,15 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [dependencies]
-argyle = "0.6.*"
+argyle = "0.7.*"
 ctrlc = "3.4.*"
-dactyl = "0.6.*"
+dactyl = "0.7.*"
 oxford_join = "0.2.*"
 trimothy = "0.2.*"
-utc2k = "0.7.*"
+utc2k = "0.8.*"
 
 [dependencies.fyi_msg]
-version = "0.11.*"
+version = "0.12.*"
 features = [ "progress" ]
 
 [dependencies.riprip_core]

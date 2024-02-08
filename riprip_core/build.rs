@@ -13,10 +13,7 @@ use std::{
 		File,
 		Metadata,
 	},
-	io::{
-		Read,
-		Write,
-	},
+	io::Write,
 	path::{
 		Path,
 		PathBuf,
@@ -67,15 +64,17 @@ fn fetch_offsets() -> Vec<u8> {
 	if let Some(x) = try_cache(&cache) { return x; }
 
 	// Download it fresh.
-	let res = ureq::get(AccurateRip::DRIVE_OFFSET_URL)
-		.set("user-agent", "Mozilla/5.0")
-		.call()
+	let res = minreq::get(AccurateRip::DRIVE_OFFSET_URL)
+		.with_header("user-agent", "Mozilla/5.0")
+		.send()
 		.expect("Unable to download AccurateRip drive offsets.");
 
-	let mut out: Vec<u8> = Vec::new();
-	res.into_reader().read_to_end(&mut out)
-		.expect("Unable to read the AccurateRip drive offset server response.");
+	// Only accept happy response codes with sized bodies.
+	if ! (200..=399).contains(&res.status_code) {
+		panic!("AccurateRip returned {}.", res.status_code);
+	}
 
+	let out = res.into_bytes();
 	if out.is_empty() {
 		panic!("The AccurateRip drive offset server response was empty.");
 	}

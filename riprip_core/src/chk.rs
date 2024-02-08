@@ -26,25 +26,22 @@ use std::{
 			Ordering::Relaxed,
 		},
 		Mutex,
-		OnceLock,
 	},
-	time::Duration,
 };
-use ureq::{
-	Agent,
-	AgentBuilder,
-};
-
-
-
-/// # Connection Agent.
-static AGENT: OnceLock<Agent> = OnceLock::new();
 
 /// # Maximum CTDB Offset Shift (in bytes).
 const CTDB_WIGGLE: usize = CTDB_WIGGLE_SAMPLES * BYTES_PER_SAMPLE as usize;
 
 /// # Maximum CTDB Offset Shift (in samples).
 const CTDB_WIGGLE_SAMPLES: usize = SAMPLE_OVERREAD as usize;
+
+/// # User Agent.
+const UA: &str = concat!(
+	"Mozilla/5.0 (X11; Linux x86_64; rv:",
+	env!("CARGO_PKG_VERSION"),
+	") RipRip/",
+	env!("CARGO_PKG_VERSION"),
+);
 
 
 
@@ -309,25 +306,6 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 
 
-/// # Connection Agent.
-///
-/// Storing the agent statically saves a little bit of overhead on reuse. Since
-/// the checksums are cached locally, this may not get called at all.
-fn agent() -> &'static Agent {
-	AGENT.get_or_init(||
-		AgentBuilder::new()
-			.timeout(Duration::from_secs(15))
-			.user_agent(concat!(
-				"Mozilla/5.0 (X11; Linux x86_64; rv:",
-				env!("CARGO_PKG_VERSION"),
-				") RipRip/",
-				env!("CARGO_PKG_VERSION"),
-			))
-			.max_idle_connections(0)
-			.build()
-	)
-}
-
 /// # Download.
 ///
 /// Download and return the data!
@@ -335,19 +313,25 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	use std::io::Write;
 
 	// Download the data into a vector.
-	let res = agent().get(url).call().ok()?;
-	let mut out = Vec::new();
-	res.into_reader().read_to_end(&mut out).ok()?;
+	let res = minreq::get(url)
+		.with_header("user-agent", UA)
+		.with_timeout(15)
+		.send()
+		.ok()?;
 
-	if out.is_empty() { None }
-	else {
-		// Cache the contents for next time.
-		let _res = CacheWriter::new(dst).ok()
-			.and_then(|mut writer| {
-				writer.writer().write_all(&out).ok()?;
-				writer.finish().ok()
-			});
-
-		Some(out)
+	// Only accept happy response codes with sized bodies.
+	if (200..=399).contains(&res.status_code) {
+		let out = res.into_bytes();
+		if ! out.is_empty() {
+			// Cache the contents for next time.
+			let _res = CacheWriter::new(dst).ok()
+				.and_then(|mut writer| {
+					writer.writer().write_all(&out).ok()?;
+					writer.finish().ok()
+				});
+			return Some(out);
+		}
 	}
+
+	None
 }
