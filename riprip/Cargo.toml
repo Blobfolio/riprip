@@ -134,7 +134,7 @@ trimothy = "0.2.*"
 utc2k = "0.8.*"
 
 [dependencies.fyi_msg]
-version = "0.12.*"
+version = "0.13.*"
 features = [ "progress" ]
 
 [dependencies.riprip_core]
