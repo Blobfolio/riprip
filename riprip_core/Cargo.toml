@@ -1,10 +1,9 @@
 [package]
 name = "riprip_core"
-version = "0.2.4"
+version = "0.2.5"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.73"
 description = "The library for Rip Rip Hooray."
 repository = "https://github.com/Blobfolio/riprip"
 readme = "README.md"
@@ -19,11 +18,11 @@ trimothy = "0.2.*"
 utc2k = "0.8.*"
 
 [dependencies.argyle]
-version = "0.7.*"
+version = "0.7.2"
 optional = true
 
 [dependencies.fyi_msg]
-version = "0.12.*"
+version = "0.13.*"
 features = [ "progress" ]
 
 [dependencies.libcdio-sys]

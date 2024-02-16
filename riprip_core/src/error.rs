@@ -104,6 +104,10 @@ pub enum RipRipError {
 	Argue(argyle::ArgyleError),
 
 	#[cfg(feature = "bin")]
+	/// # Invalid CLI arg.
+	CliArg(String),
+
+	#[cfg(feature = "bin")]
 	/// # CLI Parsing failure.
 	CliParse(&'static str),
 }
@@ -166,6 +170,9 @@ impl fmt::Display for RipRipError {
 
 			#[cfg(feature = "bin")]
 			Self::Argue(a) => f.write_str(a.as_str()),
+
+			#[cfg(feature = "bin")]
+			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
 
 			#[cfg(feature = "bin")]
 			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
