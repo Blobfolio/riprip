@@ -103,6 +103,44 @@ fn _main() -> Result<(), RipRipError> {
 	// Load CLI arguments, if any.
 	let args = Argue::new(FLAG_HELP | FLAG_VERSION)?;
 
+	// Check for unknown args.
+	if let Some(boo) = args.check_keys(
+		&[
+			b"--backward",
+			b"--backwards",
+			b"--flip-flop",
+			b"--no-resume",
+			b"--no-rip",
+			b"--no-summary",
+			b"--reset",
+			b"--status",
+			b"--strict",
+			b"--sync",
+			b"--verbose",
+			b"-v",
+		],
+		&[
+			b"--cache",
+			b"--confidence",
+			b"--dev",
+			b"--offset",
+			b"--pass",
+			b"--passes",
+			b"--reread",
+			b"--rereads",
+			b"--track",
+			b"--tracks",
+			b"-c",
+			b"-d",
+			b"-o",
+			b"-p",
+			b"-r",
+			b"-t",
+		],
+	) {
+		return Err(RipRipError::CliArg(String::from_utf8_lossy(boo).into_owned()));
+	}
+
 	// Connect to the device and summarize the disc.
 	let dev = args.option2_os(b"-d", b"--dev");
 	let disc = Disc::new(dev)?;
