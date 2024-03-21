@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.2.5"
+version = "0.2.6"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -127,7 +127,7 @@ duplicate = true
 
 [dependencies]
 argyle = "0.7.2"
-ctrlc = "3.4.*"
+ctrlc = "=3.4.4"
 dactyl = "0.7.*"
 oxford_join = "0.2.*"
 trimothy = "0.2.*"
