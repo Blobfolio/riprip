@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 cdtoc = "0.3.*"
-crc32fast = "=1.4.0"
+crc32fast = "=1.4.2"
 dactyl = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.2.*"
