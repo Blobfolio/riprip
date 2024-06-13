@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.2.6"
+version = "0.2.7"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 cdtoc = "0.3.*"
-crc32fast = "=1.4.0"
+crc32fast = "=1.4.2"
 dactyl = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.2.*"
@@ -26,7 +26,7 @@ version = "0.13.*"
 features = [ "progress" ]
 
 [dependencies.libcdio-sys]
-version = "=0.5.0"
+version = "=0.5.1"
 default-features = false
 features = [ "cdio" ]
 
@@ -46,7 +46,7 @@ version = "2.11.*"
 default-features = false
 
 [dev-dependencies]
-fastrand = "2.0.1"
+fastrand = "2"
 
 [features]
 default = []
