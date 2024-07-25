@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.2.7"
+version = "0.2.8"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -31,7 +31,7 @@ default-features = false
 features = [ "cdio" ]
 
 [dependencies.minreq]
-version = "2.11.*"
+version = "2.12.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
 # reason so we don't need any minreq features at all!
@@ -42,7 +42,7 @@ default-features = false
 features = [ "accuraterip" ]
 
 [build-dependencies.minreq]
-version = "2.11.*"
+version = "2.12.*"
 default-features = false
 
 [dev-dependencies]
