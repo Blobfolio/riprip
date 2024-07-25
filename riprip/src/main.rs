@@ -63,7 +63,6 @@ use std::{
 		Arc,
 	},
 };
-use trimothy::TrimSlice;
 use utc2k::FmtUtc2k;
 
 
@@ -269,7 +268,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 			.position(|&b| matches!(b, b'm' | b'M'))
 			.map_or_else(
 				|| u16::btou(v),
-				|pos| u16::btou(v[..pos].trim()).and_then(|v| v.checked_mul(1024))
+				|pos| u16::btou(v[..pos].trim_ascii()).and_then(|v| v.checked_mul(1024))
 			)
 			.ok_or(RipRipError::CliParse("-c/--cache"))?;
 		opts = opts.with_cache(v);
@@ -294,14 +293,14 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	// Tracks are also kinda annoying.
 	let toc = disc.toc();
 	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
-		let v = v.trim();
+		let v = v.trim_ascii();
 		if v.is_empty() { continue; }
 
 		// It might be a range.
 		if let Some(pos) = v.iter().position(|b| b'-'.eq(b)) {
 			// Split.
-			let a = v[..pos].trim();
-			let b = v[pos + 1..].trim();
+			let a = v[..pos].trim_ascii();
+			let b = v[pos + 1..].trim_ascii();
 			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--tracks")); }
 
 			// Decode.
