@@ -130,7 +130,7 @@ argyle = "0.7.2"
 ctrlc = "=3.4.4"
 dactyl = "0.7.*"
 oxford_join = "0.2.*"
-utc2k = "0.8.*"
+utc2k = "0.9.*"
 
 [dependencies.fyi_msg]
 version = "0.13.*"
