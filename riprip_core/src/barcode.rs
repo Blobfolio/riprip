@@ -16,7 +16,7 @@ use trimothy::TrimSliceMatches;
 pub struct Barcode([u8; 13]);
 
 impl fmt::Display for Barcode {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "Content is ASCII.")]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		// Safety: all values are ASCII digits.
 		let s = unsafe { std::str::from_utf8_unchecked(self.0.as_slice()) };
@@ -113,18 +113,18 @@ mod tests {
 
 	#[test]
 	fn t_is_ean13() {
-		assert_eq!(is_ean13(&*b"0008811126827"), true);
-		assert_eq!(is_ean13(&*b"0018861006529"), true);
-		assert_eq!(is_ean13(&*b"0042282848420"), true);
-		assert_eq!(is_ean13(&*b"0075597996524"), true);
-		assert_eq!(is_ean13(&*b"0075992742320"), true);
-		assert_eq!(is_ean13(&*b"0089218545555"), false);
-		assert_eq!(is_ean13(&*b"0089218545992"), true);
-		assert_eq!(is_ean13(&*b"0731455829921"), true);
-		assert_eq!(is_ean13(&*b"0732455829921"), false);
-		assert_eq!(is_ean13(&*b"0886977200922"), true);
-		assert_eq!(is_ean13(&*b"5099997200628"), true);
-		assert_eq!(is_ean13(&*b"9332727016318"), true);
+		assert!(is_ean13(b"0008811126827"));
+		assert!(is_ean13(b"0018861006529"));
+		assert!(is_ean13(b"0042282848420"));
+		assert!(is_ean13(b"0075597996524"));
+		assert!(is_ean13(b"0075992742320"));
+		assert!(! is_ean13(b"0089218545555"));
+		assert!(is_ean13(b"0089218545992"));
+		assert!(is_ean13(b"0731455829921"));
+		assert!(! is_ean13(b"0732455829921"));
+		assert!(is_ean13(b"0886977200922"));
+		assert!(is_ean13(b"5099997200628"));
+		assert!(is_ean13(b"9332727016318"));
 
 		// Test formatting too.
 		let bc = Barcode::try_from("9332727016318").expect("Barcode failed.");

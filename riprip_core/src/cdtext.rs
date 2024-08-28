@@ -9,14 +9,13 @@ use std::{
 
 
 
+#[expect(missing_docs, reason = "Self-explanatory.")]
 #[repr(u32)]
-#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 /// # CDText Field.
 ///
 /// This enum simply rearranges the constants exported from `libcdio` in a
-/// friendlier format. Rip Rip doesn't currently anything with most of them,
-/// but it feels better having the list be complete.
+/// friendlier format.
 pub enum CDTextKind {
 	Arranger = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ARRANGER,
 	Barcode = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_UPC_EAN,

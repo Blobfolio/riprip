@@ -43,9 +43,16 @@ use std::{
 ///
 /// A loaded and parsed compact disc.
 pub struct Disc {
+	/// # CDIO Instance.
 	cdio: LibcdioInstance,
+
+	/// # Disc Table of Contents.
 	toc: Toc,
+
+	/// # Barcode.
 	barcode: Option<Barcode>,
+
+	/// # Track ISRCs.
 	isrcs: HashMap<u8, String, NoHash>,
 }
 
@@ -55,6 +62,7 @@ impl fmt::Display for Disc {
 	/// This prints various disc identifiers and table of contents-type
 	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Divider.
 		const DIVIDER: &str = "\x1b[2m----------------------------------------\x1b[0m\n";
 
 		// A few key/value pairs.
@@ -369,7 +377,7 @@ fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
 	else { Cow::Borrowed("             ") }
 }
 
-#[allow(clippy::option_if_let_else)]
+#[expect(clippy::option_if_let_else, reason = "Too messy.")]
 /// # Format CUETools.
 fn fmt_ctdb(ctdb: Option<u16>) -> Cow<'static, str> {
 	if let Some(v1) = ctdb {

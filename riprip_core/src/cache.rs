@@ -40,7 +40,10 @@ static CACHE_PREFIX: OnceLock<String> = OnceLock::new();
 /// This is a simple wrapper around `Tempfile` that abstracts away the
 /// particulars, minimizing code repetition.
 pub(super) struct CacheWriter<'a> {
+	/// # Destination Path.
 	dst: &'a Path,
+
+	/// # Tempfile.
 	tmp: NamedTempFile,
 }
 

@@ -37,11 +37,25 @@ const QUALITY_BAR: &str = "#####################################################
 /// separate out a lot of simple but verbose-looking code from the modules that
 /// do _important_ things.
 pub(super) struct TrackQuality {
+	/// # Bad Samples.
 	bad: u32,
+
+	/// # Allegedly Good Samples.
 	maybe: u32,
+
+	/// # Likely Good Samples.
 	likely: u32,
+
+	/// # Confirmed Good Samples.
 	confirmed: u32,
+
+	/// # Contentious Samples.
 	contentious: u32,
+
+	/// # Confused?
+	///
+	/// This is true when the drive returns different values from read-to-read
+	/// without admitting any errors have occurred.
 	confused: bool,
 }
 
@@ -209,7 +223,7 @@ impl TrackQuality {
 		]
 	}
 
-	#[allow(clippy::cast_precision_loss)]
+	#[expect(clippy::cast_precision_loss, reason = "False positive.")]
 	/// # Colored Bar.
 	///
 	/// Return a pretty bar representing the different states in relative

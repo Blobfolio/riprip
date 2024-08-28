@@ -210,7 +210,10 @@ impl RipSample {
 /// Lastly, because there are so many goddamn samples in a typical song, the
 /// variant IDs are stored in a packed `u4`-esque format to halve their size.
 pub(super) struct RipSector {
+	/// # Kinds.
 	kind: [u8; (SAMPLES_PER_SECTOR as usize).wrapping_div(2)],
+
+	/// # Data.
 	data: [u8; SAMPLES_PER_SECTOR as usize * 15],
 }
 
@@ -241,7 +244,7 @@ impl RipSector {
 		})
 	}
 
-	#[allow(unused_assignments)] // It's called "initialization". Haha.
+	#[expect(unused_assignments, reason = "We're initializing?")]
 	/// # Serialize Into Writer.
 	///
 	/// Fill the buffers with the sample data from `src`, then write them into
@@ -332,8 +335,13 @@ impl RipSector {
 /// This iterator returns each sample stored in the `RipSector`. There should
 /// always be exactly `588` of them.
 pub(super) struct RipSectorSamples<'a> {
+	/// # Kinds.
 	kind: &'a [u8],
+
+	/// # Data.
 	data: &'a [u8],
+
+	/// # Current Index.
 	pos: u16,
 }
 
@@ -428,6 +436,7 @@ impl<'a> ExactSizeIterator for RipSectorSamples<'a> {
 
 
 
+#[expect(clippy::missing_docs_in_private_items, reason = "Self-explanatory.")]
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 /// # Contentious Rip Sample.
 ///
@@ -678,7 +687,7 @@ const fn data_len_by_kind(kind: u8) -> u8 {
 	}
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)] // This is a callback.
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "This is a callback.")]
 #[inline]
 /// # Sort Sample Count Tuple.
 ///

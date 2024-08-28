@@ -23,8 +23,15 @@ use utc2k::FmtUtc2k;
 /// Aside from helping to ensure consistent formatting, this also keeps the
 /// ordering consistent.
 pub(super) struct RipLog {
+	/// # Pass Number, Timestamp.
 	pass: Option<(NonZeroU8, Instant)>,
+
+	/// # Events.
 	events: Vec<(RipLogEventKind, FmtUtc2k)>,
+
+	/// # Sectors.
+	///
+	/// This holds each track number, LSN, sample count, and status.
 	sectors: Vec<(u8, i32, u16, RipLogSampleKind)>,
 }
 
@@ -158,7 +165,10 @@ impl RipLog {
 /// present are just "we busted the cache" and read-related errors. There might
 /// be more things to talk about some day.
 enum RipLogEventKind {
+	/// # Cache Bust.
 	CacheBust,
+
+	/// # Error.
 	Err((i32, RipRipError)),
 }
 
@@ -179,7 +189,10 @@ impl fmt::Display for RipLogEventKind {
 /// As we're only logging problem sectors, the two main things worth mentioning
 /// are C2/read errors and major inconsistencies.
 enum RipLogSampleKind {
+	/// # Explicit Error.
 	Bad,
+
+	/// # Inconsistent Reads.
 	Confused,
 }
 

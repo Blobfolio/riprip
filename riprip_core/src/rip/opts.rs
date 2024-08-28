@@ -77,12 +77,25 @@ const REREADS_REL_MAX: u8 = 10;
 /// assert_eq!(opts.tracks().collect::<Vec<u8>>(), &[2, 3, 15]);
 /// ```
 pub struct RipOptions {
+	/// # Read Offset.
 	offset: ReadOffset,
+
+	/// # Cache Size.
 	cache: Option<NonZeroU16>,
+
+	/// # Minimum Checksum Confidence.
 	confidence: u8,
+
+	/// # Re/Read Attempts.
 	rereads: (u8, u8),
+
+	/// # Passes.
 	passes: u8,
+
+	/// # Flags.
 	flags: u8,
+
+	/// # Tracks.
 	tracks: u128,
 }
 
@@ -100,6 +113,7 @@ impl Default for RipOptions {
 	}
 }
 
+/// # Helper: Generate With* Methods.
 macro_rules! with_flag {
 	($fn:ident, $flag:ident, $($doc:literal),+ $(,)?) => (
 		#[must_use]
@@ -485,7 +499,10 @@ impl RipOptions {
 /// This iterator converts the `u128` monster flag back into individual `u8`
 /// track indexes.
 pub struct RipOptionsTracks {
+	/// # Tracks.
 	set: u128,
+
+	/// # Current Index.
 	pos: u8,
 }
 
@@ -519,7 +536,10 @@ impl Iterator for RipOptionsTracks {
 /// Like [`RipOptionsTracks`], but results are returned as ranges instead of
 /// individual numbers. Useful for compact display, I suppose.
 pub struct RipOptionsTracksRng {
+	/// # Tracks.
 	set: u128,
+
+	/// # Current Index.
 	pos: u8,
 }
 

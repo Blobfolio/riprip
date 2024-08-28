@@ -90,11 +90,22 @@ const WAVE_HEADER: [u8; 44] = [
 /// This structure gets saved to disk _en masse_ in a zstd-compressed binary
 /// format after each rip pass so operations can be resumed at a later date.
 pub(crate) struct RipState {
+	/// # Table of Contents.
 	toc: Toc,
+
+	/// # Track Number.
 	track: Track,
+
+	/// # Disc Range.
 	disc_rng: Range<i32>,
+
+	/// # Rip Range.
 	rip_rng: Range<i32>,
+
+	/// # Sample Data.
 	data: Vec<RipSample>,
+
+	/// # New Rip?
 	new: bool,
 }
 
@@ -184,7 +195,7 @@ impl RipState {
 				let mut file = BufReader::with_capacity(BUFFER_SIZE, file);
 
 				// Magic header.
-				let mut buf = [0u8; MAGIC.len()];
+				let mut buf = [0_u8; MAGIC.len()];
 				if file.read_exact(&mut buf).is_err() || buf != MAGIC {
 					return Err(RipRipError::StateCorrupt(idx));
 				}

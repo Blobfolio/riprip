@@ -15,7 +15,7 @@ use trimothy::NormalizeWhitespace;
 
 
 
-#[allow(clippy::cast_possible_wrap)] // It fits.
+#[expect(clippy::cast_possible_wrap, reason = "False positive.")]
 /// # Offset Range.
 ///
 /// Ranges outside the ignorable regions in the AccurateRip/CTDB algorithms
@@ -190,7 +190,7 @@ impl ReadOffset {
 
 impl ReadOffset {
 	#[must_use]
-	#[allow(clippy::cast_possible_wrap)]
+	#[expect(clippy::cast_possible_wrap, reason = "False positive.")]
 	/// # Sectors.
 	///
 	/// Return the minimum containing sector amount.
