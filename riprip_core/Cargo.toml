@@ -22,7 +22,7 @@ version = "0.8.*"
 optional = true
 
 [dependencies.fyi_msg]
-version = "0.13.*"
+version = "0.14.*"
 features = [ "progress" ]
 
 [dependencies.libcdio-sys]
