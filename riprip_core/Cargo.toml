@@ -10,7 +10,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.4.*"
+cdtoc = "0.5.*"
 crc32fast = "=1.4.2"
 dactyl = "0.7.*"
 tempfile = "3.8.0"
@@ -37,7 +37,7 @@ default-features = false
 # reason so we don't need any minreq features at all!
 
 [build-dependencies.cdtoc]
-version = "0.4.*"
+version = "0.5.*"
 default-features = false
 features = [ "accuraterip" ]
 
