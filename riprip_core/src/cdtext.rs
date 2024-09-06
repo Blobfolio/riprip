@@ -9,7 +9,6 @@ use std::{
 
 
 
-#[expect(missing_docs, reason = "Self-explanatory.")]
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 /// # CDText Field.
@@ -17,13 +16,28 @@ use std::{
 /// This enum simply rearranges the constants exported from `libcdio` in a
 /// friendlier format.
 pub enum CDTextKind {
+	/// # Arranger.
 	Arranger = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ARRANGER,
+
+	/// # Barcode.
 	Barcode = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_UPC_EAN,
+
+	/// # Composer.
 	Composer = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_COMPOSER,
+
+	/// # ISRC.
 	Isrc = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ISRC,
+
+	/// # Message.
 	Message = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_MESSAGE,
+
+	/// # Performer.
 	Performer = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_PERFORMER,
+
+	/// # Songwriter.
 	Songwriter = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_SONGWRITER,
+
+	/// # Title.
 	Title = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_TITLE,
 }
 
