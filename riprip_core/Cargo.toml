@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.2.8"
+version = "0.2.9"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -10,19 +10,19 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.3.*"
+cdtoc = "0.5.*"
 crc32fast = "=1.4.2"
 dactyl = "0.7.*"
 tempfile = "3.8.0"
-trimothy = "0.2.*"
-utc2k = "0.8.*"
+trimothy = "0.3.*"
+utc2k = "0.9.*"
 
 [dependencies.argyle]
-version = "0.7.2"
+version = "0.8.*"
 optional = true
 
 [dependencies.fyi_msg]
-version = "0.13.*"
+version = "0.14.*"
 features = [ "progress" ]
 
 [dependencies.libcdio-sys]
@@ -37,7 +37,7 @@ default-features = false
 # reason so we don't need any minreq features at all!
 
 [build-dependencies.cdtoc]
-version = "0.3.*"
+version = "0.5.*"
 default-features = false
 features = [ "accuraterip" ]
 

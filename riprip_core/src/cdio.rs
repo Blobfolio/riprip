@@ -77,16 +77,22 @@ thread_local! {
 /// object. Every interface is unsafe and awkward, so this struct exists to
 /// abstract away the noise and handle cleanup.
 pub(super) struct LibcdioInstance {
+	/// # Device.
 	dev: Option<CString>,
+
+	/// # CDIO Instance (Pointer).
 	ptr: *mut libcdio_sys::CdIo_t,
+
+	/// # CD-Text (Pointer).
 	cdtext: Option<*mut libcdio_sys::cdtext_t>,
 }
 
 impl Drop for LibcdioInstance {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	fn drop(&mut self) {
 		// Release the C memory!
 		if ! self.ptr.is_null() {
+			// Safety: this is an FFI call…
 			unsafe { libcdio_sys::cdio_destroy(self.as_mut_ptr()); }
 
 			// Use the dev field so Rust won't complain about dead code. Haha.
@@ -96,7 +102,7 @@ impl Drop for LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # New!
 	///
 	/// Initialize a new instance, optionally connecting to a specific device.
@@ -126,6 +132,7 @@ impl LibcdioInstance {
 		};
 
 		// Connect to it.
+		// Safety: this is an FFI call…
 		let ptr = unsafe {
 			libcdio_sys::cdio_open(
 				dev.as_ref().map_or_else(std::ptr::null, |v| v.as_ptr()),
@@ -155,8 +162,8 @@ impl LibcdioInstance {
 		}
 	}
 
-	#[allow(unsafe_code)]
-	#[allow(non_upper_case_globals)] // These aren't our globals.
+	#[expect(unsafe_code, reason = "For FFI.")]
+	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	/// # Check Disc Mode.
 	///
 	/// This makes sure an audio CD is actually present in the drive.
@@ -165,6 +172,7 @@ impl LibcdioInstance {
 	///
 	/// Returns an error if the disc is missing or unsupported.
 	fn _check_disc_mode(&self) -> Result<(), RipRipError> {
+		// Safety: this is an FFI call…
 		let discmode = unsafe {
 			libcdio_sys::cdio_get_discmode(self.as_mut_ptr())
 		};
@@ -177,7 +185,7 @@ impl LibcdioInstance {
 		else { Err(RipRipError::DiscMode) }
 	}
 
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Initialize CDText.
 	///
 	/// This initializes (but does not parse) the CDText information contained
@@ -187,6 +195,7 @@ impl LibcdioInstance {
 	/// parent instance is destroyed, so it makes sense keeping the two
 	/// together.
 	fn _init_cdtext(&mut self) {
+		// Safety: this is an FFI call…
 		let ptr = unsafe {
 			libcdio_sys::cdio_get_cdtext(self.as_mut_ptr())
 		};
@@ -203,12 +212,13 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # First Track Number.
 	///
 	/// Return the first track number on the disc, almost always but not
 	/// necessarily `1`.
 	pub(super) fn first_track_num(&self) -> Result<u8, RipRipError> {
+		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_first_track_num(self.as_ptr())
 		};
@@ -226,12 +236,13 @@ impl LibcdioInstance {
 		self.track_lba_start(idx)
 	}
 
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Get the Number of Tracks.
 	///
 	/// Return the total number of tracks, or the last track number, however
 	/// you want to think of it.
 	pub(super) fn num_tracks(&self) -> Result<u8, RipRipError> {
+		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_num_tracks(self.as_ptr())
 		};
@@ -240,13 +251,14 @@ impl LibcdioInstance {
 		else { Ok(raw) }
 	}
 
-	#[allow(unsafe_code)]
-	#[allow(non_upper_case_globals)] // Not our globals.
+	#[expect(unsafe_code, reason = "For FFI.")]
+	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	/// # Track Format.
 	///
 	/// Returns `true` for audio, `false` for data, and an error for anything
 	/// else.
 	pub(super) fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
+		// Safety: this is an FFI call…
 		let kind = unsafe {
 			libcdio_sys::cdio_get_track_format(self.as_ptr(), idx)
 		};
@@ -259,7 +271,7 @@ impl LibcdioInstance {
 		}
 	}
 
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Track LBA Start.
 	///
 	/// Return the starting LBA — including the leading `150` — for a given
@@ -267,6 +279,7 @@ impl LibcdioInstance {
 	pub(super) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
 		if idx == 0 { Err(RipRipError::TrackNumber(0)) }
 		else {
+			// Safety: this is an FFI call…
 			let raw = unsafe {
 				libcdio_sys::cdio_get_track_lsn(self.as_ptr(), idx)
 			};
@@ -277,13 +290,14 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # CDText Value.
 	///
 	/// Return the value associated with the CDText field, if any. If the track
 	/// number is zero, data associated with the album will be returned.
 	pub(super) fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
 		let ptr = self.cdtext?;
+		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdtext_get_const(
 				ptr.cast(),
@@ -296,18 +310,20 @@ impl LibcdioInstance {
 	}
 
 	/*
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Track ISRC.
 	///
 	/// This method is used as a fallback when the value is not within the
 	/// CDText, but is relatively slow.
 	pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
 		if self.supports_isrc() {
+			// Safety: this is an FFI call…
 			let raw = unsafe {
 				libcdio_sys::cdio_get_track_isrc(self.as_ptr(), idx)
 			};
 
 			let out = c_char_to_string(raw.cast());
+			// Safety: this is an FFI call…
 			unsafe { libcdio_sys::cdio_free(raw.cast()); }
 			out
 		}
@@ -329,20 +345,23 @@ impl LibcdioInstance {
 			.or_else(|| self._mcn())
 	}
 
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
 	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
 	fn _mcn(&self) -> Option<Barcode> {
+		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_mcn(self.as_ptr())
 		};
 		if raw.is_null() { None }
 		else {
+			// Safety: this is an FFI call…
 			let mcn = unsafe { CStr::from_ptr(raw) }
 				.to_str()
 				.ok()
 				.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
+			// Safety: this is an FFI call…
 			unsafe { libcdio_sys::cdio_free(raw.cast()); }
 			mcn
 		}
@@ -350,7 +369,7 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Drive Vendor/Model.
 	///
 	/// Fetch the drive vendor and/or model, if possible.
@@ -362,7 +381,8 @@ impl LibcdioInstance {
 		};
 
 		// The return code is a bool, true for good, instead of the usual
-		// 0 for good.
+		// 0 FFI normally kicks back.
+		// Safety: this is an FFI call…
 		if 1 == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
@@ -491,7 +511,7 @@ impl LibcdioInstance {
 		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
 	}
 
-	#[allow(unsafe_code)]
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Read Data + Subchannel
 	///
 	/// Read a single sector's worth of data and formatted 16-byte subchannel
@@ -530,6 +550,7 @@ impl LibcdioInstance {
 				s: buf[usize::from(CD_DATA_SIZE) + 8],
 				f: buf[usize::from(CD_DATA_SIZE) + 9],
 			};
+			// Safety: this is an FFI call…
 			if lsn != unsafe { libcdio_sys::cdio_msf_to_lsn(&msf) } {
 				return Err(RipRipError::SubchannelDesync);
 			}
@@ -539,8 +560,8 @@ impl LibcdioInstance {
 		Ok(())
 	}
 
-	#[allow(unsafe_code)]
-	#[allow(non_upper_case_globals)] // Not our globals.
+	#[expect(unsafe_code, reason = "For FFI.")]
+	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	#[inline]
 	/// # Execute Read Command.
 	///
@@ -559,6 +580,7 @@ impl LibcdioInstance {
 		sub: u8,
 		block_size: u16,
 	) -> Result<(), RipRipError> {
+		// Safety: this is an FFI call…
 		let res = unsafe {
 			libcdio_sys::mmc_read_cd(
 				self.as_ptr(),
@@ -590,13 +612,14 @@ impl LibcdioInstance {
 
 
 
-#[allow(unsafe_code)]
+#[expect(unsafe_code, reason = "For FFI.")]
 /// # Pointer to String.
 ///
 /// Convert C-string pointers to a string, unless they're null.
 fn c_char_to_string(ptr: *const c_char) -> Option<String> {
 	if ptr.is_null() { None }
 	else {
+		// Safety: this is an FFI call…
 		unsafe { CStr::from_ptr(ptr) }
 			.to_str()
 			.ok()
@@ -605,11 +628,12 @@ fn c_char_to_string(ptr: *const c_char) -> Option<String> {
 	}
 }
 
-#[allow(unsafe_code)]
+#[expect(unsafe_code, reason = "For FFI.")]
 /// # Initialize `libcdio`.
 ///
 /// This is only called once, but to be safe, it is also wrapped in a static to
 /// make sure it can never re-initialize.
 fn init() {
+	// Safety: this is an FFI call…
 	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
 }

@@ -11,7 +11,6 @@ use std::{
 
 
 
-#[allow(missing_docs)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// # Errors.
 pub enum RipRipError {

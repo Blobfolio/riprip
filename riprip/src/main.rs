@@ -4,23 +4,48 @@
 
 #![forbid(unsafe_code)]
 
+#![deny(
+	clippy::allow_attributes_without_reason,
+	clippy::correctness,
+	unreachable_pub,
+)]
+
 #![warn(
-	clippy::filetype_is_file,
-	clippy::integer_division,
-	clippy::needless_borrow,
+	clippy::complexity,
 	clippy::nursery,
 	clippy::pedantic,
 	clippy::perf,
-	clippy::suboptimal_flops,
+	clippy::style,
+
+	clippy::allow_attributes,
+	clippy::clone_on_ref_ptr,
+	clippy::create_dir,
+	clippy::filetype_is_file,
+	clippy::format_push_string,
+	clippy::get_unwrap,
+	clippy::impl_trait_in_params,
+	clippy::lossy_float_literal,
+	clippy::missing_assert_message,
+	clippy::missing_docs_in_private_items,
+	clippy::needless_raw_strings,
+	clippy::panic_in_result_fn,
+	clippy::pub_without_shorthand,
+	clippy::rest_pat_in_fully_bound_structs,
+	clippy::semicolon_inside_block,
+	clippy::str_to_string,
+	clippy::string_to_string,
+	clippy::todo,
+	clippy::undocumented_unsafe_blocks,
 	clippy::unneeded_field_pattern,
+	clippy::unseparated_literal_suffix,
+	clippy::unwrap_in_result,
+
 	macro_use_extern_crate,
 	missing_copy_implementations,
-	missing_debug_implementations,
 	missing_docs,
 	non_ascii_idents,
 	trivial_casts,
 	trivial_numeric_casts,
-	unreachable_pub,
 	unused_crate_dependencies,
 	unused_extern_crates,
 	unused_import_braces,
@@ -63,7 +88,6 @@ use std::{
 		Arc,
 	},
 };
-use trimothy::TrimSlice;
 use utc2k::FmtUtc2k;
 
 
@@ -269,7 +293,7 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 			.position(|&b| matches!(b, b'm' | b'M'))
 			.map_or_else(
 				|| u16::btou(v),
-				|pos| u16::btou(v[..pos].trim()).and_then(|v| v.checked_mul(1024))
+				|pos| u16::btou(v[..pos].trim_ascii()).and_then(|v| v.checked_mul(1024))
 			)
 			.ok_or(RipRipError::CliParse("-c/--cache"))?;
 		opts = opts.with_cache(v);
@@ -294,14 +318,14 @@ fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc)
 	// Tracks are also kinda annoying.
 	let toc = disc.toc();
 	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
-		let v = v.trim();
+		let v = v.trim_ascii();
 		if v.is_empty() { continue; }
 
 		// It might be a range.
 		if let Some(pos) = v.iter().position(|b| b'-'.eq(b)) {
 			// Split.
-			let a = v[..pos].trim();
-			let b = v[pos + 1..].trim();
+			let a = v[..pos].trim_ascii();
+			let b = v[pos + 1..].trim_ascii();
 			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--tracks")); }
 
 			// Decode.

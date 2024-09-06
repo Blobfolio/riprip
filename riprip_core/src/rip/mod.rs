@@ -69,15 +69,24 @@ const STANDBY: [&str; 2] = [
 /// This holds the disc details, ripping options, etc., to coordinate the rip
 /// action(s) when `Ripper::rip` is called.
 pub(crate) struct Ripper<'a> {
+	/// # Date Created.
 	now: Instant,
+
+	/// # Disc Details.
 	disc: &'a Disc,
+
+	/// # Options.
 	opts: RipOptions,
+
+	/// # Track Details.
 	tracks: BTreeMap<u8, RipEntry>,
-	total: u32, // Total sectors across all passes, plus one.
+
+	/// # Total Sectors (across all passes, plus one)
+	total: u32,
 }
 
 impl<'a> Ripper<'a> {
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # New!
 	///
 	/// Initialize from a disc and options.
@@ -114,7 +123,7 @@ impl<'a> Ripper<'a> {
 		})
 	}
 
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Rip All Passes and Tracks!
 	///
 	/// This sets up some shared buffers, the progress bar, etc., then loops
@@ -254,7 +263,7 @@ impl<'a> Ripper<'a> {
 		Ok(())
 	}
 
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Status.
 	///
 	/// Check the status of each track and nothing else.
@@ -327,8 +336,8 @@ impl<'a> Ripper<'a> {
 		eprintln!();
 	}
 
-	#[allow(clippy::type_complexity)]
-	#[allow(clippy::option_if_let_else)]
+	#[expect(clippy::option_if_let_else, reason = "Too messy.")]
+	#[expect(clippy::type_complexity, reason = "It is only used internally.")]
 	/// # Summarize Per-Track Status.
 	///
 	/// Print a simple table of each track and its status.
@@ -457,11 +466,22 @@ impl<'a> Ripper<'a> {
 /// stands, without the cost of perpetually holding the _full_ data for an
 /// entire album or anything crazy like that.
 struct RipEntry {
+	/// # Destination Path.
 	dst: Option<PathBuf>,
+
+	/// # Track Details.
 	track: Track,
+
+	/// # Number of Sectors.
 	sectors: u32,
+
+	/// # Quality (Before and After).
 	quality: (TrackQuality, TrackQuality),
+
+	/// # AccurateRip Confidence.
 	ar: Option<(u8, u8)>,
+
+	/// # CTDB Confidence.
 	ctdb: Option<u16>,
 }
 
@@ -741,20 +761,41 @@ impl RipEntry {
 /// row, or sector twice in a row, if they're literally the only things left to
 /// rip. We can usually get away with a lot less busting as a result.)
 struct RipShare<'a> {
+	/// # Buffer.
 	buf: RipBuffer,
+
+	/// # Event Log.
 	log: RipLog,
+
+	/// # Leadout Sector.
 	leadout: i32,
+
+	/// # Pass Number.
 	pass: u8,
+
+	/// # Reads This Pass.
 	pass_reads: u32,
+
+	/// # Force Bust?
+	///
+	/// When true, a cache bust will be attempted on the next read.
 	force_bust: bool,
+
+	/// # Last Read Track Number.
 	last_read_track: u8,
+
+	/// # CDIO Instance.
 	cdio: &'a LibcdioInstance,
+
+	/// # Progress Instance.
 	progress: &'a Progless,
+
+	/// # Killswitch.
 	killed: &'a KillSwitch,
 }
 
 impl<'a> RipShare<'a> {
-	#[allow(clippy::cast_possible_wrap)]
+	#[expect(clippy::cast_possible_wrap, reason = "False positive.")]
 	/// # New Instance.
 	const fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
 		Self {
@@ -825,7 +866,7 @@ fn happy_track_msg(track: Track) -> Msg {
 		.with_newline(true)
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 /// # Max Confidence.
 ///
 /// Return the largest confidence value.

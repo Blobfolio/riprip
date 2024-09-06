@@ -177,7 +177,10 @@ impl RipBuffer {
 /// (`false` for good, `true` for bad). Since the data range covers one sector,
 /// this will always produce exactly `588` results.
 pub(crate) struct RipBufferIter<'a> {
+	/// # Samples.
 	set: &'a [u8; CD_DATA_C2_SIZE as usize],
+
+	/// # Current Index.
 	pos: usize,
 }
 

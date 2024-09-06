@@ -31,7 +31,10 @@ use std::{
 /// Depending on the settings, it might run start to end, or end to start, but
 /// either way ultimately yields the same data.
 pub(super) struct OffsetRipIter<'a> {
+	/// # Reader.
 	read: EitherRangeIter,
+
+	/// # Writer.
 	write: EitherChunksIter<'a>,
 }
 
@@ -95,7 +98,10 @@ impl<'a> ExactSizeIterator for OffsetRipIter<'a> {
 /// mutable chunk iterator under a single variable type. All iterator business
 /// is passed straight on through.
 enum EitherChunksIter<'a> {
+	/// # Forward Reader.
 	Forward(ChunksExactMut<'a, RipSample>),
+
+	/// # Backward Reader.
 	Backward(RChunksExactMut<'a, RipSample>)
 }
 
@@ -140,7 +146,10 @@ impl<'a> ExactSizeIterator for EitherChunksIter<'a> {
 /// range iterator under a single variable type. All iterator business is
 /// passed straight on through.
 enum EitherRangeIter {
+	/// # Forward Iter.
 	Forward(Range<i32>),
+
+	/// # Backward Iter.
 	Backward(Rev<Range<i32>>)
 }
 
