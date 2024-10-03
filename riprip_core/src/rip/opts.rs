@@ -6,7 +6,9 @@ use crate::{
 	CD_DATA_SIZE,
 	ReadOffset,
 };
+use oxford_join::JoinFmt;
 use std::{
+	fmt,
 	num::NonZeroU16,
 	ops::RangeInclusive,
 };
@@ -455,40 +457,68 @@ impl RipOptions {
 	/// Convert the options back into a list of arguments in CLI format. This
 	/// code isn't super pretty, but it's pretty straightforward.
 	pub fn cli(&self) -> String {
-		use std::borrow::Cow;
+		use std::fmt::Write;
 
-		// The entries will be variable, so toss them into a vec first.
-		let mut opts = Vec::new();
+		#[derive(Copy, Clone)]
+		/// # Track Number(s).
+		enum OptTrack {
+			/// # One Track.
+			One(u8),
+
+			/// # Track Range.
+			Rng(u8, u8),
+		}
+
+		impl fmt::Display for OptTrack {
+			#[inline]
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				match *self {
+					Self::One(n) => write!(f, "{n}"),
+					Self::Rng(a, b) => write!(f, "{a}-{b}"),
+				}
+			}
+		}
+
+		// Let's get it going!
+		let mut opts = String::with_capacity(256);
 
 		// All the easy stuff.
-		if self.backwards() { opts.push(Cow::Borrowed("--backwards")); }
+		if self.backwards() { opts.push_str("--backwards "); }
 		if let Some(cache) = self.cache {
-			opts.push(Cow::Owned(format!("-c{cache}")));
+			write!(&mut opts, "-c{cache} ").unwrap();
 		}
-		opts.push(Cow::Owned(format!("--confidence={}", self.confidence())));
-		if self.flip_flop() { opts.push(Cow::Borrowed("--flip-flop")); }
-		if ! self.resume() { opts.push(Cow::Borrowed("--no-resume")); }
+		write!(&mut opts, "--confidence={} ", self.confidence()).unwrap();
+		if self.flip_flop() { opts.push_str("--flip-flop "); }
+		if ! self.resume() { opts.push_str("--no-resume "); }
+
 		let offset = self.offset().samples();
-		if offset != 0 { opts.push(Cow::Owned(format!("-o{offset}"))); }
-		opts.push(Cow::Owned(format!("-p{}", self.passes())));
+		if offset != 0 { write!(&mut opts, "-o{offset} ").unwrap(); }
+
+		write!(&mut opts, "-p{} ", self.passes()).unwrap();
+
 		let rr = self.rereads();
-		opts.push(Cow::Owned(format!("-r{},{}", rr.0, rr.1)));
-		if self.reset() { opts.push(Cow::Borrowed("--reset-counts")); }
-		if self.strict() { opts.push(Cow::Borrowed("--strict-c2")); }
-		if self.sync() { opts.push(Cow::Borrowed("--sync")); }
+		write!(&mut opts, "-r{},{} ", rr.0, rr.1).unwrap();
+
+		if self.reset() { opts.push_str("--reset-counts "); }
+		if self.strict() { opts.push_str("--strict-c2 "); }
+		if self.sync() { opts.push_str("--sync "); }
 
 		// The tracks should be condensed.
-		opts.push(Cow::Owned(format!(
+		write!(
+			&mut opts,
 			"-t{}",
-			self.tracks_rng().map(|rng| {
-				let (a, b) = rng.into_inner();
-				if a == b { a.to_string() }
-				else { format!("{a}-{b}") }
-			}).collect::<Vec<String>>().join(",")
-		)));
+			JoinFmt::new(
+				self.tracks_rng().map(|rng| {
+					let (a, b) = rng.into_inner();
+					if a == b { OptTrack::One(a) }
+					else { OptTrack::Rng(a, b) }
+				}),
+				",",
+			)
+		).unwrap();
 
 		// Done!
-		opts.join(" ")
+		opts
 	}
 }
 

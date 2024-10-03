@@ -6,9 +6,12 @@ array that can be easily searched at runtime.
 */
 
 use cdtoc::AccurateRip;
+use dactyl::NiceU16;
+use oxford_join::JoinFmt;
 use std::{
 	collections::BTreeMap,
 	env,
+	fmt,
 	fs::{
 		File,
 		Metadata,
@@ -94,13 +97,22 @@ fn fetch_offsets() -> Vec<u8> {
 /// The generated code takes the form of a static array, allowing for
 /// reasonably fast and straightforward binary search at runtime.
 fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
-	// Reformat the data into "code" for the array we're about to generate.
-	let nice = parsed.into_iter()
-		.map(|(vendormodel, size)| format!(
-			"(DriveVendorModel({vendormodel:?}), {size}_u16),"
-		))
-		.collect::<Vec<String>>();
+	/// # Vendor/Model and Size.
+	struct VendorModelSize(VendorModel, u16);
 
+	impl fmt::Display for VendorModelSize {
+		#[inline]
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			write!(
+				f,
+				"(DriveVendorModel({:?}), {}_u16)",
+				self.0,
+				NiceU16::with_separator(self.1, b'_'),
+			)
+		}
+	}
+
+	// Reformat the data into "code" for the array we're about to generate.
 	format!(
 		r#"
 /// # Drive Cache Sizes.
@@ -108,8 +120,8 @@ const DRIVE_CACHES: [(DriveVendorModel, u16); {}] = [
 	{}
 ];
 "#,
-		nice.len(),
-		nice.join(" "),
+		parsed.len(),
+		JoinFmt::new(parsed.into_iter().map(|(x, y)| VendorModelSize(x, y)), ", "),
 	)
 }
 
@@ -121,31 +133,32 @@ const DRIVE_CACHES: [(DriveVendorModel, u16); {}] = [
 /// The generated code takes the form of a static array, allowing for
 /// reasonably fast and straightforward binary search at runtime.
 fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
-	use std::fmt::Write;
+	/// # Vendor/Model and Size.
+	struct VendorModelOffset(VendorModel, i16);
 
-	// Reformat the data into "code" for the array we're about to generate.
-	let nice = parsed.into_iter()
-		.map(|(vendormodel, offset)|
-			format!("(DriveVendorModel({vendormodel:?}), ReadOffset({offset})),")
-		)
-		.collect::<Vec<String>>();
-
-	// Start the array.
-	let mut out = format!(
-		r#"
-/// # Drive Offsets.
-const DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = ["#,
-		nice.len(),
-	);
-
-	// Split up the data so we don't end up with one REALLY LONG line.
-	for chunk in nice.chunks(256) {
-		write!(&mut out, "\n\t{}", chunk.join(" ")).expect("Failed to write string.");
+	impl fmt::Display for VendorModelOffset {
+		#[inline]
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			write!(
+				f,
+				"(DriveVendorModel({:?}), ReadOffset({}))",
+				self.0,
+				self.1,
+			)
+		}
 	}
 
-	// Close out the array.
-	out.push_str("\n];\n");
-	out
+	// Reformat the data into "code" for the array we're about to generate.
+	format!(
+		r#"
+/// # Drive Offsets.
+const DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = [
+	{},
+];
+"#,
+		parsed.len(),
+		JoinFmt::new(parsed.into_iter().map(|(x, y)| VendorModelOffset(x, y)), ", "),
+	)
 }
 
 /// # Out path.

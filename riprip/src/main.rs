@@ -67,6 +67,7 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
+use oxford_join::JoinFmt;
 use riprip_core::{
 	Disc,
 	DriveVendorModel,
@@ -77,6 +78,7 @@ use riprip_core::{
 };
 use std::{
 	borrow::Cow,
+	fmt,
 	sync::{
 		atomic::{
 			AtomicBool,
@@ -531,22 +533,45 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 /// Note: this value assumes ASCII bold and clear codes will be appended to
 /// either end prior to print.
 fn rip_summary_tracks(opts: &RipOptions) -> String {
-	use oxford_join::OxfordJoin;
+	#[derive(Copy, Clone)]
+	/// # Track Number(s).
+	enum SummaryTrack {
+		/// # One Track.
+		One(u8),
+
+		/// # Track Range.
+		Rng(u8, u8),
+	}
+
+	impl fmt::Display for SummaryTrack {
+		#[inline]
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			match *self {
+				Self::One(n) => write!(f, "{n}"),
+				Self::Rng(a, b) => write!(f, "{a}\x1b[0;2m..=\x1b[0;1m{b}"),
+			}
+		}
+	}
 
 	let mut set = opts.tracks_rng()
 		.map(|rng| {
 			let (a, b) = rng.into_inner();
-			if a == b { a.to_string() }
-			else { format!("{a}\x1b[0;2m..=\x1b[0;1m{b}") }
+			if a == b { SummaryTrack::One(a) }
+			else { SummaryTrack::Rng(a, b) }
 		})
 		.collect::<Vec<_>>();
 
 	match set.len() {
-		1 => set.remove(0),
-		2 => set.join("\x1b[0;2m and \x1b[0;1m"),
-		_ => set.oxford_and()
-			.replace(',', "\x1b[0;2m,\x1b[0;1m")
-			.replace("\x1b[2m,\x1b[0;1m and ", "\x1b[0;2m, and \x1b[0;1m"),
+		1 => set.remove(0).to_string(),
+		2 => format!(
+			"{}\x1b[0;2m and \x1b[0;1m{}",
+			set[0],
+			set[1],
+		),
+		_ => set.pop().map_or_else(String::new, |last| format!(
+			"{}\x1b[0;2m, and \x1b[0;1m{last}",
+			JoinFmt::new(set.into_iter(), "\x1b[0;2m, \x1b[0;1m"),
+		)),
 	}
 }
 

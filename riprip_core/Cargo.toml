@@ -13,6 +13,7 @@ publish = false
 cdtoc = "0.5.*"
 crc32fast = "=1.4.2"
 dactyl = "0.7.*"
+oxford_join = "0.4.*"
 tempfile = "3.8.0"
 trimothy = "0.3.*"
 utc2k = "0.10.*"
@@ -35,6 +36,10 @@ version = "2.12.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
 # reason so we don't need any minreq features at all!
+
+[build-dependencies]
+dactyl = "0.7.*"
+oxford_join = "0.4.*"
 
 [build-dependencies.cdtoc]
 version = "0.5.*"
