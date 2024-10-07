@@ -303,8 +303,8 @@ impl TrackQuality {
 		for ((a, b), color) in start.into_iter().zip(end).zip([COLOR_BAD, COLOR_MAYBE, COLOR_LIKELY, COLOR_CONFIRMED]) {
 			if a.is_some() || b.is_some() {
 				let len = usize::max(
-					a.as_ref().map_or(1, |v| v.len()),
-					b.as_ref().map_or(1, |v| v.len()),
+					a.as_ref().map_or(1, NiceU32::len),
+					b.as_ref().map_or(1, NiceU32::len),
 				);
 
 				// Only include starts if there's at least one.
