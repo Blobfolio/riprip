@@ -11,6 +11,110 @@ use std::{
 
 
 
+#[cfg(feature = "bin")]
+/// # Help Text.
+const HELP: &str = concat!(r#"
+    n__n_
+   /  = =\     "#, "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r#"
+  /   ._Y_)    Accurate, incremental audio
+ /      "\     CD ripping and recovery.
+(_/  (_,  \
+  \      ( \_,--""""--.
+ ,-`.___,-` )-.______.'
+ `-,'   `-_-'
+
+USAGE:
+    riprip [OPTIONS]
+
+BASIC SETTINGS:
+    -r, --rereads <[ABS],[MUL]>
+                      Re-read sectors on subsequent passes until A) they have
+                      been independently verified with AccurateRip or CUETools;
+                      or B) the same allegedly-good values have been read at
+                      least <ABS> times, and <MUL> times more often than any
+                      contradictory "good" values. The value may omit the
+                      number on either side of the comma to keep the default,
+                      or be a single number to alter only the <ABS>.
+                      [default: 2,2; range: 1..=20,1..=10]
+    -p, --passes <NUM>
+                      Automate re-ripping by executing up to <NUM> passes for
+                      each track while any samples remain unread or
+                      unconfirmed. [default: 1; max: 16]
+    -t, --tracks <NUM(s),RNG>
+                      Rip one or more specific tracks (rather than the whole
+                      disc). Multiple tracks can be separated by commas (2,3),
+                      specified as an inclusive range (2-3), and/or given their
+                      own -t/--track (-t 2 -t 3). Track 0 can be used to rip
+                      the HTOA, if any. [default: the whole disc]
+
+WHEN ALL ELSE FAILS:
+        --backwards   Reverse the sector read order when ripping a track,
+                      starting at end, and ending at the start.
+        --flip-flop   Alternate the sector read order between passes, forwards
+                      then backwards then forwards then backwards… This has no
+                      effect unless -p/--passes is at least two.
+        --no-resume   Ignore any previous rip states, starting over from
+                      scratch.
+        --reset       Flip "likely" samples back to "maybe", keeping their
+                      values, but resetting all counts to one. This is a softer
+                      alternative to --no-resume, and will not affect tracks
+                      confirmed by AccurateRip/CUETools.
+        --strict      Consider C2 errors an all-or-nothing proposition for the
+                      sector as a whole, marking all samples bad if any of them
+                      are bad. This is most effective when applied consistently
+                      from the initial rip and onward.
+
+DRIVE SETTINGS:
+    -c, --cache <NUM> Drive cache can interfere with re-read accuracy. If your
+                      drive caches data, use this option to specify its buffer
+                      size so Rip Rip can try to mitigate it. Values with an
+                      M suffix are treated as MiB, otherwise KiB are assumed.
+                      [default: auto or 0; max: 65,535]
+    -d, --dev <PATH>  The device path for the optical drive containing the CD
+                      of interest, like /dev/cdrom. [default: auto]
+    -o, --offset <SAMPLES>
+                      The AccurateRip, et al, sample read offset to apply to
+                      data retrieved from the drive.
+                      [default: auto or 0; range: ±5880]
+
+UNUSUAL SETTINGS:
+        --confidence <NUM>
+                      Consider a track accurately ripped — i.e. stop working on
+                      it — AccurateRip and/or CUETools matches are found with a
+                      confidence of at least <NUM>. Raise this value if you
+                      personally fucked up the database(s) with prior bad rips,
+                      otherwise the default should be fine. Haha.
+                      [default: 3; range: 1..=10]
+        --sync        Confirm sector positioning with subchannel data (when
+                      available) to make sure the drive is actually reading
+                      from the right place, and ignore the data if not. This is
+                      prone to false-positives — subchannel data is easily
+                      corrupted — so only recommended when disc rot, rather
+                      than wear-and-tear, is the sole cause of your woes.
+
+MISCELLANEOUS:
+    -h, --help        Print help information to STDOUT and exit.
+    -v, --verbose     Print detailed sector quality information to STDOUT, so
+                      it can e.g. be piped to a file for review, like:
+                      riprip -v > issues.log
+    -V, --version     Print version information to STDOUT and exit.
+        --no-rip      Print the basic drive and disc information to STDERR and
+                      exit (without ripping anything).
+        --no-summary  Skip the drive and disc summary and jump straight to
+                      ripping.
+        --status      Print the status of the individual track rips (that you
+                      presumably already started) to STDERR and exit. Note that
+                      only the --no-summary, --confidence, and -r/--rereads
+                      options have any meaning in this mode.
+
+EARLY EXIT:
+    If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    it early. Your progress will still be saved, there just won't be as much of
+    it. Haha.
+");
+
+
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// # Errors.
 pub enum RipRipError {
@@ -99,25 +203,23 @@ pub enum RipRipError {
 	Write(String),
 
 	#[cfg(feature = "bin")]
-	/// # General CLI issues.
-	Argue(argyle::ArgyleError),
-
-	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
 	CliArg(String),
 
 	#[cfg(feature = "bin")]
 	/// # CLI Parsing failure.
 	CliParse(&'static str),
+
+	#[cfg(feature = "bin")]
+	/// # Print Help (Not an Error).
+	PrintHelp,
+
+	#[cfg(feature = "bin")]
+	/// # Print Version (Not an Error).
+	PrintVersion,
 }
 
 impl Error for RipRipError {}
-
-#[cfg(feature = "bin")]
-impl From<argyle::ArgyleError> for RipRipError {
-	#[inline]
-	fn from(err: argyle::ArgyleError) -> Self { Self::Argue(err) }
-}
 
 impl From<TocError> for RipRipError {
 	#[inline]
@@ -168,13 +270,16 @@ impl fmt::Display for RipRipError {
 			Self::Write(ref s) => write!(f, "Unable to write to {s}."),
 
 			#[cfg(feature = "bin")]
-			Self::Argue(a) => f.write_str(a.as_str()),
-
-			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
 
 			#[cfg(feature = "bin")]
 			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
+
+			#[cfg(feature = "bin")]
+			Self::PrintHelp => f.write_str(HELP),
+
+			#[cfg(feature = "bin")]
+			Self::PrintVersion => f.write_str(concat!("Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"))),
 		}
 	}
 }
