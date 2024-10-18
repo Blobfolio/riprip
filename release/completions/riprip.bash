@@ -54,7 +54,7 @@ _basher___riprip() {
 		return 0
 	fi
 	case "${prev}" in
-		-d|--dev)
+		--dev|-d)
 			if [ -z "$( declare -f _filedir )" ]; then
 				COMPREPLY=( $( compgen -f "${cur}" ) )
 			else
