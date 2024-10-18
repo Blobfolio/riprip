@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.2.9"
+version = "0.2.10"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -13,16 +13,13 @@ publish = false
 cdtoc = "0.5.*"
 crc32fast = "=1.4.2"
 dactyl = "0.7.*"
+oxford_join = "0.4.*"
 tempfile = "3.8.0"
 trimothy = "0.3.*"
-utc2k = "0.9.*"
-
-[dependencies.argyle]
-version = "0.8.*"
-optional = true
+utc2k = "0.10.*"
 
 [dependencies.fyi_msg]
-version = "0.14.*"
+version = "1.1.*"
 features = [ "progress" ]
 
 [dependencies.libcdio-sys]
@@ -35,6 +32,10 @@ version = "2.12.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
 # reason so we don't need any minreq features at all!
+
+[build-dependencies]
+dactyl = "0.7.*"
+oxford_join = "0.4.*"
 
 [build-dependencies.cdtoc]
 version = "0.5.*"
@@ -53,4 +54,4 @@ default = []
 
 # This feature adds a few generic RipRipError types for the binary.
 # It is not something external crates need to worry about.
-bin = [ "argyle" ]
+bin = []

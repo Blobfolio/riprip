@@ -51,32 +51,27 @@
 	unused_import_braces,
 )]
 
+#![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
 
 
-use argyle::{
-	Argue,
-	ArgyleError,
-	FLAG_HELP,
-	FLAG_VERSION,
-};
-use dactyl::{
-	NiceU16,
-	traits::BytesToUnsigned,
-};
+
+mod cli;
+
+use dactyl::NiceU16;
 use fyi_msg::{
 	Msg,
 	Progless,
 };
+use oxford_join::JoinFmt;
 use riprip_core::{
 	Disc,
-	DriveVendorModel,
 	KillSwitch,
-	ReadOffset,
 	RipRipError,
 	RipOptions,
 };
 use std::{
 	borrow::Cow,
+	fmt,
 	sync::{
 		atomic::{
 			AtomicBool,
@@ -106,11 +101,8 @@ const DIVIDER: &str = "------------------------";
 fn main() {
 	match _main() {
 		Ok(()) => {},
-		Err(RipRipError::Argue(ArgyleError::WantsVersion)) => {
-			println!(concat!("Rip Rip Hooray! v", env!("CARGO_PKG_VERSION")));
-		},
-		Err(RipRipError::Argue(ArgyleError::WantsHelp)) => {
-			helper();
+		Err(e @ (RipRipError::PrintHelp | RipRipError::PrintVersion)) => {
+			println!("{e}");
 		},
 		Err(e) => {
 			Msg::from(e).eprint();
@@ -124,54 +116,17 @@ fn main() {
 ///
 /// This does all the stuff.
 fn _main() -> Result<(), RipRipError> {
-	// Load CLI arguments, if any.
-	let args = Argue::new(FLAG_HELP | FLAG_VERSION)?;
-
-	// Check for unknown args.
-	if let Some(boo) = args.check_keys(
-		&[
-			b"--backward",
-			b"--backwards",
-			b"--flip-flop",
-			b"--no-resume",
-			b"--no-rip",
-			b"--no-summary",
-			b"--reset",
-			b"--status",
-			b"--strict",
-			b"--sync",
-			b"--verbose",
-			b"-v",
-		],
-		&[
-			b"--cache",
-			b"--confidence",
-			b"--dev",
-			b"--offset",
-			b"--pass",
-			b"--passes",
-			b"--reread",
-			b"--rereads",
-			b"--track",
-			b"--tracks",
-			b"-c",
-			b"-d",
-			b"-o",
-			b"-p",
-			b"-r",
-			b"-t",
-		],
-	) {
-		return Err(RipRipError::CliArg(String::from_utf8_lossy(boo).into_owned()));
-	}
-
-	// Connect to the device and summarize the disc.
-	let dev = args.option2_os(b"-d", b"--dev");
-	let disc = Disc::new(dev)?;
-	let drivevendormodel = disc.drive_vendor_model();
+	let (
+		opts,
+		disc,
+		drivevendormodel,
+		no_rip,
+		no_summary,
+		status,
+	) = cli::parse()?;
 
 	// Quiet?
-	if ! args.switch(b"--no-summary") {
+	if ! no_summary {
 		if let Some(vm) = drivevendormodel {
 			let vm = vm.to_string();
 			if ! vm.is_empty() {
@@ -187,7 +142,7 @@ fn _main() -> Result<(), RipRipError> {
 	}
 
 	// Go ahead and leave if there's no ripping to do.
-	if args.switch(b"--no-rip") { return Ok(()); }
+	if no_rip { return Ok(()); }
 
 	// Set up progress and killswitch in case they're needed.
 	let progress = Progless::default();
@@ -195,12 +150,9 @@ fn _main() -> Result<(), RipRipError> {
 	sigint(killed.inner(), Some(progress.clone()));
 
 	// Just checking the status?
-	if let Some(opts) = parse_rip_status_options(&args, &disc)? {
-		return disc.status(&opts, &progress, &killed);
-	}
+	if status { return disc.status(&opts, &progress, &killed); }
 
 	// Parse the options.
-	let opts = parse_rip_options(&args, drivevendormodel, &disc)?;
 	rip_summary(&disc, &opts)?;
 
 	// Log header.
@@ -267,171 +219,7 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 	let _res = handle.flush();
 }
 
-/// # Parse Rip Options.
-fn parse_rip_options(args: &Argue, drive: Option<DriveVendorModel>, disc: &Disc) -> Result<RipOptions, RipRipError> {
-	let mut opts = RipOptions::default()
-		.with_backwards(args.switch2(b"--backwards", b"--backward"))
-		.with_flip_flop(args.switch(b"--flip-flop"))
-		.with_reset(args.switch(b"--reset"))
-		.with_resume(! args.switch(b"--no-resume"))
-		.with_strict(args.switch(b"--strict"))
-		.with_sync(args.switch(b"--sync"))
-		.with_verbose(args.switch2(b"-v", b"--verbose"));
 
-	if let Some(v) = args.option2(b"-o", b"--offset") {
-		let v = ReadOffset::try_from(v)
-			.map_err(|_| RipRipError::CliParse("-o/--offset"))?;
-		opts = opts.with_offset(v);
-	}
-	else if let Some(v) = drive.and_then(|vm| vm.detect_offset()) {
-		opts = opts.with_offset(v);
-	}
-
-	// Cache is more annoying than some options, less annoying than others.
-	if let Some(v) = args.option2(b"-c", b"--cache") {
-		let v = v.iter()
-			.position(|&b| matches!(b, b'm' | b'M'))
-			.map_or_else(
-				|| u16::btou(v),
-				|pos| u16::btou(v[..pos].trim_ascii()).and_then(|v| v.checked_mul(1024))
-			)
-			.ok_or(RipRipError::CliParse("-c/--cache"))?;
-		opts = opts.with_cache(v);
-	}
-	else if let Some(v) = drive.and_then(|vm| vm.detect_cache()) {
-		opts = opts.with_cache(v);
-	}
-
-	if let Some(v) = parse_rip_option_confidence(args)? {
-		opts = opts.with_confidence(v);
-	}
-
-	if let Some(v) = args.option2(b"-p", b"--passes").or_else(|| args.option(b"--pass")) {
-		let passes = u8::btou(v).ok_or(RipRipError::CliParse("-p/--passes"))?;
-		opts = opts.with_passes(passes);
-	}
-
-	if let Some((a, b)) = parse_rip_option_reread(args)? {
-		opts = opts.with_rereads(a, b);
-	}
-
-	// Tracks are also kinda annoying.
-	let toc = disc.toc();
-	for v in args.option2_values(b"-t", b"--tracks", Some(b',')).chain(args.option_values(b"--track", Some(b','))) {
-		let v = v.trim_ascii();
-		if v.is_empty() { continue; }
-
-		// It might be a range.
-		if let Some(pos) = v.iter().position(|b| b'-'.eq(b)) {
-			// Split.
-			let a = v[..pos].trim_ascii();
-			let b = v[pos + 1..].trim_ascii();
-			if a.is_empty() || b.is_empty() { return Err(RipRipError::CliParse("-t/--tracks")); }
-
-			// Decode.
-			let a = u8::btou(a).ok_or(RipRipError::CliParse("-t/--tracks"))?;
-			let b = u8::btou(b).ok_or(RipRipError::CliParse("-t/--tracks"))?;
-
-			// Add them all!
-			if a <= b {
-				for idx in a..=b { opts = opts.with_track(idx); }
-			}
-			else { return Err(RipRipError::CliParse("-t/--tracks")); }
-		}
-		// Otherwise it should be a single index.
-		else {
-			let v = u8::btou(v).ok_or(RipRipError::CliParse("-t/--tracks"))?;
-			opts = opts.with_track(v);
-		}
-	}
-
-	// Make sure the desired tracks are actually on the disc.
-	if opts.has_tracks() {
-		for idx in opts.tracks() {
-			// Make sure the track is valid.
-			let good =
-				if idx == 0 { toc.htoa().is_some() }
-				else { toc.audio_track(usize::from(idx)).is_some() };
-			if ! good {
-				return Err(RipRipError::NoTrack(idx));
-			}
-		}
-	}
-	// If no tracks were specified, DO IT ALL.
-	else {
-		if toc.htoa().is_some() { opts = opts.with_track(0); }
-		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
-	}
-
-	// Done!
-	Ok(opts)
-}
-
-/// # Parse Rip (Status) Options.
-///
-/// Return (mostly) default options if `--status` is set.
-fn parse_rip_status_options(args: &Argue, disc: &Disc)
--> Result<Option<RipOptions>, RipRipError> {
-	if args.switch(b"--status") {
-		// Make a generic options with all the tracks.
-		let mut opts = RipOptions::default();
-
-		if let Some(v) = parse_rip_option_confidence(args)? {
-			opts = opts.with_confidence(v);
-		}
-
-		if let Some((a, b)) = parse_rip_option_reread(args)? {
-			opts = opts.with_rereads(a, b);
-		}
-
-		// Add all tracks from the disc.
-		let toc = disc.toc();
-		if toc.htoa().is_some() { opts = opts.with_track(0); }
-		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
-
-		Ok(Some(opts))
-	}
-	else { Ok(None) }
-}
-
-/// # Parse Confidence Option.
-fn parse_rip_option_confidence(args: &Argue) -> Result<Option<u8>, RipRipError> {
-	if let Some(v) = args.option(b"--confidence") {
-		let confidence = u8::btou(v).ok_or(RipRipError::CliParse("--confidence"))?;
-		Ok(Some(confidence))
-	}
-	else { Ok(None) }
-}
-
-/// # Parse Re-read Option.
-fn parse_rip_option_reread(args: &Argue) -> Result<Option<(u8, u8)>, RipRipError> {
-	// Rereads are kinda annoying.
-	if let Some(v) = args.option2(b"-r", b"--rereads").or_else(|| args.option(b"--reread")) {
-		// Default.
-		let mut a = 2;
-		let mut b = 2;
-
-		// If there's a comma, there could be up to two values. Keep the
-		// default if either is omitted.
-		if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
-			let tmp = &v[..pos];
-			if ! tmp.is_empty() {
-				a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-			}
-			let tmp = &v[pos + 1..];
-			if ! tmp.is_empty() {
-				b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-			}
-		}
-		// A number by itself affects only the first part.
-		else {
-			a = u8::btou(v).ok_or(RipRipError::CliParse("-r/--rereads"))?;
-		}
-
-		Ok(Some((a, b)))
-	}
-	else { Ok(None) }
-}
 
 /// # Rip Summary.
 ///
@@ -531,22 +319,45 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 /// Note: this value assumes ASCII bold and clear codes will be appended to
 /// either end prior to print.
 fn rip_summary_tracks(opts: &RipOptions) -> String {
-	use oxford_join::OxfordJoin;
+	#[derive(Copy, Clone)]
+	/// # Track Number(s).
+	enum SummaryTrack {
+		/// # One Track.
+		One(u8),
+
+		/// # Track Range.
+		Rng(u8, u8),
+	}
+
+	impl fmt::Display for SummaryTrack {
+		#[inline]
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			match *self {
+				Self::One(n) => write!(f, "{n}"),
+				Self::Rng(a, b) => write!(f, "{a}\x1b[0;2m..=\x1b[0;1m{b}"),
+			}
+		}
+	}
 
 	let mut set = opts.tracks_rng()
 		.map(|rng| {
 			let (a, b) = rng.into_inner();
-			if a == b { a.to_string() }
-			else { format!("{a}\x1b[0;2m..=\x1b[0;1m{b}") }
+			if a == b { SummaryTrack::One(a) }
+			else { SummaryTrack::Rng(a, b) }
 		})
 		.collect::<Vec<_>>();
 
 	match set.len() {
-		1 => set.remove(0),
-		2 => set.join("\x1b[0;2m and \x1b[0;1m"),
-		_ => set.oxford_and()
-			.replace(',', "\x1b[0;2m,\x1b[0;1m")
-			.replace("\x1b[2m,\x1b[0;1m and ", "\x1b[0;2m, and \x1b[0;1m"),
+		1 => set.remove(0).to_string(),
+		2 => format!(
+			"{}\x1b[0;2m and \x1b[0;1m{}",
+			set[0],
+			set[1],
+		),
+		_ => set.pop().map_or_else(String::new, |last| format!(
+			"{}\x1b[0;2m, and \x1b[0;1m{last}",
+			JoinFmt::new(set.into_iter(), "\x1b[0;2m, \x1b[0;1m"),
+		)),
 	}
 }
 
@@ -557,110 +368,4 @@ fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 			if let Some(p) = &progress { p.sigint(); }
 		}
 	);
-}
-
-#[cold]
-/// # Print Help.
-fn helper() {
-	println!(concat!(
-		r#"
-    n__n_
-   /  = =\     "#, "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r#"
-  /   ._Y_)    Accurate, incremental audio
- /      "\     CD ripping and recovery.
-(_/  (_,  \
-  \      ( \_,--""""--.
- ,-`.___,-` )-.______.'
- `-,'   `-_-'
-
-USAGE:
-    riprip [OPTIONS]
-
-BASIC SETTINGS:
-    -r, --rereads <[ABS],[MUL]>
-                      Re-read sectors on subsequent passes until A) they have
-                      been independently verified with AccurateRip or CUETools;
-                      or B) the same allegedly-good values have been read at
-                      least <ABS> times, and <MUL> times more often than any
-                      contradictory "good" values. The value may omit the
-                      number on either side of the comma to keep the default,
-                      or be a single number to alter only the <ABS>.
-                      [default: 2,2; range: 1..=20,1..=10]
-    -p, --passes <NUM>
-                      Automate re-ripping by executing up to <NUM> passes for
-                      each track while any samples remain unread or
-                      unconfirmed. [default: 1; max: 16]
-    -t, --tracks <NUM(s),RNG>
-                      Rip one or more specific tracks (rather than the whole
-                      disc). Multiple tracks can be separated by commas (2,3),
-                      specified as an inclusive range (2-3), and/or given their
-                      own -t/--track (-t 2 -t 3). Track 0 can be used to rip
-                      the HTOA, if any. [default: the whole disc]
-
-WHEN ALL ELSE FAILS:
-        --backwards   Reverse the sector read order when ripping a track,
-                      starting at end, and ending at the start.
-        --flip-flop   Alternate the sector read order between passes, forwards
-                      then backwards then forwards then backwards… This has no
-                      effect unless -p/--passes is at least two.
-        --no-resume   Ignore any previous rip states, starting over from
-                      scratch.
-        --reset       Flip "likely" samples back to "maybe", keeping their
-                      values, but resetting all counts to one. This is a softer
-                      alternative to --no-resume, and will not affect tracks
-                      confirmed by AccurateRip/CUETools.
-        --strict      Consider C2 errors an all-or-nothing proposition for the
-                      sector as a whole, marking all samples bad if any of them
-                      are bad. This is most effective when applied consistently
-                      from the initial rip and onward.
-
-DRIVE SETTINGS:
-    -c, --cache <NUM> Drive cache can interfere with re-read accuracy. If your
-                      drive caches data, use this option to specify its buffer
-                      size so Rip Rip can try to mitigate it. Values with an
-                      M suffix are treated as MiB, otherwise KiB are assumed.
-                      [default: auto or 0; max: 65,535]
-    -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom. [default: auto]
-    -o, --offset <SAMPLES>
-                      The AccurateRip, et al, sample read offset to apply to
-                      data retrieved from the drive.
-                      [default: auto or 0; range: ±5880]
-
-UNUSUAL SETTINGS:
-        --confidence <NUM>
-                      Consider a track accurately ripped — i.e. stop working on
-                      it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. Raise this value if you
-                      personally fucked up the database(s) with prior bad rips,
-                      otherwise the default should be fine. Haha.
-                      [default: 3; range: 1..=10]
-        --sync        Confirm sector positioning with subchannel data (when
-                      available) to make sure the drive is actually reading
-                      from the right place, and ignore the data if not. This is
-                      prone to false-positives — subchannel data is easily
-                      corrupted — so only recommended when disc rot, rather
-                      than wear-and-tear, is the sole cause of your woes.
-
-MISCELLANEOUS:
-    -h, --help        Print help information to STDOUT and exit.
-    -v, --verbose     Print detailed sector quality information to STDOUT, so
-                      it can e.g. be piped to a file for review, like:
-                      riprip -v > issues.log
-    -V, --version     Print version information to STDOUT and exit.
-        --no-rip      Print the basic drive and disc information to STDERR and
-                      exit (without ripping anything).
-        --no-summary  Skip the drive and disc summary and jump straight to
-                      ripping.
-        --status      Print the status of the individual track rips (that you
-                      presumably already started) to STDERR and exit. Note that
-                      only the --no-summary, --confidence, and -r/--rereads
-                      options have any meaning in this mode.
-
-EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
-    it early. Your progress will still be saved, there just won't be as much of
-    it. Haha.
-"
-	));
 }
