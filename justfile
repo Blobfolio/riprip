@@ -78,7 +78,7 @@ export RUSTFLAGS := "-C target-cpu=x86-64-v3"
 
 # Generate CREDITS.
 @credits:
-	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
+	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml" -t x86_64-unknown-linux-gnu
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 
