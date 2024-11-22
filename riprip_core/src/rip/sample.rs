@@ -345,7 +345,7 @@ pub(super) struct RipSectorSamples<'a> {
 	pos: u16,
 }
 
-impl<'a> Iterator for RipSectorSamples<'a> {
+impl Iterator for RipSectorSamples<'_> {
 	type Item = RipSample;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -428,7 +428,7 @@ impl<'a> Iterator for RipSectorSamples<'a> {
 	}
 }
 
-impl<'a> ExactSizeIterator for RipSectorSamples<'a> {
+impl ExactSizeIterator for RipSectorSamples<'_> {
 	fn len(&self) -> usize {
 		usize::from(SAMPLES_PER_SECTOR.saturating_sub(self.pos))
 	}

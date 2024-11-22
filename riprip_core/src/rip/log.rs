@@ -122,7 +122,7 @@ impl RipLog {
 		let mut handle = writer.lock();
 		let _res = writeln!(
 			&mut handle,
-			r"##
+			"##
 ## Pass {pass}: {}
 ## Problematic Sectors: {}
 ## Problematic Samples: {}
@@ -135,7 +135,7 @@ impl RipLog {
 		// Miscellaneous events.
 		if ! self.events.is_empty() {
 			for (event, time) in self.events.drain(..) {
-				let _res = writeln!(&mut handle, r"## [{time}] {event}");
+				let _res = writeln!(&mut handle, "## [{time}] {event}");
 			}
 			let _res =writeln!(&mut handle, "##");
 		}
@@ -146,7 +146,7 @@ impl RipLog {
 			for (track, lsn, samples, kind) in self.sectors.drain(..) {
 				let _res = writeln!(
 					&mut handle,
-					r"{track:02}  {lsn:06}  {samples:03}  {}",
+					"{track:02}  {lsn:06}  {samples:03}  {}",
 					kind.as_str(),
 				);
 			}

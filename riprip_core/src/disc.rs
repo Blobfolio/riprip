@@ -262,7 +262,7 @@ impl Disc {
 			let mut good = 0;
 
 			let htoa_any = saved.contains_key(&0);
-			let htoa_likely = saved.get(&0).map_or(false, |(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
+			let htoa_likely = saved.get(&0).is_some_and(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
 			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
 			let col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
@@ -273,7 +273,7 @@ impl Disc {
 				let _res = writeln!(
 					&mut handle,
 					"  \x1b[2m{}\x1b[0m",
-					file.to_string_lossy(),
+					file.display(),
 				);
 			}
 
@@ -284,7 +284,7 @@ impl Disc {
 				let _res = writeln!(
 					&mut handle,
 					"  \x1b[2m{:<col1$}\x1b[0m{}{}",
-					file.to_string_lossy(),
+					file.display(),
 					if conf {
 						if idx == 0 { Cow::Borrowed("            \x1b[0;93m*\x1b[0m") }
 						else { fmt_ar(ar) }

@@ -152,7 +152,7 @@ fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
 	format!(
 		r#"
 /// # Drive Offsets.
-const DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = [
+static DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = [
 	{},
 ];
 "#,

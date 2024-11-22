@@ -184,7 +184,7 @@ pub(crate) struct RipBufferIter<'a> {
 	pos: usize,
 }
 
-impl<'a> Iterator for RipBufferIter<'a> {
+impl Iterator for RipBufferIter<'_> {
 	type Item = (Sample, bool);
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -220,7 +220,7 @@ impl<'a> Iterator for RipBufferIter<'a> {
 	}
 }
 
-impl<'a> ExactSizeIterator for RipBufferIter<'a> {
+impl ExactSizeIterator for RipBufferIter<'_> {
 	fn len(&self) -> usize {
 		usize::from(SAMPLES_PER_SECTOR).saturating_sub(self.pos)
 	}

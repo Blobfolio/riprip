@@ -99,7 +99,7 @@ const DIVIDER: &str = "------------------------";
 ///
 /// This lets us bubble up startup errors so they can be pretty-printed.
 fn main() {
-	match _main() {
+	match main__() {
 		Ok(()) => {},
 		Err(e @ (RipRipError::PrintHelp | RipRipError::PrintVersion)) => {
 			println!("{e}");
@@ -115,7 +115,7 @@ fn main() {
 /// # Actual Main.
 ///
 /// This does all the stuff.
-fn _main() -> Result<(), RipRipError> {
+fn main__() -> Result<(), RipRipError> {
 	let (
 		opts,
 		disc,
