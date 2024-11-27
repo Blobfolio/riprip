@@ -327,9 +327,9 @@ impl Ripper<'_> {
 
 		// Print the bar and legend(s).
 		eprintln!("        {}", q2.bar());
-		let (legend_a, legend_b) = q2.legend(&q1);
-		if let Some(legend_a) = legend_a { eprintln!("        {legend_a}"); }
-		eprintln!("        {legend_b} \x1b[2msamples\x1b[0m");
+		let legend = q2.legend(&q1);
+		if let Some(legend_a) = legend.start() { eprintln!("        {legend_a}"); }
+		eprintln!("        {legend} \x1b[2msamples\x1b[0m");
 
 		// An extra line to give some separation between this task and the
 		// next.

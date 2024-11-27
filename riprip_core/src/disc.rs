@@ -299,9 +299,10 @@ impl Disc {
 			// Add confirmation column headers.
 			let _res = writeln!(
 				&mut handle,
-				"  {}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
-				" ".repeat(col1),
-				if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
+				"  {line: >width$}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{color}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
+				line="",
+				width=col1,
+				color=if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
 			);
 
 			// Mention that the HTOA can't be verified but is probably okay.
