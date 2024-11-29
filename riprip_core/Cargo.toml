@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.2.10"
+version = "0.2.11"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
