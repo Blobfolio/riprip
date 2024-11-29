@@ -11,7 +11,6 @@ use std::{
 	fmt,
 	ops::RangeInclusive,
 };
-use trimothy::NormalizeWhitespace;
 
 
 
@@ -53,9 +52,15 @@ pub struct DriveVendorModel([u8; 24]);
 
 impl fmt::Display for DriveVendorModel {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		use std::fmt::Write;
+		use trimothy::TrimNormalChars;
+
 		if let Ok(raw) = std::str::from_utf8(&self.0) {
-			for c in raw.chars().normalized_control_and_whitespace() {
-				write!(f, "{c}")?;
+			for c in raw.chars()
+				.map(|c| if c.is_control() { ' ' } else { c })
+				.trim_and_normalize()
+			{
+				f.write_char(c)?;
 			}
 		}
 

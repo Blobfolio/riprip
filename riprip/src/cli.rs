@@ -142,6 +142,7 @@ fn parse_rip_option_reread(v: &[u8]) -> Result<(u8, u8), RipRipError> {
 	// If there's a comma, there could be up to two values. Keep the
 	// default if either is omitted.
 	let v = v.trim_ascii();
+	// TODO: use split_once once stable.
 	if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
 		let tmp = &v[..pos];
 		if ! tmp.is_empty() {
@@ -168,6 +169,7 @@ fn parse_rip_option_tracks(disc: &Disc, mut opts: RipOptions, tracks: &str)
 		if v.is_empty() { continue; }
 
 		// It might be a range.
+		// TODO: use split_once once stable.
 		if let Some(pos) = v.iter().position(|b| b'-'.eq(b)) {
 			// Split.
 			let a = v[..pos].trim_ascii();

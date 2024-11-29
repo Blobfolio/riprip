@@ -19,6 +19,7 @@ use dactyl::{
 };
 use std::{
 	borrow::Cow,
+	fmt,
 	num::NonZeroU32,
 	ops::Add,
 };
@@ -228,7 +229,7 @@ impl TrackQuality {
 	///
 	/// Return a pretty bar representing the different states in relative
 	/// proportion.
-	pub(super) fn bar(&self) -> String {
+	pub(super) fn bar(&self) -> TrackQualityBar {
 		let q_total = self.total().get();
 		let b_len = QUALITY_BAR.len() as f64;
 		let mut b_total = 0;
@@ -273,13 +274,7 @@ impl TrackQuality {
 			}
 		}
 
-		format!(
-			"\x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
-			&QUALITY_BAR[..b_chunks[0]],
-			&QUALITY_BAR[..b_chunks[1]],
-			&QUALITY_BAR[..b_chunks[2]],
-			&QUALITY_BAR[..b_chunks[3]],
-		)
+		TrackQualityBar(b_chunks)
 	}
 
 	/// # Legend.
@@ -287,54 +282,10 @@ impl TrackQuality {
 	/// Generate before and after legend(s) to go along with the bar. For the
 	/// first one, only differences will be included, so if there are none,
 	/// it will be returned as `None`.
-	pub(super) fn legend(&self, start: &Self) -> (Option<String>, String) {
+	pub(super) fn legend(&self, start: &Self) -> TrackQualityLegend {
 		let start = start.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
 		let end = self.as_array().map(|n| if n == 0 { None } else { Some(NiceU32::from(n)) });
-
-		// Do we have any start values different from the end?
-		let start_any = start.iter().zip(end.iter()).any(|(a, b)| a.is_some() && a != b);
-
-		// Hold the final, used values, which will probably be less than four.
-		let mut list1 = Vec::new();
-		let mut list2 = Vec::new();
-
-		// Compare the start and end, if any, and pad entries in both lists
-		// to the maximum length when either is worth printing.
-		for ((a, b), color) in start.into_iter().zip(end).zip([COLOR_BAD, COLOR_MAYBE, COLOR_LIKELY, COLOR_CONFIRMED]) {
-			if a.is_some() || b.is_some() {
-				let len = usize::max(
-					a.as_ref().map_or(1, NiceU32::len),
-					b.as_ref().map_or(1, NiceU32::len),
-				);
-
-				// Only include starts if there's at least one.
-				if start_any {
-					// If unchanged, don't cross it out.
-					if a == b {
-						list1.push(format!(
-							"\x1b[2;{color}m{:>len$}\x1b[0m",
-							a.as_ref().map_or("0", |v| v.as_str()),
-						));
-					}
-					// Otherwise strike!
-					else {
-						let v = a.as_ref().map_or("0", |v| v.as_str());
-						let extra = " ".repeat(len - v.len());
-						list1.push(format!("{extra}\x1b[2;9;{color}m{v}\x1b[0m"));
-					}
-				}
-				list2.push(format!(
-					"\x1b[{color}m{:>len$}\x1b[0m",
-					b.as_ref().map_or("0", |v| v.as_str()),
-				));
-			}
-		}
-
-		// Done!
-		(
-			if list1.is_empty() { None } else { Some(list1.join("   ")) },
-			list2.join("\x1b[2m + \x1b[0m"),
-		)
+		TrackQualityLegend { start, end }
 	}
 
 	/// # Summary.
@@ -399,5 +350,186 @@ impl TrackQuality {
 				)),
 			}
 		}
+	}
+}
+
+
+
+/// # Track Quality Bar.
+pub(super) struct TrackQualityBar([usize; 4]);
+
+impl fmt::Display for TrackQualityBar {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"\x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
+			&QUALITY_BAR[..self.0[0]],
+			&QUALITY_BAR[..self.0[1]],
+			&QUALITY_BAR[..self.0[2]],
+			&QUALITY_BAR[..self.0[3]],
+		)
+	}
+}
+
+
+
+/// # Track Quality Legend.
+///
+/// This is used to format the legend for the initial and/or final rip states.
+pub(super) struct TrackQualityLegend {
+	/// # Original Values.
+	start: [Option<NiceU32>; 4],
+
+	/// # Final Values.
+	end: [Option<NiceU32>; 4],
+}
+
+impl TrackQualityLegend {
+	/// # Colors.
+	const COLORS: [&str; 4] = [COLOR_BAD, COLOR_MAYBE, COLOR_LIKELY, COLOR_CONFIRMED];
+
+	/// # Padding.
+	///
+	/// Note: this is the maximum length of a NiceU32.
+	const PADDING: &str = "             ";
+
+	/// # Iterate!
+	const fn iter(&self) -> TrackQualityLegendIter {
+		TrackQualityLegendIter {
+			start: &self.start,
+			end: &self.end,
+			pos: 0,
+		}
+	}
+
+	/// # Start Line.
+	///
+	/// Return a `Display`-friendly object representing the legend for the
+	/// initial state.
+	///
+	/// Returns `None` if there was no initial state or it is identical to the
+	/// final one.
+	pub(super) fn start(&self) -> Option<TrackQualityLegendStart> {
+		if self.start.iter().zip(self.end.iter()).any(|(a, b)| a.is_some() && a != b) {
+			Some(TrackQualityLegendStart(self))
+		}
+		else { None }
+	}
+}
+
+impl fmt::Display for TrackQualityLegend {
+	/// # Print Final Legend.
+	///
+	/// Print the legend for the final state.
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Entry Spacer.
+		const GLUE: &str = "\x1b[2m + \x1b[0m";
+
+		let mut any = false;
+		for (a, b, color) in self.iter() {
+			// Column length.
+			let len = usize::max(a.len(), b.len());
+
+			if any { f.write_str(GLUE)?;}
+			f.write_str(&Self::PADDING[..len - b.len()])?;
+			f.write_str("\x1b[")?;
+			f.write_str(color)?;
+			f.write_str("m")?;
+			f.write_str(b)?;
+			f.write_str("\x1b[0m")?;
+			any = true;
+		}
+
+		Ok(())
+	}
+}
+
+
+
+/// # Track Quality Legend Iterator.
+///
+/// Iterate through triples containing the initial and final states, and
+/// corresponding color, filtering out empty values.
+struct TrackQualityLegendIter<'a> {
+	/// # Initial State.
+	start: &'a [Option<NiceU32>; 4],
+
+	/// # Final State.
+	end: &'a [Option<NiceU32>; 4],
+
+	/// # Next Iter Position.
+	pos: usize,
+}
+
+impl<'a> Iterator for TrackQualityLegendIter<'a> {
+	type Item = (&'a str, &'a str, &'static str);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		for idx in self.pos..4 {
+			// Values at the current index.
+			let start = self.start[idx].as_ref();
+			let end = self.end[idx].as_ref();
+
+			// Return both if either exist.
+			if start.is_some() || end.is_some() {
+				self.pos = idx + 1;
+				return Some((
+					start.map_or("0", NiceU32::as_str),
+					end.map_or("0", NiceU32::as_str),
+					TrackQualityLegend::COLORS[idx],
+				));
+			}
+		}
+
+		// We're done.
+		self.pos = 4;
+		None
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let len = self.len();
+		(len, Some(len))
+	}
+}
+
+impl ExactSizeIterator for TrackQualityLegendIter<'_> {
+	fn len(&self) -> usize {
+		let mut total = 0;
+		for idx in self.pos..4 {
+			if self.start[idx].is_some() || self.end[idx].is_some() { total += 1; }
+		}
+		total
+	}
+}
+
+
+
+/// # Initial Track Quality Legend.
+///
+/// This is used to format the legend for the initial rip state.
+pub(super) struct TrackQualityLegendStart<'a>(&'a TrackQualityLegend);
+
+impl fmt::Display for TrackQualityLegendStart<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Entry Spacer.
+		const GLUE: &str = "   ";
+
+		let mut any = false;
+		for (a, b, color) in self.0.iter() {
+			// Column length.
+			let len = usize::max(a.len(), b.len());
+
+			if any { f.write_str(GLUE)?; }
+			f.write_str(&TrackQualityLegend::PADDING[..len - a.len()])?;
+			f.write_str("\x1b[2;")?;
+			if a != b { f.write_str("9;")?; } // Strike if different.
+			f.write_str(color)?;
+			f.write_str("m")?;
+			f.write_str(a)?;
+			f.write_str("\x1b[0m")?;
+			any = true;
+		}
+
+		Ok(())
 	}
 }

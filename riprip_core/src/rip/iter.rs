@@ -85,7 +85,7 @@ impl<'a> Iterator for OffsetRipIter<'a> {
 	}
 }
 
-impl<'a> ExactSizeIterator for OffsetRipIter<'a> {
+impl ExactSizeIterator for OffsetRipIter<'_> {
 	fn len(&self) -> usize { self.read.len() }
 }
 
@@ -128,7 +128,7 @@ impl<'a> Iterator for EitherChunksIter<'a> {
 	}
 }
 
-impl<'a> ExactSizeIterator for EitherChunksIter<'a> {
+impl ExactSizeIterator for EitherChunksIter<'_> {
 	fn len(&self) -> usize {
 		match self {
 			Self::Forward(i) => i.len(),

@@ -49,8 +49,8 @@ impl TryFrom<&[u8]> for Barcode {
 	type Error = RipRipError;
 	fn try_from(mut src: &[u8]) -> Result<Self, Self::Error> {
 		// Remove whitespace, leading *ASCII* zeroes, and trailing nulls.
-		src = src.trim_start_matches(|b| b.is_ascii_whitespace() || b == b'0');
-		src = src.trim_end_matches(|b| b.is_ascii_whitespace() || b == 0);
+		src = src.trim_start_matches(|b: u8| b.is_ascii_whitespace() || b == b'0');
+		src = src.trim_end_matches(|b: u8| b.is_ascii_whitespace() || b == 0);
 
 		// Make sure we've got 8-13 ASCII digits and nothing else.
 		if ! (8..=13).contains(&src.len()) || ! src.iter().all(u8::is_ascii_digit) {

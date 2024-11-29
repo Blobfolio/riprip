@@ -154,8 +154,8 @@ impl LibcdioInstance {
 
 			// Make sure the disc is present and valid before leaving, and
 			// initialize the CDText to have it ready for later queries.
-			out._check_disc_mode()?;
-			out._init_cdtext();
+			out.check_disc_mode__()?;
+			out.init_cdtext__();
 
 			// Done!
 			Ok(out)
@@ -171,7 +171,7 @@ impl LibcdioInstance {
 	/// ## Errors
 	///
 	/// Returns an error if the disc is missing or unsupported.
-	fn _check_disc_mode(&self) -> Result<(), RipRipError> {
+	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
 		// Safety: this is an FFI call…
 		let discmode = unsafe {
 			libcdio_sys::cdio_get_discmode(self.as_mut_ptr())
@@ -194,7 +194,7 @@ impl LibcdioInstance {
 	/// The data on the other end of this pointer gets cleaned up when the
 	/// parent instance is destroyed, so it makes sense keeping the two
 	/// together.
-	fn _init_cdtext(&mut self) {
+	fn init_cdtext__(&mut self) {
 		// Safety: this is an FFI call…
 		let ptr = unsafe {
 			libcdio_sys::cdio_get_cdtext(self.as_mut_ptr())
@@ -342,14 +342,14 @@ impl LibcdioInstance {
 		self.cdtext(0, CDTextKind::Barcode)
 			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
 			// Otherwise try pulling it directly.
-			.or_else(|| self._mcn())
+			.or_else(|| self.mcn__())
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
 	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
-	fn _mcn(&self) -> Option<Barcode> {
+	fn mcn__(&self) -> Option<Barcode> {
 		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_mcn(self.as_ptr())
@@ -449,13 +449,13 @@ impl LibcdioInstance {
 
 			// If we're moving backwards, try after, then before.
 			if backwards {
-				self._cache_bust(buf, rng.end, leadout, &mut todo, now, killed);
-				self._cache_bust(buf, 0, rng.start - 1, &mut todo, now, killed);
+				self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
+				self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
 			}
 			// Otherwise before, then after.
 			else {
-				self._cache_bust(buf, 0, rng.start - 1, &mut todo, now, killed);
-				self._cache_bust(buf, rng.end, leadout, &mut todo, now, killed);
+				self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
+				self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
 			}
 		}
 	}
@@ -465,7 +465,7 @@ impl LibcdioInstance {
 	/// This method attempts to read up to `todo` sectors between `from..to`.
 	/// It is separated from the main method only to cut down on repetitive
 	/// code.
-	fn _cache_bust(
+	fn cache_bust__(
 		&self,
 		buf: &mut[u8],
 		mut from: i32,

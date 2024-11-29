@@ -171,7 +171,7 @@ impl<'a> Ripper<'a> {
 			for entry in self.tracks.values_mut() {
 				if
 					! killed.killed() &&
-					state_path(toc, entry.track).map_or(false, |s| s.is_file())
+					state_path(toc, entry.track).is_ok_and(|s| s.is_file())
 				{
 					state.replace(entry.track, &self.opts)?;
 					if entry.preverify(&state, &self.opts)? {
@@ -285,7 +285,7 @@ impl<'a> Ripper<'a> {
 		for entry in self.tracks.values_mut() {
 			if killed.killed() { return Err(RipRipError::Killed); }
 
-			if state_path(toc, entry.track).map_or(false, |s| s.is_file()) {
+			if state_path(toc, entry.track).is_ok_and(|s| s.is_file()) {
 				state.replace(entry.track, &self.opts)?;
 				entry.preverify(&state, &self.opts)?;
 			}
@@ -299,7 +299,7 @@ impl<'a> Ripper<'a> {
 	}
 }
 
-impl<'a> Ripper<'a> {
+impl Ripper<'_> {
 	/// # Summarize.
 	///
 	/// Print a colored bar, some numbers, and a status for the rip as a whole.
@@ -327,9 +327,9 @@ impl<'a> Ripper<'a> {
 
 		// Print the bar and legend(s).
 		eprintln!("        {}", q2.bar());
-		let (legend_a, legend_b) = q2.legend(&q1);
-		if let Some(legend_a) = legend_a { eprintln!("        {legend_a}"); }
-		eprintln!("        {legend_b} \x1b[2msamples\x1b[0m");
+		let legend = q2.legend(&q1);
+		if let Some(legend_a) = legend.start() { eprintln!("        {legend_a}"); }
+		eprintln!("        {legend} \x1b[2msamples\x1b[0m");
 
 		// An extra line to give some separation between this task and the
 		// next.
