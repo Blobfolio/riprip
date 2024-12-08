@@ -131,7 +131,7 @@ argyle = "0.10.*"
 [dependencies]
 argyle = "0.10.*"
 ctrlc = "=3.4.5"
-dactyl = "0.8.*"
+dactyl = "0.9.*"
 oxford_join = "0.4.*"
 utc2k = "0.11.*"
 
