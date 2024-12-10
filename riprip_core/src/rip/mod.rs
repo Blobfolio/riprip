@@ -175,7 +175,7 @@ impl<'a> Ripper<'a> {
 				{
 					state.replace(entry.track, &self.opts)?;
 					if entry.preverify(&state, &self.opts)? {
-						share.progress.push_msg(happy_track_msg(entry.track), true);
+						let _res = share.progress.push_msg(happy_track_msg(entry.track));
 						progress.increment_n(entry.sectors * u32::from(self.opts.passes()));
 					}
 				}
@@ -241,7 +241,7 @@ impl<'a> Ripper<'a> {
 				if entry.rip(&mut share, &mut state, &self.opts)? {
 					let skip = u32::from(self.opts.passes() - pass) * entry.sectors;
 					if skip != 0 { progress.increment_n(skip); }
-					share.progress.push_msg(happy_track_msg(entry.track), true);
+					let _res = share.progress.push_msg(happy_track_msg(entry.track));
 				}
 			}
 

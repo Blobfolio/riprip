@@ -136,7 +136,7 @@ oxford_join = "0.4.*"
 utc2k = "0.11.*"
 
 [dependencies.fyi_msg]
-version = "1.3.*"
+version = "1.4.*"
 features = [ "progress" ]
 
 [dependencies.riprip_core]
