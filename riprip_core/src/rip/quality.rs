@@ -344,7 +344,7 @@ impl TrackQuality {
 					p1.compact_str(),
 				)),
 				(Some(p1), Some(p2)) => Cow::Owned(format!(
-					"Recovery is \x1b[2m(roughly)\x1b[0m {}% – {}%s complete.",
+					"Recovery is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
 					p1.precise_str(3),
 					p2.precise_str(3),
 				)),

@@ -159,7 +159,9 @@ fn main__() -> Result<(), RipRipError> {
 	if opts.verbose() { log_header(&disc, &opts); }
 
 	// Rip and rip and rip!
+	let hide_cursor = HideCursor::new();
 	disc.rip(&opts, &progress, &killed)?;
+	drop(hide_cursor);
 
 	if killed.killed() { Err(RipRipError::Killed) }
 	else { Ok(()) }
@@ -365,7 +367,34 @@ fn rip_summary_tracks(opts: &RipOptions) -> String {
 fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
 	let _res = ctrlc::set_handler(move ||
 		if killed.compare_exchange(false, true, SeqCst, Relaxed).is_ok() {
-			if let Some(p) = &progress { p.sigint(); }
+			if let Some(p) = &progress {
+				p.sigint();
+
+				// Manually unhide the cursor; the drop glue probably won't run.
+				eprint!("{}", Progless::CURSOR_UNHIDE);
+			}
 		}
 	);
+}
+
+/// # Hide Cursor.
+///
+/// This helps control the hiding and showing of the cursor during progress
+/// render. (The drop glue is key.)
+struct HideCursor(());
+
+impl Drop for HideCursor {
+	fn drop(&mut self) {
+		// Unhide the cursor.
+		eprint!("{}", Progless::CURSOR_UNHIDE);
+	}
+}
+
+impl HideCursor {
+	/// # New!
+	fn new() -> Self {
+		// Hide the cursor.
+		eprint!("{}", Progless::CURSOR_HIDE);
+		Self(())
+	}
 }
