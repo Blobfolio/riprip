@@ -51,7 +51,6 @@
 )]
 
 #![expect(clippy::doc_markdown, reason = "`RipRip` makes this annoying.")]
-#![expect(clippy::module_name_repetitions, reason = "Repetition is preferred.")]
 #![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
 
 mod abort;
