@@ -244,7 +244,7 @@ impl Disc {
 	/// ## Errors
 	///
 	/// This will bubble up any IO/rip/etc. errors encountered along the way.
-	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
+	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: KillSwitch)
 	-> Result<(), RipRipError> {
 		use std::io::Write;
 
@@ -343,7 +343,7 @@ impl Disc {
 	/// ## Errors
 	///
 	/// This will return an error if there are I/O problems or the user aborts.
-	pub fn status(&self, opts: &RipOptions, progress: &Progless, killed: &KillSwitch)
+	pub fn status(&self, opts: &RipOptions, progress: &Progless, killed: KillSwitch)
 	-> Result<(), RipRipError> {
 		// Load the ripper.
 		let mut rip = Ripper::new(self, opts)?;

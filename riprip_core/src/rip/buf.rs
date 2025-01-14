@@ -44,7 +44,7 @@ impl RipBuffer {
 		rng: &Range<i32>,
 		leadout: i32,
 		backwards: bool,
-		killed: &KillSwitch,
+		killed: KillSwitch,
 	) {
 		cdio.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
 	}
