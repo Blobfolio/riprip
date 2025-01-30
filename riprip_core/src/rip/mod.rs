@@ -149,7 +149,7 @@ impl<'a> Ripper<'a> {
 	/// support an operation at all — it's missing a feature, etc. — or there
 	/// are I/O issues with the state data, etc., those will kill the process
 	/// and be returned.
-	pub(crate) fn rip(&mut self, progress: &Progless, killed: &KillSwitch)
+	pub(crate) fn rip(&mut self, progress: &Progless, killed: KillSwitch)
 	-> Result<(), RipRipError> {
 		// We should definitely have a first track, but if for some reason we
 		// don't there's nothing more to do!
@@ -267,7 +267,7 @@ impl<'a> Ripper<'a> {
 	/// # Status.
 	///
 	/// Check the status of each track and nothing else.
-	pub(crate) fn status(&mut self, progress: &Progless, killed: &KillSwitch)
+	pub(crate) fn status(&mut self, progress: &Progless, killed: KillSwitch)
 	-> Result<(), RipRipError> {
 		// We should definitely have a first track, but if for some reason we
 		// don't there's nothing more to do!
@@ -791,13 +791,13 @@ struct RipShare<'a> {
 	progress: &'a Progless,
 
 	/// # Killswitch.
-	killed: &'a KillSwitch,
+	killed: KillSwitch,
 }
 
 impl<'a> RipShare<'a> {
 	#[expect(clippy::cast_possible_wrap, reason = "False positive.")]
 	/// # New Instance.
-	const fn new(disc: &'a Disc, progress: &'a Progless, killed: &'a KillSwitch) -> Self {
+	const fn new(disc: &'a Disc, progress: &'a Progless, killed: KillSwitch) -> Self {
 		Self {
 			buf: RipBuffer::new(),
 			log: RipLog::new(),

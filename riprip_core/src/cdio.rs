@@ -442,7 +442,7 @@ impl LibcdioInstance {
 		rng: &Range<i32>,
 		leadout: i32,
 		backwards: bool,
-		killed: &KillSwitch,
+		killed: KillSwitch,
 	) {
 		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
 			let now = Instant::now();
@@ -472,7 +472,7 @@ impl LibcdioInstance {
 		to: i32,
 		todo: &mut u32,
 		now: Instant,
-		killed: &KillSwitch,
+		killed: KillSwitch,
 	) {
 		while from < to && 0 < *todo {
 			if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {

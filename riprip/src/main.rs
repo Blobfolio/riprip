@@ -72,16 +72,6 @@ use riprip_core::{
 use std::{
 	borrow::Cow,
 	fmt,
-	sync::{
-		atomic::{
-			AtomicBool,
-			Ordering::{
-				Relaxed,
-				SeqCst,
-			},
-		},
-		Arc,
-	},
 };
 use utc2k::FmtUtc2k;
 
@@ -145,12 +135,11 @@ fn main__() -> Result<(), RipRipError> {
 	if no_rip { return Ok(()); }
 
 	// Set up progress and killswitch in case they're needed.
+	let killed = KillSwitch::from(Progless::sigint_keepalive());
 	let progress = Progless::default();
-	let killed = KillSwitch::default();
-	sigint(killed.inner(), Some(progress.clone()));
 
 	// Just checking the status?
-	if status { return disc.status(&opts, &progress, &killed); }
+	if status { return disc.status(&opts, &progress, killed); }
 
 	// Parse the options.
 	rip_summary(&disc, &opts)?;
@@ -159,9 +148,7 @@ fn main__() -> Result<(), RipRipError> {
 	if opts.verbose() { log_header(&disc, &opts); }
 
 	// Rip and rip and rip!
-	let hide_cursor = HideCursor::new();
-	disc.rip(&opts, &progress, &killed)?;
-	drop(hide_cursor);
+	disc.rip(&opts, &progress, killed)?;
 
 	if killed.killed() { Err(RipRipError::Killed) }
 	else { Ok(()) }
@@ -360,41 +347,5 @@ fn rip_summary_tracks(opts: &RipOptions) -> String {
 			"{}\x1b[0;2m, and \x1b[0;1m{last}",
 			JoinFmt::new(set.into_iter(), "\x1b[0;2m, \x1b[0;1m"),
 		)),
-	}
-}
-
-/// # Hook Up CTRL+C.
-fn sigint(killed: Arc<AtomicBool>, progress: Option<Progless>) {
-	let _res = ctrlc::set_handler(move ||
-		if killed.compare_exchange(false, true, SeqCst, Relaxed).is_ok() {
-			if let Some(p) = &progress {
-				p.sigint();
-
-				// Manually unhide the cursor; the drop glue probably won't run.
-				eprint!("{}", Progless::CURSOR_UNHIDE);
-			}
-		}
-	);
-}
-
-/// # Hide Cursor.
-///
-/// This helps control the hiding and showing of the cursor during progress
-/// render. (The drop glue is key.)
-struct HideCursor(());
-
-impl Drop for HideCursor {
-	fn drop(&mut self) {
-		// Unhide the cursor.
-		eprint!("{}", Progless::CURSOR_UNHIDE);
-	}
-}
-
-impl HideCursor {
-	/// # New!
-	fn new() -> Self {
-		// Hide the cursor.
-		eprint!("{}", Progless::CURSOR_HIDE);
-		Self(())
 	}
 }
