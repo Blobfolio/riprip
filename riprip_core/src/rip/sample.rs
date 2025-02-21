@@ -703,7 +703,7 @@ fn sort_sample_count(a: &(Sample, u8), b: &(Sample, u8)) -> Ordering { b.1.cmp(&
 ///
 /// This is used for our sample type de/serialization, which codes the variant
 /// identifiers as a number between `1..=8`.
-const fn u4_pack(a: u8, b: u8) -> u8 { a | b << 4 }
+const fn u4_pack(a: u8, b: u8) -> u8 { a | (b << 4) }
 
 /// # Unpack `u8` into Two `u4`.
 const fn u4_unpack(c: u8) -> (u8, u8) { (u4_unpack_lhs(c), u4_unpack_rhs(c)) }

@@ -632,7 +632,7 @@ mod test {
 		assert_eq!(all.len(), 7);
 
 		// Also make sure each is only one bit.
-		assert!(all.iter().all(|&v| v.count_ones() == 1));
+		assert!(all.iter().all(|&v| v.is_power_of_two()));
 	}
 
 	#[test]
