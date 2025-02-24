@@ -72,6 +72,7 @@ use riprip_core::{
 use std::{
 	borrow::Cow,
 	fmt,
+	process::ExitCode,
 };
 use utc2k::FmtUtc2k;
 
@@ -88,15 +89,16 @@ const DIVIDER: &str = "------------------------";
 /// # Main.
 ///
 /// This lets us bubble up startup errors so they can be pretty-printed.
-fn main() {
+fn main() -> ExitCode {
 	match main__() {
-		Ok(()) => {},
+		Ok(()) => ExitCode::SUCCESS,
 		Err(e @ (RipRipError::PrintHelp | RipRipError::PrintVersion)) => {
 			println!("{e}");
+			ExitCode::SUCCESS
 		},
 		Err(e) => {
 			Msg::from(e).eprint();
-			std::process::exit(1);
+			ExitCode::FAILURE
 		},
 	}
 }
