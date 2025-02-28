@@ -238,12 +238,12 @@ impl fmt::Display for RipRipError {
 			Self::Bug(s) => write!(f, "Bug: {s}."),
 			Self::C2Mode296 => f.write_str("This drive does not seem to support 296-byte C2 blocks."),
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
-			Self::CachePath(ref s) => write!(f, "Invalid cache path {s}."),
+			Self::CachePath(s) => write!(f, "Invalid cache path {s}."),
 			Self::CdRead => f.write_str("Read error."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
-			Self::Device(ref s) => write!(f, "Invalid device path {s}."),
-			Self::DeviceOpen(ref s) =>
+			Self::Device(s) => write!(f, "Invalid device path {s}."),
+			Self::DeviceOpen(s) =>
 				if let Some(s) = s { write!(f, "Unable to open connection with {s}.") }
 				else {
 					f.write_str("Unable to open connection with default optical drive.")
@@ -267,7 +267,7 @@ impl fmt::Display for RipRipError {
 			Self::TrackFormat(n) => write!(f, "Unsupported track type ({n})."),
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
-			Self::Write(ref s) => write!(f, "Unable to write to {s}."),
+			Self::Write(s) => write!(f, "Unable to write to {s}."),
 
 			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),

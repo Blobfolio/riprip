@@ -82,7 +82,7 @@ pub(crate) struct Ripper<'a> {
 	tracks: BTreeMap<u8, RipEntry>,
 
 	/// # Total Sectors (across all passes, plus one)
-	total: u32,
+	total: NonZeroU32,
 }
 
 impl<'a> Ripper<'a> {
@@ -112,6 +112,7 @@ impl<'a> Ripper<'a> {
 			.try_fold(0_u32, |acc, e| acc.checked_add(e.sectors))
 			.and_then(|n| n.checked_mul(u32::from(opts.passes())))
 			.and_then(|n| n.checked_add(1 + tracks.len() as u32))
+			.and_then(NonZeroU32::new)
 			.ok_or(RipRipError::RipOverflow)?;
 
 		Ok(Self {
@@ -159,7 +160,7 @@ impl<'a> Ripper<'a> {
 
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
-		let _res = progress.reset(self.total);
+		progress.reset(self.total);
 		progress.set_title(Some(Msg::custom("Initializing", 199, standby_msg())));
 		let mut state = RipState::new(toc, first_track, &self.opts)?;
 		let mut share = RipShare::new(self.disc, progress, killed);
@@ -277,7 +278,7 @@ impl<'a> Ripper<'a> {
 
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
-		let _res = progress.reset(self.tracks.len() as u32);
+		let _res = progress.try_reset(self.tracks.len() as u32);
 		progress.set_title(Some(Msg::custom("Analyzing", 199, standby_msg())));
 		let mut state = RipState::new(toc, first_track, &self.opts)?;
 

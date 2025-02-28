@@ -1,9 +1,9 @@
 [package]
 name = "riprip"
-version = "0.3.1"
+version = "0.3.2"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
-edition = "2021"
+edition = "2024"
 description = "A specialized audio CD-ripper optimized for incremental data recovery."
 repository = "https://github.com/Blobfolio/riprip"
 readme = "README.md"
@@ -126,16 +126,16 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [build-dependencies]
-argyle = "0.10.*"
+argyle = "0.11.*"
 
 [dependencies]
-argyle = "0.10.*"
-dactyl = "0.9.*"
-oxford_join = "0.4.*"
-utc2k = "0.11.*"
+argyle = "0.11.*"
+dactyl = "0.10.*"
+oxford_join = "0.5.*"
+utc2k = "0.12.*"
 
 [dependencies.fyi_msg]
-version = "1.6.*"
+version = "1.7.*"
 features = [ "signals" ]
 
 [dependencies.riprip_core]

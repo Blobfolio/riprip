@@ -1,25 +1,25 @@
 [package]
 name = "riprip_core"
-version = "0.3.1"
+version = "0.3.2"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
-edition = "2021"
+edition = "2024"
 description = "The library for Rip Rip Hooray."
 repository = "https://github.com/Blobfolio/riprip"
 readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.7.*"
+cdtoc = "0.8.*"
 crc32fast = "=1.4.2"
-dactyl = "0.9.*"
-oxford_join = "0.4.*"
+dactyl = "0.10.*"
+oxford_join = "0.5.*"
 tempfile = "3.8.0"
-trimothy = "0.6.*"
-utc2k = "0.11.*"
+trimothy = "0.7.*"
+utc2k = "0.12.*"
 
 [dependencies.fyi_msg]
-version = "1.6.*"
+version = "1.7.*"
 features = [ "signals" ]
 
 [dependencies.libcdio-sys]
@@ -34,11 +34,11 @@ default-features = false
 # reason so we don't need any minreq features at all!
 
 [build-dependencies]
-dactyl = "0.9.*"
-oxford_join = "0.4.*"
+dactyl = "0.10.*"
+oxford_join = "0.5.*"
 
 [build-dependencies.cdtoc]
-version = "0.7.*"
+version = "0.8.*"
 default-features = false
 features = [ "accuraterip" ]
 
