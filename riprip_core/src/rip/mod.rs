@@ -862,7 +862,7 @@ fn happy_track_msg(track: Track) -> Msg {
 	Msg::custom(
 		"Accurate",
 		10,
-		&format!("Track #{} has been successfully rescued.", track.number()),
+		&format!("Track #{:02} has been successfully rescued.", track.number()),
 	)
 		.with_newline(true)
 }
