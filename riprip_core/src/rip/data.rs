@@ -407,6 +407,7 @@ impl RipState {
 		)
 	}
 
+	#[expect(clippy::missing_const_for_fn, reason = "False positive.")]
 	/// # Full Rip Slice.
 	///
 	/// Return a slice of all of the samples gathered, not just the track bits.

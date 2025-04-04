@@ -819,7 +819,7 @@ impl<'a> RipShare<'a> {
 	/// the previous run failed to conduct enough reads to moot the cache on
 	/// its own. (The flag exists so that we can clear the count straight away,
 	/// and deal with busting if and when we actually need to read something.)
-	fn bump_pass(&mut self, opts: &RipOptions) {
+	const fn bump_pass(&mut self, opts: &RipOptions) {
 		// Force a cache bust if we didn't read enough during the previous pass
 		// or are just getting started.
 		let len = opts.cache_sectors();
@@ -841,7 +841,7 @@ impl<'a> RipShare<'a> {
 	/// need to be read to bust the cache.
 	///
 	/// Otherwise — most of the time — it will return `None`.
-	fn should_bust_cache(&mut self, track: u8, opts: &RipOptions) -> Option<u32> {
+	const fn should_bust_cache(&mut self, track: u8, opts: &RipOptions) -> Option<u32> {
 		if self.force_bust || track == self.last_read_track {
 			self.force_bust = false;
 			self.last_read_track = track;

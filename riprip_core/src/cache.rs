@@ -86,7 +86,7 @@ impl<'a> CacheWriter<'a> {
 	/// # Writer Reference.
 	///
 	/// Return a mutable reference to the underlying file writer.
-	pub(super) fn writer(&mut self) -> &mut NamedTempFile { &mut self.tmp }
+	pub(super) const fn writer(&mut self) -> &mut NamedTempFile { &mut self.tmp }
 
 	/// # Finish it off!
 	///
