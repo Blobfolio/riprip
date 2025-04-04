@@ -293,7 +293,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	}
 
 	// One last chance to bail!
-	if Msg::plain("\x1b[1;38;5;199m…Hooray?\x1b[0m").eprompt_with_default(true) {
+	if Msg::from("\x1b[1;38;5;199m…Hooray?\x1b[0m").eprompt_with_default(true) {
 		eprintln!("\n");
 		Ok(())
 	}
