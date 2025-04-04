@@ -40,6 +40,7 @@ use dactyl::{
 	traits::NiceInflection,
 };
 use fyi_msg::{
+	AnsiColor,
 	Msg,
 	Progless,
 };
@@ -161,7 +162,7 @@ impl<'a> Ripper<'a> {
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
 		progress.reset(self.total);
-		progress.set_title(Some(Msg::custom("Initializing", 199, standby_msg())));
+		progress.set_title(Some(Msg::new(("Initializing", AnsiColor::Misc199), standby_msg())));
 		let mut state = RipState::new(toc, first_track, &self.opts)?;
 		let mut share = RipShare::new(self.disc, progress, killed);
 
@@ -279,7 +280,7 @@ impl<'a> Ripper<'a> {
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
 		let _res = progress.try_reset(self.tracks.len() as u32);
-		progress.set_title(Some(Msg::custom("Analyzing", 199, standby_msg())));
+		progress.set_title(Some(Msg::new(("Analyzing", AnsiColor::Misc199), standby_msg())));
 		let mut state = RipState::new(toc, first_track, &self.opts)?;
 
 		// Take a look!
@@ -315,14 +316,14 @@ impl Ripper<'_> {
 		// Print some words.
 		let ripped = self.tracks.values().filter(|t| t.dst.is_some()).count();
 		let elapsed = NiceElapsed::from(self.now.elapsed());
-		Msg::custom("Ripped", 199, &format!(
+		Msg::new(("Ripped", AnsiColor::Misc199), format!(
 			"{}, {}, in {elapsed}.",
 			ripped.nice_inflect("track", "tracks"),
 			self.opts.passes().nice_inflect("pass", "passes"),
 		))
 			.with_newline(true)
 			.eprint();
-		Msg::custom("Status", 199, &q2.summarize())
+		Msg::new(("Status", AnsiColor::Misc199), q2.summarize())
 			.with_newline(true)
 			.eprint();
 
@@ -859,10 +860,9 @@ impl<'a> RipShare<'a> {
 ///
 /// This returns a message for a track that has been confirmed.
 fn happy_track_msg(track: Track) -> Msg {
-	Msg::custom(
-		"Accurate",
-		10,
-		&format!("Track #{:02} has been successfully rescued.", track.number()),
+	Msg::new(
+		("Accurate", AnsiColor::LightGreen),
+		format!("Track #{:02} has been successfully rescued.", track.number()),
 	)
 		.with_newline(true)
 }
@@ -893,9 +893,8 @@ const fn max_confidence(ar: Option<(u8, u8)>, ctdb: Option<u16>) -> u8 {
 /// Most of our progress bars share a common prefix based on the track number,
 /// so this just abstracts away some of the tedium of generating that.
 fn set_progress_title(progress: &Progless, idx: u8, msg: &str) {
-	progress.set_title(Some(Msg::custom(
-		format!("Track {idx:02}").as_str(),
-		199,
+	progress.set_title(Some(Msg::new(
+		(format!("Track {idx:02}").as_str(), AnsiColor::Misc199),
 		msg
 	)));
 }

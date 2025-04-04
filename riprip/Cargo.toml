@@ -135,7 +135,7 @@ oxford_join = "0.5.*"
 utc2k = "0.12.*"
 
 [dependencies.fyi_msg]
-version = "1.8.*"
+version = "2.0.*"
 features = [ "signals" ]
 
 [dependencies.riprip_core]
