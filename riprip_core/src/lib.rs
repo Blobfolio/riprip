@@ -122,23 +122,6 @@ const CACHE_SCRATCH: &str = "scratch";
 
 
 
-// Color
-// ---------------
-
-/// # Color: Bad.
-const COLOR_BAD: &str = "91";
-
-/// # Color: Maybe.
-const COLOR_MAYBE: &str = "38;5;208";
-
-/// # Color: Likely.
-const COLOR_LIKELY: &str = "93";
-
-/// # Color: Confirmed.
-const COLOR_CONFIRMED: &str = "92";
-
-
-
 // Conversion
 // ---------------
 

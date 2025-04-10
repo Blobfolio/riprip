@@ -18,10 +18,6 @@ use cdtoc::{
 use crate::{
 	chk_accuraterip,
 	chk_ctdb,
-	COLOR_BAD,
-	COLOR_CONFIRMED,
-	COLOR_LIKELY,
-	COLOR_MAYBE,
 	Disc,
 	KillSwitch,
 	LibcdioInstance,
@@ -38,6 +34,11 @@ use dactyl::{
 	NiceU32,
 	NiceU8,
 	traits::NiceInflection,
+};
+use fyi_ansi::{
+	ansi,
+	csi,
+	dim,
 };
 use fyi_msg::{
 	AnsiColor,
@@ -331,7 +332,7 @@ impl Ripper<'_> {
 		eprintln!("        {}", q2.bar());
 		let legend = q2.legend(&q1);
 		if let Some(legend_a) = legend.start() { eprintln!("        {legend_a}"); }
-		eprintln!("        {legend} \x1b[2msamples\x1b[0m");
+		eprintln!(concat!("        {} ", dim!("samples")), legend);
 
 		// An extra line to give some separation between this task and the
 		// next.
@@ -391,26 +392,41 @@ impl Ripper<'_> {
 			if bad == zero && maybe == zero && likely == zero {
 				writeln!(
 					&mut handle,
-					"{idx:02}  \x1b[2m{:>wbad$}  {:>wmaybe$}  {:>wlikely$}\x1b[0m",
+					concat!("{:02}  ", dim!("{:>wbad$}  {:>wmaybe$}  {:>wlikely$}")),
+					idx,
 					"--",
 					"--",
 					"--",
+					wbad=wbad,
+					wmaybe=wmaybe,
+					wlikely=wlikely,
 				).unwrap();
 			}
 			// Status!
 			else {
 				writeln!(
 					&mut handle,
-					"{idx:02}  \x1b[{COLOR_BAD}m{:>wbad$}  \x1b[0;{COLOR_MAYBE}m{:>wmaybe$}  \x1b[0;{}m{:>wlikely$}\x1b[0m{}{}",
+					concat!(
+						"{:02}  ",
+						csi!(light_red), "{:>wbad$}  ",
+						csi!(dark_orange), "{:>wmaybe$}  ",
+						"{}{:>wlikely$}",
+						csi!(), "{}{}",
+					),
+					idx,
 					bad.as_str(),
 					maybe.as_str(),
-					if ar.is_some() || ctdb.is_some() { COLOR_CONFIRMED } else { COLOR_LIKELY },
+					if ar.is_some() || ctdb.is_some() { csi!(light_green) } else { csi!(light_yellow) },
 					likely.as_str(),
 					if let Some((v1, v2)) = ar {
 						let nice_v1 = NiceU8::from(v1.min(99));
 						let nice_v2 = NiceU8::from(v2.min(99));
 						Cow::Owned(format!(
-							"        \x1b[1;{COLOR_CONFIRMED}m{}\x1b[0;2m/\x1b[0;1;{COLOR_CONFIRMED}m{}\x1b[0m",
+							concat!(
+								csi!(bold, light_green), "        {}",
+								csi!(reset, dim), "/",
+								ansi!((reset, bold, light_green) "{}"),
+							),
 							if v1 == 0 { "--" } else { nice_v1.as_str2() },
 							if v2 == 0 { "--" } else { nice_v2.as_str2() },
 						))
@@ -419,12 +435,15 @@ impl Ripper<'_> {
 					else { Cow::Borrowed("") },
 					if let Some(v1) = ctdb {
 						Cow::Owned(format!(
-							"       \x1b[1;{COLOR_CONFIRMED}m{:03}\x1b[0m",
+							ansi!((bold, light_green) "       {:03}"),
 							v1.min(999),
 						))
 					}
 					else if any_ctdb { Cow::Borrowed("          ") }
 					else { Cow::Borrowed("") },
+					wbad=wbad,
+					wmaybe=wmaybe,
+					wlikely=wlikely,
 				).unwrap();
 			}
 		}

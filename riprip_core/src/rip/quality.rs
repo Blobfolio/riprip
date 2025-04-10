@@ -2,13 +2,7 @@
 # Rip Rip Hooray: Quality Counts
 */
 
-use crate::{
-	COLOR_BAD,
-	COLOR_CONFIRMED,
-	COLOR_LIKELY,
-	COLOR_MAYBE,
-	RipSample,
-};
+use crate::RipSample;
 use dactyl::{
 	NiceFloat,
 	NiceU32,
@@ -16,6 +10,11 @@ use dactyl::{
 		Inflection,
 		SaturatingFrom,
 	},
+};
+use fyi_ansi::{
+	ansi,
+	csi,
+	dim,
 };
 use std::{
 	borrow::Cow,
@@ -334,17 +333,18 @@ impl TrackQuality {
 						if self.maybe() < self.likely() { "likely" }
 						else { "maybe" };
 					Cow::Owned(format!(
-						"Recovery is \x1b[2m({qualifier})\x1b[0m {}{}complete.",
+						concat!("Recovery is ", dim!("({})"), " {}{}complete."),
+						qualifier,
 						if p.compact_str() == "100" { "" } else { p.compact_str() },
 						if p.compact_str() == "100" { "" } else { "% " },
 					))
 				},
 				(Some(p1), Some(p2)) if p2.precise_str(3) == "100.000" => Cow::Owned(format!(
-					"Recovery is \x1b[2m(likely)\x1b[0m at least {}% complete.",
+					concat!("Recovery is ", dim!("(likely)"), " at least {}% complete."),
 					p1.compact_str(),
 				)),
 				(Some(p1), Some(p2)) => Cow::Owned(format!(
-					"Recovery is \x1b[2m(roughly)\x1b[0m {}% – {}% complete.",
+					concat!("Recovery is ", dim!("(roughly)"), " {}% – {}% complete."),
 					p1.precise_str(3),
 					p2.precise_str(3),
 				)),
@@ -362,7 +362,12 @@ impl fmt::Display for TrackQualityBar {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
-			"\x1b[{COLOR_BAD}m{}\x1b[0;{COLOR_MAYBE}m{}\x1b[0;{COLOR_LIKELY}m{}\x1b[0;{COLOR_CONFIRMED}m{}\x1b[0m",
+			concat!(
+				csi!(light_red), "{}",
+				csi!(dark_orange), "{}",
+				csi!(light_yellow), "{}",
+				ansi!((light_green) "{}"),
+			),
 			&QUALITY_BAR[..self.0[0]],
 			&QUALITY_BAR[..self.0[1]],
 			&QUALITY_BAR[..self.0[2]],
@@ -386,7 +391,7 @@ pub(super) struct TrackQualityLegend {
 
 impl TrackQualityLegend {
 	/// # Colors.
-	const COLORS: [&str; 4] = [COLOR_BAD, COLOR_MAYBE, COLOR_LIKELY, COLOR_CONFIRMED];
+	const COLORS: [&str; 4] = [csi!(light_red), csi!(dark_orange), csi!(light_yellow), csi!(light_green)];
 
 	/// # Padding.
 	///
@@ -423,7 +428,7 @@ impl fmt::Display for TrackQualityLegend {
 	/// Print the legend for the final state.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		/// # Entry Spacer.
-		const GLUE: &str = "\x1b[2m + \x1b[0m";
+		const GLUE: &str = dim!(" + ");
 
 		let mut any = false;
 		for (a, b, color) in self.iter() {
@@ -432,11 +437,9 @@ impl fmt::Display for TrackQualityLegend {
 
 			if any { f.write_str(GLUE)?;}
 			f.write_str(&Self::PADDING[..len - b.len()])?;
-			f.write_str("\x1b[")?;
 			f.write_str(color)?;
-			f.write_str("m")?;
 			f.write_str(b)?;
-			f.write_str("\x1b[0m")?;
+			f.write_str(csi!())?;
 			any = true;
 		}
 
@@ -521,12 +524,11 @@ impl fmt::Display for TrackQualityLegendStart<'_> {
 
 			if any { f.write_str(GLUE)?; }
 			f.write_str(&TrackQualityLegend::PADDING[..len - a.len()])?;
-			f.write_str("\x1b[2;")?;
-			if a != b { f.write_str("9;")?; } // Strike if different.
+			if a == b { f.write_str(csi!(dim))?; }
+			else { f.write_str(csi!(dim, strike))?; }
 			f.write_str(color)?;
-			f.write_str("m")?;
 			f.write_str(a)?;
-			f.write_str("\x1b[0m")?;
+			f.write_str(csi!())?;
 			any = true;
 		}
 

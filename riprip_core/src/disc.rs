@@ -12,9 +12,6 @@ use crate::{
 	CacheWriter,
 	CD_LEADOUT_LABEL,
 	CDTextKind,
-	COLOR_BAD,
-	COLOR_CONFIRMED,
-	COLOR_LIKELY,
 	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
@@ -24,6 +21,11 @@ use crate::{
 	SavedRips,
 };
 use dactyl::NoHash;
+use fyi_ansi::{
+	ansi,
+	csi,
+	dim,
+};
 use fyi_msg::Progless;
 use std::{
 	borrow::Cow,
@@ -63,29 +65,36 @@ impl fmt::Display for Disc {
 	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		/// # Divider.
-		const DIVIDER: &str = "\x1b[2m----------------------------------------\x1b[0m\n";
+		const DIVIDER: &str = dim!("----------------------------------------\n");
 
 		// A few key/value pairs.
-		let mut kv: Vec<(&str, u8, String)> = vec![
-			("CDTOC:", 199, self.toc.to_string()),
-			("AccurateRip:", 4, self.toc.accuraterip_id().to_string()),
-			("CDDB:", 4, cache_prefix(&self.toc).to_owned()),
-			("CUETools:", 4, self.toc.ctdb_id().to_string()),
-			("MusicBrainz:", 4, self.toc.musicbrainz_id().to_string()),
+		let mut kv: Vec<(&str, &str, String)> = vec![
+			("CDTOC:", csi!(bold, 199), self.toc.to_string()),
+			("AccurateRip:", csi!(bold, blue), self.toc.accuraterip_id().to_string()),
+			("CDDB:", csi!(bold, blue), cache_prefix(&self.toc).to_owned()),
+			("CUETools:", csi!(bold, blue), self.toc.ctdb_id().to_string()),
+			("MusicBrainz:", csi!(bold, blue), self.toc.musicbrainz_id().to_string()),
 		];
 		if let Some(barcode) = self.barcode.as_ref() {
-			kv.push(("Barcode:", 199, barcode.to_string()));
+			kv.push(("Barcode:", csi!(bold, 199), barcode.to_string()));
 		}
 
 		let col_max: usize = kv.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 		for (k, color, v) in kv {
-			writeln!(f, "\x1b[1;38;5;{color}m{k:col_max$}\x1b[0m {v}")?;
+			writeln!(
+				f,
+				concat!("{color}{k:col_max$}", csi!(), " {v}"),
+				color=color,
+				k=k,
+				col_max=col_max,
+				v=v,
+			)?;
 		}
 
 		// Start the table of contents.
 		write!(
 			f,
-			"\n\x1b[2m##   FIRST    LAST  LENGTH          {}\x1b[0m\n",
+			dim!("\n##   FIRST    LAST  LENGTH          {}\n"),
 			if self.isrcs.is_empty() { "" } else { "ISRC" },
 		)?;
 		f.write_str(DIVIDER)?;
@@ -98,9 +107,10 @@ impl fmt::Display for Disc {
 			let len = rng.end - rng.start;
 			writeln!(
 				f,
-				"\x1b[2m00  {:>6}  {:>6}  {len:>6}          HTOA\x1b[0m",
+				dim!("00  {:>6}  {:>6}  {:>6}          HTOA"),
 				rng.start,
 				rng.end - 1,
+				len,
 			)?;
 		}
 		// Leading data track.
@@ -108,7 +118,8 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
+				dim!("{:02}  {:>6}                    DATA TRACK"),
+				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
 		}
@@ -133,7 +144,8 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				"\x1b[2m{total:02}  {:>6}                    DATA TRACK\x1b[0m",
+				dim!("{:02}  {:>6}                    DATA TRACK"),
+				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
 		}
@@ -141,7 +153,8 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			"\x1b[2m{CD_LEADOUT_LABEL}  {:>6}                      LEAD-OUT",
+			concat!(csi!(dim), "{}  {:>6}                      LEAD-OUT"),
+			CD_LEADOUT_LABEL,
 			self.toc.leadout_normalized(),
 		)?;
 
@@ -270,11 +283,7 @@ impl Disc {
 
 			// If we did all tracks, make a cue sheet.
 			if let Some(file) = save_cuesheet(&self.toc, &saved) {
-				let _res = writeln!(
-					&mut handle,
-					"  \x1b[2m{}\x1b[0m",
-					file.display(),
-				);
+				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
 			}
 
 			for (idx, (file, ar, ctdb)) in saved {
@@ -283,37 +292,50 @@ impl Disc {
 
 				let _res = writeln!(
 					&mut handle,
-					"  \x1b[2m{:<col1$}\x1b[0m{}{}",
+					concat!(dim!("  {:<col1$}"), "{}{}"),
 					file.display(),
 					if conf {
-						if idx == 0 { Cow::Borrowed("            \x1b[0;93m*\x1b[0m") }
+						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "            *")) }
 						else { fmt_ar(ar) }
-					} else { Cow::Borrowed("            \x1b[0;91mx\x1b[0m") },
+					} else { Cow::Borrowed(ansi!((reset, light_red) "            x")) },
 					if conf {
-						if idx == 0 { Cow::Borrowed("         \x1b[0;93m*\x1b[0m") }
+						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "         *")) }
 						else { fmt_ctdb(ctdb) }
-					} else { Cow::Borrowed("         \x1b[0;91mx\x1b[0m") },
+					} else { Cow::Borrowed(ansi!((reset, light_red) "         x")) },
+					col1=col1,
 				);
 			}
 
 			// Add confirmation column headers.
 			let _res = writeln!(
 				&mut handle,
-				"  {line: >width$}  AccurateRip  CUETools  \x1b[2m(\x1b[0;{color}m{good}\x1b[0;2m/\x1b[0m{total}\x1b[2m)\x1b[0m",
+				concat!(
+					"  {line: >width$}  AccurateRip  CUETools  ",
+					csi!(dim), "(",
+					"{color}{good}",
+					ansi!((reset, dim) "/"),
+					"{total}",
+					dim!(")"),
+				),
 				line="",
 				width=col1,
-				color=if good == 0 { COLOR_BAD } else { COLOR_CONFIRMED },
+				color=if good == 0 { csi!(reset, light_red) } else { csi!(reset, light_green) },
+				good=good,
+				total=total
 			);
 
 			// Mention that the HTOA can't be verified but is probably okay.
 			if htoa_likely {
 				let _res = writeln!(
 					&mut handle,
-					"\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB,"
-				);
-				let _res = writeln!(
-					&mut handle,
-					"  but this rip rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m, which is the next best thing!\x1b[0m"
+					concat!(
+						csi!(light_yellow), "\n*",
+						csi!(reset, dim),
+						" HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
+						"  but this rip rates ",
+						csi!(reset, light_yellow), "likely",
+						ansi!((reset, dim) ", which is the next best thing!"),
+					),
 				);
 			}
 			// Mention that the HTOA can't be verified and should be reripped
@@ -321,11 +343,14 @@ impl Disc {
 			else if htoa_any {
 				let _res = writeln!(
 					&mut handle,
-					"\n\x1b[{COLOR_LIKELY}m*\x1b[0;2m HTOA tracks cannot be verified w/ AccurateRip or CTDB"
-				);
-				let _res = writeln!(
-					&mut handle,
-					"  so you should re-rip it until it rates \x1b[0;{COLOR_LIKELY}mlikely\x1b[0;2m to be safe.\x1b[0m"
+					concat!(
+						csi!(light_yellow), "\n*",
+						csi!(reset, dim),
+						" HTOA tracks cannot be verified w/ AccurateRip or CTDB\n",
+						"  so you should re-rip it until it rates ",
+						csi!(reset, light_yellow), "likely",
+						ansi!((reset, dim) " to be safe."),
+					),
 				);
 			}
 
@@ -360,19 +385,21 @@ impl Disc {
 fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
 	if let Some((v1, v2)) = ar {
 		let c1 =
-			if v1 == 0 { COLOR_BAD }
-			else if v1 <= 5 { COLOR_LIKELY }
-			else { COLOR_CONFIRMED };
+			if v1 == 0 { csi!(reset, light_red) }
+			else if v1 <= 5 { csi!(reset, light_yellow) }
+			else { csi!(reset, light_green) };
 
 		let c2 =
-			if v2 == 0 { COLOR_BAD }
-			else if v2 <= 5 { COLOR_LIKELY }
-			else { COLOR_CONFIRMED };
+			if v2 == 0 { csi!(reset, light_red) }
+			else if v2 <= 5 { csi!(reset, light_yellow) }
+			else { csi!(reset, light_green) };
 
 		Cow::Owned(format!(
-			"        \x1b[0;{c1}m{:02}\x1b[0;2m+\x1b[0;{c2}m{:02}\x1b[0m",
+			concat!("        {c1}{:02}", csi!(reset, dim), "+{c2}{:02}", csi!()),
 			v1.min(99),
 			v2.min(99),
+			c1=c1,
+			c2=c2,
 		))
 	}
 	else { Cow::Borrowed("             ") }
@@ -383,13 +410,14 @@ fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
 fn fmt_ctdb(ctdb: Option<u16>) -> Cow<'static, str> {
 	if let Some(v1) = ctdb {
 		let c1 =
-			if v1 == 0 { COLOR_BAD }
-			else if v1 <= 5 { COLOR_LIKELY }
-			else { COLOR_CONFIRMED };
+			if v1 == 0 { csi!(reset, light_red) }
+			else if v1 <= 5 { csi!(reset, light_yellow) }
+			else { csi!(reset, light_green) };
 
 		Cow::Owned(format!(
-			"       \x1b[0;{c1}m{:03}\x1b[0m",
+			concat!("       {c1}{:03}", csi!()),
 			v1.min(999),
+			c1=c1,
 		))
 	}
 	else { Cow::Borrowed("          ") }

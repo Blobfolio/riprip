@@ -13,6 +13,7 @@ publish = false
 cdtoc = "0.8.*"
 crc32fast = "=1.4.2"
 dactyl = "0.10.*"
+fyi_ansi = "2.0.*"
 oxford_join = "0.5.*"
 tempfile = "3.8.0"
 trimothy = "0.7.*"
