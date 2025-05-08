@@ -58,6 +58,12 @@
 mod cli;
 
 use dactyl::NiceU16;
+use fyi_ansi::{
+	ansi,
+	csi,
+	dim,
+	bold,
+};
 use fyi_msg::{
 	Msg,
 	Progless,
@@ -123,9 +129,14 @@ fn main__() -> Result<(), RipRipError> {
 			let vm = vm.to_string();
 			if ! vm.is_empty() {
 				eprintln!(
-					"\x1b[2;36m{}\n\x1b[0;1;36m{vm}\n\x1b[0;2;36m{}\n\x1b[0m",
+					concat!(
+						ansi!((dim, cyan) "{}\n"),
+						ansi!((bold, cyan) "{vm}\n"),
+						ansi!((dim, cyan) "{}\n"),
+					),
 					&DIVIDER[..vm.len()],
 					&DIVIDER[..vm.len()],
+					vm=vm
 				);
 			}
 		}
@@ -212,14 +223,29 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 
 
 
+#[expect(clippy::too_many_lines, reason = "For readability.")]
 /// # Rip Summary.
 ///
 /// Summarize and confirm the chosen settings before proceeding.
 fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	// Build up all the messy values.
 	let nice_c2 = Cow::Borrowed(
-		if opts.strict() { "C2 Error Pointers \x1b[0;2m(\x1b[0;1;93mSector\x1b[0;2m)" }
-		else { "C2 Error Pointers \x1b[0;2m(\x1b[0;1mSample\x1b[0;2m)" }
+		if opts.strict() {
+			concat!(
+				"C2 Error Pointers ",
+				csi!(reset, dim), "(",
+				csi!(reset, bold, light_yellow), "Sector",
+				csi!(reset, dim), ")",
+			)
+		}
+		else {
+			concat!(
+				"C2 Error Pointers ",
+				csi!(reset, dim), "(",
+				csi!(reset, bold), "Sample",
+				csi!(reset, dim), ")",
+			)
+		}
 	);
 	let nice_cache = opts.cache().map_or(
 		Cow::Borrowed("Disabled"),
@@ -231,7 +257,11 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	));
 	let nice_offset = Cow::Owned(format!("{}", opts.offset().samples()));
 	let nice_output = Cow::Owned(format!(
-		"./{}/{}_\x1b[0;2m##\x1b[0;1m.wav",
+		concat!(
+			"./{}/{}_",
+			csi!(reset, dim), "##",
+			csi!(reset, bold), ".wav",
+		),
 		riprip_core::CACHE_BASE,
 		disc.toc().cddb_id(),
 	));
@@ -239,10 +269,22 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		"{}{}",
 		opts.passes(),
 		if opts.resume() {
-			if opts.reset() { " \x1b[0;2m(\x1b[0;1;93mReset Counts\x1b[0;2m)" }
+			if opts.reset() {
+				concat!(
+					csi!(reset, dim), " (",
+					csi!(reset, bold, light_yellow), "Reset Counts",
+					csi!(reset, dim), ")",
+				)
+			}
 			else { "" }
 		}
-		else { " \x1b[0;2m(\x1b[0;1;93mFrom Scratch\x1b[0;2m)" },
+		else {
+			concat!(
+				csi!(reset, dim), " (",
+				csi!(reset, bold, light_yellow), "From Scratch",
+				csi!(reset, dim), ")",
+			)
+		},
 	));
 	let nice_read_order = Cow::Borrowed(
 		if opts.flip_flop() { "Alternate" }
@@ -279,21 +321,36 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 	let max_label = set.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
 
 	// Print them!
-	eprintln!("\x1b[1;38;5;199mRip Rip…\x1b[0m");
+	eprintln!(ansi!((bold, 199) "Rip Rip…"));
 	for (k, v, enabled) in set {
 		if enabled {
-			eprintln!("  {k:max_label$} \x1b[1m{v}\x1b[0m");
+			eprintln!(
+				concat!("  {k:max_label$} ", bold!("{v}")),
+				k=k,
+				v=v,
+				max_label=max_label,
+			);
 		}
 		else if k.is_empty() {
-			eprintln!("  \x1b[2m{k:max_label$} \x1b[9m{v}\x1b[0m");
+			eprintln!(
+				dim!("  {k:max_label$} ", csi!(strike), "{v}"),
+				k=k,
+				v=v,
+				max_label=max_label,
+			);
 		}
 		else {
-			eprintln!("  \x1b[2;9m{k:max_label$} {v}\x1b[0m");
+			eprintln!(
+				ansi!((dim, strike) "  {k:max_label$} {v}"),
+				k=k,
+				v=v,
+				max_label=max_label,
+			);
 		}
 	}
 
 	// One last chance to bail!
-	if Msg::from("\x1b[1;38;5;199m…Hooray?\x1b[0m").eprompt_with_default(true) {
+	if Msg::from(ansi!((bold, 199) "…Hooray?")).eprompt_with_default(true) {
 		eprintln!("\n");
 		Ok(())
 	}
@@ -325,7 +382,12 @@ fn rip_summary_tracks(opts: &RipOptions) -> String {
 		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 			match *self {
 				Self::One(n) => write!(f, "{n}"),
-				Self::Rng(a, b) => write!(f, "{a}\x1b[0;2m..=\x1b[0;1m{b}"),
+				Self::Rng(a, b) => write!(
+					f,
+					concat!("{a}", csi!(reset, dim), "..=", csi!(reset, bold), "{b}"),
+					a=a,
+					b=b,
+				),
 			}
 		}
 	}
@@ -341,13 +403,14 @@ fn rip_summary_tracks(opts: &RipOptions) -> String {
 	match set.len() {
 		1 => set.remove(0).to_string(),
 		2 => format!(
-			"{}\x1b[0;2m and \x1b[0;1m{}",
+			concat!("{}", csi!(reset, dim), " and ", csi!(reset, bold), "{}"),
 			set[0],
 			set[1],
 		),
 		_ => set.pop().map_or_else(String::new, |last| format!(
-			"{}\x1b[0;2m, and \x1b[0;1m{last}",
-			JoinFmt::new(set.into_iter(), "\x1b[0;2m, \x1b[0;1m"),
+			concat!("{}", csi!(reset, dim), ", and ", csi!(reset, bold), "{}"),
+			JoinFmt::new(set.into_iter(), concat!(csi!(reset, dim), ", ", csi!(reset, bold))),
+			last,
 		)),
 	}
 }

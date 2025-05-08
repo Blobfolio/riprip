@@ -3,6 +3,10 @@
 */
 
 use cdtoc::TocError;
+use fyi_ansi::{
+	ansi,
+	csi,
+};
 use fyi_msg::Msg;
 use std::{
 	error::Error,
@@ -15,7 +19,7 @@ use std::{
 /// # Help Text.
 const HELP: &str = concat!(r#"
     n__n_
-   /  = =\     "#, "\x1b[38;5;199mRip Rip Hooray!\x1b[0;38;5;69m v", env!("CARGO_PKG_VERSION"), "\x1b[0m", r#"
+   /  = =\     "#, csi!(199), "Rip Rip Hooray!", ansi!((cornflower_blue) " v", env!("CARGO_PKG_VERSION")), r#"
   /   ._Y_)    Accurate, incremental audio
  /      "\     CD ripping and recovery.
 (_/  (_,  \
@@ -108,7 +112,7 @@ MISCELLANEOUS:
                       options have any meaning in this mode.
 
 EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press "#, "\x1b[38;5;208mCTRL\x1b[0m+\x1b[38;5;208mC\x1b[0m to stop
+    If you don't have time to let a rip finish naturally, press "#, ansi!((dark_orange) "CTRL"), "+", ansi!((dark_orange) "C"), " to stop
     it early. Your progress will still be saved, there just won't be as much of
     it. Haha.
 ");

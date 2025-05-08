@@ -18,6 +18,7 @@ use cdtoc::{
 	Track,
 };
 use std::{
+	num::Wrapping,
 	path::Path,
 	sync::{
 		Arc,
@@ -94,22 +95,22 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	if end <= start { return None; }
 
 	// Crunch!
-	let mut crc1 = 0_u64; // Version #1.
-	let mut crc2 = 0_u64; // Version #2.
+	let mut crc1 = Wrapping(0_u64); // Version #1.
+	let mut crc2 = Wrapping(0_u64); // Version #2.
 	let mut idx = 0;
 
 	for sample in data {
 		if start <= idx && idx <= end {
 			let sample = sample.as_array();
-			let v = u64::from_le_bytes([
+			let v = Wrapping(u64::from_le_bytes([
 				sample[0], sample[1], sample[2], sample[3], 0, 0, 0, 0,
-			]);
+			]));
 
-			let k = idx as u64 + 1;
+			let k = Wrapping(idx as u64 + 1);
 			let kv = k * v;
 
 			crc1 += kv;
-			crc2 += (kv >> 32) + (kv & 0xFFFF_FFFF);
+			crc2 += (kv.0 >> 32) + (kv.0 & 0xFFFF_FFFF);
 		}
 
 		idx += 1;
@@ -118,8 +119,8 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 
 	// Sixty-four bits were only used to help with overflow; the final checksum
 	// only uses half that much.
-	let crc1 = (crc1 & 0xFFFF_FFFF) as u32;
-	let crc2 = (crc2 & 0xFFFF_FFFF) as u32;
+	let crc1 = (crc1.0 & 0xFFFF_FFFF) as u32;
+	let crc2 = (crc2.0 & 0xFFFF_FFFF) as u32;
 
 	// Return the matches, if any.
 	Some((

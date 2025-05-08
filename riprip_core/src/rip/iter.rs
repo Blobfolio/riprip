@@ -54,6 +54,7 @@ impl<'a> OffsetRipIter<'a> {
 		let read = EitherRangeIter::new(lsn, backwards);
 
 		// Make sure the slice is sector aligned.
+		// TODO: use is_multiple_of once stable
 		if 0 != slice.len() % usize::from(SAMPLES_PER_SECTOR) {
 			return Err(RipRipError::Bug("OffsetRipIter slice length not sector-aligned!"));
 		}

@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.3.3
+    Version:   0.4.0
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2025-04-04 02:58:32 UTC
+    Generated: 2025-05-08 02:53:31 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -23,7 +23,8 @@
 | [either](https://github.com/rayon-rs/either) ⚒️ | 1.15.0 | bluss | MIT OR Apache-2.0 |
 | [faster-hex](https://github.com/NervosFoundation/faster-hex) | 0.10.0 | [zhangsoledad](mailto:787953403@qq.com) | MIT |
 | [fastrand](https://github.com/smol-rs/fastrand) | 2.3.0 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 OR MIT |
-| [**fyi_msg**](https://github.com/Blobfolio/fyi) | 2.0.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**fyi_ansi**](https://github.com/Blobfolio/fyi) | 2.0.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**fyi_msg**](https://github.com/Blobfolio/fyi) | 2.0.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [generic-array](https://github.com/fizyk20/generic-array.git) | 0.14.7 | [Bartłomiej Kamiński](mailto:fizyk20@gmail.com) and [Aaron Trent](mailto:novacrazy@gmail.com) | MIT |
 | [getrandom](https://github.com/rust-random/getrandom) | 0.3.2 | The Rand Project Developers | MIT OR Apache-2.0 |
 | [glob](https://github.com/rust-lang/glob) ⚒️ | 0.3.2 | The Rust Project Developers | MIT OR Apache-2.0 |
@@ -31,32 +32,32 @@
 | [heapless](https://github.com/rust-embedded/heapless) | 0.8.0 | [Jorge Aparicio](mailto:jorge@japaric.io), [Per Lindgren](mailto:per.lindgren@ltu.se), and [Emil Fresk](mailto:emil.fresk@gmail.com) | MIT OR Apache-2.0 |
 | [itertools](https://github.com/rust-itertools/itertools) ⚒️ | 0.13.0 | bluss | MIT OR Apache-2.0 |
 | [itoa](https://github.com/dtolnay/itoa) | 1.0.15 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
-| [libc](https://github.com/rust-lang/libc) | 0.2.171 | The Rust Project Developers | MIT OR Apache-2.0 |
+| [libc](https://github.com/rust-lang/libc) | 0.2.172 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [**libcdio-sys**](https://github.com/MonterraByte/libcdio-sys) | 0.5.2 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
 | [libloading](https://github.com/nagisa/rust_libloading/) ⚒️ | 0.8.6 | [Simonas Kazlauskas](mailto:libloading@kazlauskas.me) | ISC |
-| [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.9.3 | [Dan Gohman](mailto:dev@sunfishcode.online) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.9.4 | [Dan Gohman](mailto:dev@sunfishcode.online) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [log](https://github.com/rust-lang/log) | 0.4.27 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [memchr](https://github.com/BurntSushi/memchr) ⚒️ | 2.7.4 | [Andrew Gallant](mailto:jamslam@gmail.com) and bluss | Unlicense OR MIT |
 | [minimal-lexical](https://github.com/Alexhuszagh/minimal-lexical) ⚒️ | 0.2.1 | [Alex Huszagh](mailto:ahuszagh@gmail.com) | MIT OR Apache-2.0 |
-| [**minreq**](https://github.com/neonmoe/minreq) | 2.13.3 | [Jens Pitkanen](mailto:jens@neon.moe) | ISC |
+| [**minreq**](https://github.com/neonmoe/minreq) | 2.13.4 | [Jens Pitkanen](mailto:jens@neon.moe) | ISC |
 | [nom](https://github.com/Geal/nom) ⚒️ | 7.1.3 | contact@geoffroycouprie.com | MIT |
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.3 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
 | [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.5.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
-| [prettyplease](https://github.com/dtolnay/prettyplease) ⚒️ | 0.2.31 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
-| [proc-macro2](https://github.com/dtolnay/proc-macro2) ⚒️ | 1.0.94 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
+| [prettyplease](https://github.com/dtolnay/prettyplease) ⚒️ | 0.2.32 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
+| [proc-macro2](https://github.com/dtolnay/proc-macro2) ⚒️ | 1.0.95 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [quote](https://github.com/dtolnay/quote) ⚒️ | 1.0.40 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
 | [regex](https://github.com/rust-lang/regex) ⚒️ | 1.11.1 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-automata](https://github.com/rust-lang/regex/tree/master/regex-automata) ⚒️ | 0.4.9 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-syntax](https://github.com/rust-lang/regex/tree/master/regex-syntax) ⚒️ | 0.8.5 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.3.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.4.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) ⚒️ | 2.1.1 | The Rust Project Developers | Apache-2.0 OR MIT |
-| [rustix](https://github.com/bytecodealliance/rustix) | 1.0.5 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [rustix](https://github.com/bytecodealliance/rustix) | 1.0.7 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [shlex](https://github.com/comex/rust-shlex) ⚒️ | 1.3.0 | [comex](mailto:comexk@gmail.com), [Fenhl](mailto:fenhl@fenhl.net), [Adrian Taylor](mailto:adetaylor@chromium.org), [Alex Touchet](mailto:alextouchet@outlook.com), [Daniel Parks](mailto:dp&#43;git@oxidized.org), and [Garrett Berg](mailto:googberg@gmail.com) | MIT OR Apache-2.0 |
 | [signal-hook](https://github.com/vorner/signal-hook) | 0.3.17 | [Michal 'vorner' Vaner](mailto:vorner@vorner.cz) and [Thomas Himmelstoss](mailto:thimm@posteo.de) | Apache-2.0 OR MIT |
-| [signal-hook-registry](https://github.com/vorner/signal-hook) | 1.4.2 | [Michal 'vorner' Vaner](mailto:vorner@vorner.cz) and [Masaki Hara](mailto:ackie.h.gmai@gmail.com) | Apache-2.0 OR MIT |
+| [signal-hook-registry](https://github.com/vorner/signal-hook) | 1.4.5 | [Michal 'vorner' Vaner](mailto:vorner@vorner.cz) and [Masaki Hara](mailto:ackie.h.gmai@gmail.com) | Apache-2.0 OR MIT |
 | [stable_deref_trait](https://github.com/storyyeller/stable_deref_trait) | 1.2.0 | [Robert Grosse](mailto:n210241048576@gmail.com) | MIT OR Apache-2.0 |
-| [syn](https://github.com/dtolnay/syn) ⚒️ | 2.0.100 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
+| [syn](https://github.com/dtolnay/syn) ⚒️ | 2.0.101 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
 | [**tempfile**](https://github.com/Stebalien/tempfile) | 3.19.1 | [Steven Allen](mailto:steven@stebalien.com), The Rust Project Developers, [Ashley Mannix](mailto:ashleymannix@live.com.au), and [Jason White](mailto:me@jasonwhite.io) | MIT OR Apache-2.0 |
 | [terminal_size](https://github.com/eminence/terminal-size) | 0.4.2 | [Andrew Chin](mailto:achin@eminence32.net) | MIT OR Apache-2.0 |
 | [**trimothy**](https://github.com/Blobfolio/trimothy) | 0.7.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
