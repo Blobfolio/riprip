@@ -37,6 +37,7 @@ default-features = false
 [build-dependencies]
 dactyl = "0.10.*"
 oxford_join = "0.5.*"
+pkg-config = "0.3.*"
 
 [build-dependencies.cdtoc]
 version = "0.8.*"
