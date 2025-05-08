@@ -45,7 +45,7 @@ jobs:
     
     - name: Apt Dependencies
       run: |
-        sudo apt-get install -y libcdio-dev
+        sudo dpkg -i libcdio19t64_2.2.0-4_amd64.deb libcdio-dev_2.2.0-4_amd64.deb
 
     - name: Build
       run: |
