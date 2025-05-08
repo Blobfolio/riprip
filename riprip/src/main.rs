@@ -130,9 +130,9 @@ fn main__() -> Result<(), RipRipError> {
 			if ! vm.is_empty() {
 				eprintln!(
 					concat!(
-						csi!(dim, cyan), "{}\n",
-						csi!(!dim, bold), "{vm}\n",
-						ansi!((!bold, dim) "{}\n"),
+						ansi!((dim, cyan) "{}\n"),
+						ansi!((bold, cyan) "{vm}\n"),
+						ansi!((dim, cyan) "{}\n"),
 					),
 					&DIVIDER[..vm.len()],
 					&DIVIDER[..vm.len()],
