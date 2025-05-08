@@ -383,7 +383,7 @@ impl LibcdioInstance {
 		// The return code is a bool, true for good, instead of the usual
 		// 0 FFI normally kicks back.
 		// Safety: this is an FFI call…
-		if 1 == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
+		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
 			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
@@ -587,11 +587,11 @@ impl LibcdioInstance {
 				buf.as_mut_ptr().cast(),
 				lsn,
 				1,            // Sector type: CDDA.
-				0,            // No random data manipulation thank you kindly.
-				0,            // No header syncing.
+				false,        // No random data manipulation thank you kindly.
+				false,        // No header syncing.
 				0,            // No headers.
-				1,            // YES audio block!
-				0,            // No EDC.
+				true,         // YES audio block!
+				false,        // No EDC.
 				u8::from(c2), // C2 or no C2?
 				sub,          // Subchannel? What kind?
 				block_size,   // Block size (varies by data requested).
