@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.4.0"
+version = "0.4.1"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -37,12 +37,16 @@ default-features = false
 [build-dependencies]
 dactyl = "0.10.*"
 oxford_join = "0.5.*"
-pkg-config = "0.3.*"
 
 [build-dependencies.cdtoc]
 version = "0.8.*"
 default-features = false
 features = [ "accuraterip" ]
+
+[build-dependencies.libcdio-sys]
+version = "=0.5.2"
+default-features = false
+features = [ "cdio" ]
 
 [build-dependencies.minreq]
 version = "2.13.*"
