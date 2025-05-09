@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.4.0
+    Version:   0.4.1
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2025-05-08 02:53:31 UTC
+    Generated: 2025-05-09 02:05:03 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -49,7 +49,7 @@
 | [regex](https://github.com/rust-lang/regex) ⚒️ | 1.11.1 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-automata](https://github.com/rust-lang/regex/tree/master/regex-automata) ⚒️ | 0.4.9 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-syntax](https://github.com/rust-lang/regex/tree/master/regex-syntax) ⚒️ | 0.8.5 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.4.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.4.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) ⚒️ | 2.1.1 | The Rust Project Developers | Apache-2.0 OR MIT |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.0.7 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | MIT OR Apache-2.0 |

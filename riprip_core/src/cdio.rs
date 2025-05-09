@@ -54,6 +54,11 @@ use std::{
 
 
 
+// The bool types annoyingly changed between `2.1.x` and `2.2.x` so build.rs
+// generates `LIBCDIO_TRUE` and `LIBCDIO_FALSE` constants that we can use
+// instead, ensuring compatibility with both.
+include!(concat!(env!("OUT_DIR"), "/libcdio-bools.rs"));
+
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -383,7 +388,7 @@ impl LibcdioInstance {
 		// The return code is a bool, true for good, instead of the usual
 		// 0 FFI normally kicks back.
 		// Safety: this is an FFI call…
-		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
+		if LIBCDIO_TRUE == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
 			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
@@ -586,16 +591,16 @@ impl LibcdioInstance {
 				self.as_ptr(),
 				buf.as_mut_ptr().cast(),
 				lsn,
-				1,            // Sector type: CDDA.
-				false,        // No random data manipulation thank you kindly.
-				false,        // No header syncing.
-				0,            // No headers.
-				true,         // YES audio block!
-				false,        // No EDC.
-				u8::from(c2), // C2 or no C2?
-				sub,          // Subchannel? What kind?
-				block_size,   // Block size (varies by data requested).
-				1,            // Always read one block at a time.
+				1,             // Sector type: CDDA.
+				LIBCDIO_FALSE, // No random data manipulation thank you kindly.
+				LIBCDIO_FALSE, // No header syncing.
+				0,             // No headers.
+				LIBCDIO_TRUE,  // YES audio block!
+				LIBCDIO_FALSE, // No EDC.
+				u8::from(c2),  // C2 or no C2?
+				sub,           // Subchannel? What kind?
+				block_size,    // Block size (varies by data requested).
+				1,             // Always read one block at a time.
 			)
 		};
 
