@@ -103,7 +103,7 @@ fn fetch_offsets() -> Vec<u8> {
 ///
 /// To allow our code to work seamlessly with either, this method generates
 /// and returns TRUE/FALSE constants in the matching type so we can use them
-/// instead of the literals that feel oh so much nicer. Haha.
+/// instead of the literals would that feel oh so much nicer. Haha.
 fn libcdio_bools() -> &'static str {
 	// Legacy versions use unsigned char.
 	if libcdio_sys::CDIO_VERSION.starts_with(b"2.1.") {

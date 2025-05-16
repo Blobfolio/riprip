@@ -410,7 +410,7 @@ impl RipState {
 	/// # Full Rip Slice.
 	///
 	/// Return a slice of all of the samples gathered, not just the track bits.
-	pub(crate) fn rip_slice(&self) -> &[RipSample] { self.data.as_slice() }
+	pub(crate) const fn rip_slice(&self) -> &[RipSample] { self.data.as_slice() }
 
 	/// # Sector Rip Range.
 	///
