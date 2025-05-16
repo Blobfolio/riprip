@@ -10,7 +10,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.8.*"
+cdtoc = "0.9.*"
 crc32fast = "=1.4.2"
 dactyl = "0.10.*"
 fyi_ansi = "2.1.*"
@@ -39,7 +39,7 @@ dactyl = "0.10.*"
 oxford_join = "0.5.*"
 
 [build-dependencies.cdtoc]
-version = "0.8.*"
+version = "0.9.*"
 default-features = false
 features = [ "accuraterip" ]
 
