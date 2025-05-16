@@ -17,7 +17,7 @@ fyi_ansi = "2.1.*"
 oxford_join = "0.5.*"
 tempfile = "3.8.0"
 trimothy = "0.7.*"
-utc2k = "0.12.*"
+utc2k = "0.13.*"
 
 [dependencies.fyi_msg]
 version = "2.1.*"
