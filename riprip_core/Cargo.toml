@@ -16,7 +16,7 @@ dactyl = "0.12.*"
 fyi_ansi = "2.1.*"
 oxford_join = "0.6.*"
 tempfile = "3.8.0"
-trimothy = "0.7.*"
+trimothy = "0.8.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]
