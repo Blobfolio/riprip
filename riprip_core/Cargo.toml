@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 cdtoc = "0.9.*"
 crc32fast = "=1.4.2"
-dactyl = "0.11.*"
+dactyl = "0.12.*"
 fyi_ansi = "2.1.*"
 oxford_join = "0.5.*"
 tempfile = "3.8.0"
@@ -35,7 +35,7 @@ default-features = false
 # reason so we don't need any minreq features at all!
 
 [build-dependencies]
-dactyl = "0.11.*"
+dactyl = "0.12.*"
 oxford_join = "0.5.*"
 
 [build-dependencies.cdtoc]
