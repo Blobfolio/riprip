@@ -13,14 +13,13 @@ publish = false
 cdtoc = "0.9.*"
 crc32fast = "=1.4.2"
 dactyl = "0.12.*"
-fyi_ansi = "2.1.*"
 oxford_join = "0.6.*"
 tempfile = "3.8.0"
 trimothy = "0.8.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]
-version = "2.1.*"
+version = "2.2.*"
 features = [ "signals" ]
 
 [dependencies.libcdio-sys]

@@ -131,12 +131,11 @@ argyle = "0.12.*"
 [dependencies]
 argyle = "0.12.*"
 dactyl = "0.12.*"
-fyi_ansi = "2.1.*"
 oxford_join = "0.6.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]
-version = "2.1.*"
+version = "2.2.*"
 features = [ "signals" ]
 
 [dependencies.riprip_core]

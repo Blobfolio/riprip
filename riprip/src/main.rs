@@ -58,13 +58,13 @@
 mod cli;
 
 use dactyl::NiceU16;
-use fyi_ansi::{
-	ansi,
-	csi,
-	dim,
-	bold,
-};
 use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+		dim,
+		bold,
+	},
 	Msg,
 	Progless,
 };
