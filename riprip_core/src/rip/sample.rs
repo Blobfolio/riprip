@@ -434,6 +434,8 @@ impl ExactSizeIterator for RipSectorSamples<'_> {
 	}
 }
 
+impl std::iter::FusedIterator for RipSectorSamples<'_> {}
+
 
 
 #[expect(clippy::missing_docs_in_private_items, reason = "Self-explanatory.")]

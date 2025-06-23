@@ -558,6 +558,8 @@ impl Iterator for RipOptionsTracks {
 	}
 }
 
+impl std::iter::FusedIterator for RipOptionsTracks {}
+
 
 
 #[derive(Debug, Clone)]
@@ -607,7 +609,10 @@ impl Iterator for RipOptionsTracksRng {
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
 	}
+
 }
+
+impl std::iter::FusedIterator for RipOptionsTracksRng {}
 
 
 

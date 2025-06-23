@@ -505,6 +505,8 @@ impl ExactSizeIterator for TrackQualityLegendIter<'_> {
 	}
 }
 
+impl std::iter::FusedIterator for TrackQualityLegendIter<'_> {}
+
 
 
 /// # Initial Track Quality Legend.
