@@ -23,9 +23,8 @@ version = "2.2.*"
 features = [ "signals" ]
 
 [dependencies.libcdio-sys]
-version = "=0.5.2"
+version = "=1.0.0"
 default-features = false
-features = [ "cdio" ]
 
 [dependencies.minreq]
 version = "2.13.*"
@@ -43,9 +42,8 @@ default-features = false
 features = [ "accuraterip" ]
 
 [build-dependencies.libcdio-sys]
-version = "=0.5.2"
+version = "=1.0.0"
 default-features = false
-features = [ "cdio" ]
 
 [build-dependencies.minreq]
 version = "2.13.*"
