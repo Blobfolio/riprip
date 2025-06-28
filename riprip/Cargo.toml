@@ -131,7 +131,7 @@ argyle = "0.13.*"
 [dependencies]
 argyle = "0.13.*"
 dactyl = "0.12.*"
-oxford_join = "0.6.*"
+oxford_join = "0.7.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]

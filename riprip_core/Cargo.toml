@@ -13,7 +13,7 @@ publish = false
 cdtoc = "0.11.*"
 crc32fast = "=1.4.2"
 dactyl = "0.12.*"
-oxford_join = "0.6.*"
+oxford_join = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.8.*"
 utc2k = "0.14.*"
@@ -34,7 +34,7 @@ default-features = false
 
 [build-dependencies]
 dactyl = "0.12.*"
-oxford_join = "0.6.*"
+oxford_join = "0.7.*"
 
 [build-dependencies.cdtoc]
 version = "0.11.*"
