@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.4.2"
+version = "0.4.3"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -10,46 +10,43 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.9.*"
+cdtoc = "0.11.*"
 crc32fast = "=1.4.2"
-dactyl = "0.10.*"
-fyi_ansi = "2.1.*"
-oxford_join = "0.5.*"
+dactyl = "0.13.*"
+oxford_join = "0.7.*"
 tempfile = "3.8.0"
-trimothy = "0.7.*"
-utc2k = "0.13.*"
+trimothy = "0.9.*"
+utc2k = "0.15.*"
 
 [dependencies.fyi_msg]
-version = "2.1.*"
+version = "2.3.*"
 features = [ "signals" ]
 
 [dependencies.libcdio-sys]
-version = "=0.5.2"
+version = "=1.0.0"
 default-features = false
-features = [ "cdio" ]
 
 [dependencies.minreq]
-version = "2.13.*"
+version = "2.14.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
 # reason so we don't need any minreq features at all!
 
 [build-dependencies]
-dactyl = "0.10.*"
-oxford_join = "0.5.*"
+dactyl = "0.13.*"
+oxford_join = "0.7.*"
 
 [build-dependencies.cdtoc]
-version = "0.9.*"
+version = "0.11.*"
 default-features = false
 features = [ "accuraterip" ]
 
 [build-dependencies.libcdio-sys]
-version = "=0.5.2"
+version = "=1.0.0"
 default-features = false
-features = [ "cdio" ]
 
 [build-dependencies.minreq]
-version = "2.13.*"
+version = "2.14.*"
 default-features = false
 
 [dev-dependencies]

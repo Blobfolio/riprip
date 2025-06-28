@@ -388,7 +388,7 @@ impl LibcdioInstance {
 		// The return code is a bool, true for good, instead of the usual
 		// 0 FFI normally kicks back.
 		// Safety: this is an FFI call…
-		if LIBCDIO_TRUE == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &mut raw) } {
+		if LIBCDIO_TRUE == unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &raw mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
 			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
@@ -556,7 +556,7 @@ impl LibcdioInstance {
 				f: buf[usize::from(CD_DATA_SIZE) + 9],
 			};
 			// Safety: this is an FFI call…
-			if lsn != unsafe { libcdio_sys::cdio_msf_to_lsn(&msf) } {
+			if lsn != unsafe { libcdio_sys::cdio_msf_to_lsn(&raw const msf) } {
 				return Err(RipRipError::SubchannelDesync);
 			}
 		}

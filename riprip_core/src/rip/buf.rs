@@ -226,6 +226,8 @@ impl ExactSizeIterator for RipBufferIter<'_> {
 	}
 }
 
+impl std::iter::FusedIterator for RipBufferIter<'_> {}
+
 
 
 #[cfg(test)]

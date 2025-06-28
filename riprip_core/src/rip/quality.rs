@@ -11,7 +11,7 @@ use dactyl::{
 		SaturatingFrom,
 	},
 };
-use fyi_ansi::{
+use fyi_msg::fyi_ansi::{
 	ansi,
 	csi,
 	dim,
@@ -504,6 +504,8 @@ impl ExactSizeIterator for TrackQualityLegendIter<'_> {
 		total
 	}
 }
+
+impl std::iter::FusedIterator for TrackQualityLegendIter<'_> {}
 
 
 

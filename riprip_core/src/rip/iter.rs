@@ -89,6 +89,8 @@ impl ExactSizeIterator for OffsetRipIter<'_> {
 	fn len(&self) -> usize { self.read.len() }
 }
 
+impl std::iter::FusedIterator for OffsetRipIter<'_> {}
+
 
 
 #[derive(Debug)]
@@ -137,6 +139,8 @@ impl ExactSizeIterator for EitherChunksIter<'_> {
 	}
 }
 
+impl std::iter::FusedIterator for EitherChunksIter<'_> {}
+
 
 
 #[derive(Debug, Clone)]
@@ -184,6 +188,8 @@ impl ExactSizeIterator for EitherRangeIter {
 		}
 	}
 }
+
+impl std::iter::FusedIterator for EitherRangeIter {}
 
 
 

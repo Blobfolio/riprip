@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.4.2"
+version = "0.4.3"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -126,17 +126,16 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [build-dependencies]
-argyle = "0.12.*"
+argyle = "0.13.*"
 
 [dependencies]
-argyle = "0.12.*"
-dactyl = "0.10.*"
-fyi_ansi = "2.1.*"
-oxford_join = "0.5.*"
-utc2k = "0.13.*"
+argyle = "0.13.*"
+dactyl = "0.13.*"
+oxford_join = "0.7.*"
+utc2k = "0.15.*"
 
 [dependencies.fyi_msg]
-version = "2.1.*"
+version = "2.3.*"
 features = [ "signals" ]
 
 [dependencies.riprip_core]

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 
 /// # Set Up CLI Arguments.
-pub fn main() {
+fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
 	let mut builder = KeyWordsBuilder::default();

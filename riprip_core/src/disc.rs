@@ -21,12 +21,14 @@ use crate::{
 	SavedRips,
 };
 use dactyl::NoHash;
-use fyi_ansi::{
-	ansi,
-	csi,
-	dim,
+use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+		dim,
+	},
+	Progless,
 };
-use fyi_msg::Progless;
 use std::{
 	borrow::Cow,
 	collections::HashMap,

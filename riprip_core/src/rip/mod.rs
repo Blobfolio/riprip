@@ -35,12 +35,12 @@ use dactyl::{
 	NiceU8,
 	traits::NiceInflection,
 };
-use fyi_ansi::{
-	ansi,
-	csi,
-	dim,
-};
 use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+		dim,
+	},
 	AnsiColor,
 	Msg,
 	Progless,
