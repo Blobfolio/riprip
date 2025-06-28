@@ -19,7 +19,7 @@ trimothy = "0.8.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]
-version = "2.2.*"
+version = "2.3.*"
 features = [ "signals" ]
 
 [dependencies.libcdio-sys]
