@@ -15,7 +15,7 @@ crc32fast = "=1.4.2"
 dactyl = "0.12.*"
 oxford_join = "0.7.*"
 tempfile = "3.8.0"
-trimothy = "0.8.*"
+trimothy = "0.9.*"
 utc2k = "0.14.*"
 
 [dependencies.fyi_msg]
