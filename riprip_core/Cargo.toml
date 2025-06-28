@@ -16,7 +16,7 @@ dactyl = "0.13.*"
 oxford_join = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.9.*"
-utc2k = "0.14.*"
+utc2k = "0.15.*"
 
 [dependencies.fyi_msg]
 version = "2.3.*"
