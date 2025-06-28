@@ -6,7 +6,10 @@ array that can be easily searched at runtime.
 */
 
 use cdtoc::AccurateRip;
-use dactyl::NiceU16;
+use dactyl::{
+	NiceSeparator,
+	NiceU16,
+};
 use oxford_join::JoinFmt;
 use std::{
 	collections::BTreeMap,
@@ -142,7 +145,7 @@ fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
 				f,
 				"(DriveVendorModel({:?}), {}_u16)",
 				self.0,
-				NiceU16::with_separator(self.1, b'_'),
+				NiceU16::with_separator(self.1, NiceSeparator::Underscore),
 			)
 		}
 	}
