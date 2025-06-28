@@ -27,7 +27,7 @@ version = "=1.0.0"
 default-features = false
 
 [dependencies.minreq]
-version = "2.13.*"
+version = "2.14.*"
 default-features = false
 # Neither AccurateRip nor CTDB use SSL for whatever
 # reason so we don't need any minreq features at all!
@@ -46,7 +46,7 @@ version = "=1.0.0"
 default-features = false
 
 [build-dependencies.minreq]
-version = "2.13.*"
+version = "2.14.*"
 default-features = false
 
 [dev-dependencies]
