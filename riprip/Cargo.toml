@@ -126,10 +126,10 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [build-dependencies]
-argyle = "0.12.*"
+argyle = "0.13.*"
 
 [dependencies]
-argyle = "0.12.*"
+argyle = "0.13.*"
 dactyl = "0.12.*"
 oxford_join = "0.6.*"
 utc2k = "0.14.*"
