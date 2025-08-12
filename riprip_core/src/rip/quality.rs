@@ -399,7 +399,7 @@ impl TrackQualityLegend {
 	const PADDING: &str = "             ";
 
 	/// # Iterate!
-	const fn iter(&self) -> TrackQualityLegendIter {
+	const fn iter(&self) -> TrackQualityLegendIter<'_> {
 		TrackQualityLegendIter {
 			start: &self.start,
 			end: &self.end,
@@ -414,7 +414,7 @@ impl TrackQualityLegend {
 	///
 	/// Returns `None` if there was no initial state or it is identical to the
 	/// final one.
-	pub(super) fn start(&self) -> Option<TrackQualityLegendStart> {
+	pub(super) fn start(&self) -> Option<TrackQualityLegendStart<'_>> {
 		if self.start.iter().zip(self.end.iter()).any(|(a, b)| a.is_some() && a != b) {
 			Some(TrackQualityLegendStart(self))
 		}

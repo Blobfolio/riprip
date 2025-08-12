@@ -130,7 +130,7 @@ impl RipBuffer {
 	///
 	/// Return an iterator over the samples and C2 statuses of the last-read
 	/// sector.
-	pub(crate) const fn samples(&self) -> RipBufferIter {
+	pub(crate) const fn samples(&self) -> RipBufferIter<'_> {
 		RipBufferIter {
 			set: &self.0,
 			pos: 0,

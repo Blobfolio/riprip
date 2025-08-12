@@ -222,7 +222,8 @@ impl RipSector {
 	///
 	/// Fill the buffers with data from a reader, then return an iterator over
 	/// those samples.
-	pub(super) fn deserialize_from<R: Read>(&mut self, r: &mut R) -> Option<RipSectorSamples> {
+	pub(super) fn deserialize_from<R: Read>(&mut self, r: &mut R)
+	-> Option<RipSectorSamples<'_>> {
 		// Read and validate the type IDs, and calculate the expected data length.
 		r.read_exact(&mut self.kind).ok()?;
 		let mut len = 0;
