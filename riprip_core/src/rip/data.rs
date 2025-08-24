@@ -367,7 +367,7 @@ impl RipState {
 	/// This will return an error if there's a bug in the programming, but that
 	/// shouldn't happen. ;)
 	pub(super) fn offset_rip_iter(&mut self, opts: &RipOptions)
-	-> Result<OffsetRipIter, RipRipError> {
+	-> Result<OffsetRipIter<'_>, RipRipError> {
 		// Let's start with the read parts.
 		let sector_range = self.sector_rip_range();
 		let mut lsn_start = sector_range.start;
