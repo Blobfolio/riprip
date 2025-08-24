@@ -9,36 +9,46 @@ use std::{
 
 
 
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-/// # CDText Field.
-///
-/// This enum simply rearranges the constants exported from `libcdio` in a
-/// friendlier format.
-pub enum CDTextKind {
-	/// # Arranger.
-	Arranger = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ARRANGER,
+/// # Helper: CDText Fields.
+macro_rules! fields {
+	( $( $k:ident $v:ident $vstr:literal ),+ $(,)? ) => (
+		#[repr(u32)]
+		#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+		/// # CDText Field.
+		///
+		/// This enum simply rearranges the constants exported from `libcdio` in a
+		/// friendlier format.
+		pub enum CDTextKind {
+			$(
+				#[doc = concat!("# ", stringify!($k), ".")]
+				$k = libcdio_sys::$v,
+			)+
+		}
 
-	/// # Barcode.
-	Barcode = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_UPC_EAN,
+		impl CDTextKind {
+			#[must_use]
+			/// # As Str.
+			///
+			/// Return the field as an uppercase string, similar to how it would
+			/// appear in track metadata.
+			pub const fn as_str(self) -> &'static str {
+				match self {
+					$( Self::$k => $vstr, )+
+				}
+			}
+		}
+	);
+}
 
-	/// # Composer.
-	Composer = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_COMPOSER,
-
-	/// # ISRC.
-	Isrc = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_ISRC,
-
-	/// # Message.
-	Message = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_MESSAGE,
-
-	/// # Performer.
-	Performer = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_PERFORMER,
-
-	/// # Songwriter.
-	Songwriter = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_SONGWRITER,
-
-	/// # Title.
-	Title = libcdio_sys::cdtext_field_t_CDTEXT_FIELD_TITLE,
+fields! {
+	Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER   "ARRANGER",
+	Barcode    cdtext_field_t_CDTEXT_FIELD_UPC_EAN    "BARCODE",
+	Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER   "COMPOSER",
+	Isrc       cdtext_field_t_CDTEXT_FIELD_ISRC       "ISRC",
+	Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE    "COMMENT",
+	Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER  "ARTIST",
+	Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER "SONGWRITER",
+	Title      cdtext_field_t_CDTEXT_FIELD_TITLE      "TITLE",
 }
 
 impl AsRef<str> for CDTextKind {
@@ -61,24 +71,4 @@ impl Ord for CDTextKind {
 impl PartialOrd for CDTextKind {
 	#[inline]
 	fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> { Some(self.cmp(rhs)) }
-}
-
-impl CDTextKind {
-	#[must_use]
-	/// # As Str.
-	///
-	/// Return the field as an uppercase string, similar to how it would
-	/// appear in track metadata.
-	pub const fn as_str(self) -> &'static str {
-		match self {
-			Self::Arranger => "ARRANGER",
-			Self::Barcode => "BARCODE",
-			Self::Composer => "COMPOSER",
-			Self::Isrc => "ISRC",
-			Self::Message => "COMMENT",
-			Self::Performer => "ARTIST",
-			Self::Songwriter => "SONGWRITER",
-			Self::Title => "TITLE",
-		}
-	}
 }
