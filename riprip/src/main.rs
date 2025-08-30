@@ -202,8 +202,8 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 	// Everything else!
 	let _res = writeln!(
 		&mut handle,
-		"## Disc:  {}
-## Date:  {}
+		"## Disc:  {disc}
+## Date:  {date}
 ##
 ## The quality issues noted for each pass are composed of the following fields,
 ## separated by two spaces:
@@ -214,8 +214,8 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 ##       * BAD:      values returned with C2 errors
 ##       * CONFUSED: many contradictory \"good\" values
 #####",
-		FmtUtc2k::now(),
-		disc.toc().cddb_id(),
+		disc=disc.toc().cddb_id(),
+		date=FmtUtc2k::now(),
 	);
 
 	let _res = handle.flush();
