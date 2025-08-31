@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.5.0"
+version = "0.5.1"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"

@@ -117,7 +117,7 @@ impl RipLog {
 	/// order, but one never knows with terminals…
 	fn flush(&mut self) {
 		// Header.
-		let Some((pass, start)) = self.pass.take() else { return; };
+		let Some((pass, start)) = self.pass else { return; };
 		let writer = std::io::stdout();
 		let mut handle = writer.lock();
 		let _res = writeln!(

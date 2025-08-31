@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.5.0
+    Version:   0.5.1
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2025-08-24 20:03:44 UTC
+    Generated: 2025-08-31 03:12:47 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -42,14 +42,14 @@
 | [**minreq**](https://github.com/neonmoe/minreq) | 2.14.0 | [Jens Pitkanen](mailto:jens@neon.moe) | ISC |
 | [nom](https://github.com/Geal/nom) ⚒️ | 7.1.3 | contact@geoffroycouprie.com | MIT |
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.3 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
-| [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.7.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.7.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [prettyplease](https://github.com/dtolnay/prettyplease) ⚒️ | 0.2.37 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) ⚒️ | 1.0.101 | [David Tolnay](mailto:dtolnay@gmail.com) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [quote](https://github.com/dtolnay/quote) ⚒️ | 1.0.40 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |
 | [regex](https://github.com/rust-lang/regex) ⚒️ | 1.11.2 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-automata](https://github.com/rust-lang/regex) ⚒️ | 0.4.10 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-syntax](https://github.com/rust-lang/regex) ⚒️ | 0.8.6 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.5.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.5.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) ⚒️ | 2.1.1 | The Rust Project Developers | Apache-2.0 OR MIT |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.0.8 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.10.6 | RustCrypto Developers | MIT OR Apache-2.0 |

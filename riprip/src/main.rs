@@ -182,9 +182,11 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 		&mut handle,
 		concat!("#####
 ## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "
-## {}
-##"),
-		opts.cli(),
+## {cli}
+##
+## Date:        {date}"),
+		cli=opts.cli(),
+		date=FmtUtc2k::now().to_rfc3339(),
 	);
 
 	// Drive.
@@ -192,19 +194,18 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 		let vendor = v.vendor();
 		let model = v.model();
 		if vendor.is_empty() {
-			let _res = writeln!(&mut handle, "## Drive: {model}");
+			let _res = writeln!(&mut handle, "## Drive:       {model}");
 		}
 		else {
-			let _res = writeln!(&mut handle, "## Drive: [{vendor}] {model}");
+			let _res = writeln!(&mut handle, "## Drive:       [{vendor}] {model}");
 		}
 	}
 
 	// Everything else!
 	let _res = writeln!(
 		&mut handle,
-		"## Disc:  {}
-## Date:  {}
-##
+		"##
+{disc:?}
 ## The quality issues noted for each pass are composed of the following fields,
 ## separated by two spaces:
 ##   * Track Number                   [2 digits]
@@ -214,8 +215,6 @@ fn log_header(disc: &Disc, opts: &RipOptions) {
 ##       * BAD:      values returned with C2 errors
 ##       * CONFUSED: many contradictory \"good\" values
 #####",
-		FmtUtc2k::now(),
-		disc.toc().cddb_id(),
 	);
 
 	let _res = handle.flush();
