@@ -42,7 +42,6 @@ use std::{
 
 
 
-#[derive(Debug)]
 /// # Disc.
 ///
 /// A loaded and parsed compact disc.
@@ -58,6 +57,107 @@ pub struct Disc {
 
 	/// # Track ISRCs.
 	isrcs: HashMap<u8, String, NoHash>,
+}
+
+impl fmt::Debug for Disc {
+	/// # Summarize the Disc.
+	///
+	/// This prints various disc identifiers and table of contents-type
+	/// information in a nice little table, minus ANSI, plus "## " line
+	/// prefixes to match the log format.
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Divider.
+		const DIVIDER: &str = "## ----------------------------------------\n";
+
+		// A few key/value pairs.
+		let mut kv: Vec<(&str, String)> = vec![
+			("CDTOC:", self.toc.to_string()),
+			("AccurateRip:", self.toc.accuraterip_id().to_string()),
+			("CDDB:", cache_prefix(&self.toc).to_owned()),
+			("CUETools:", self.toc.ctdb_id().to_string()),
+			("MusicBrainz:", self.toc.musicbrainz_id().to_string()),
+		];
+		if let Some(barcode) = self.barcode.as_ref() {
+			kv.push(("Barcode:", barcode.to_string()));
+		}
+
+		let col_max: usize = kv.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
+		for (k, v) in kv {
+			writeln!(f, "## {k:col_max$} {v}")?;
+		}
+		f.write_str("##\n")?;
+		f.write_str(DIVIDER)?;
+
+		// Start the table of contents.
+		write!(
+			f,
+			"## NO   FIRST    LAST  LENGTH          {}\n",
+			if self.isrcs.is_empty() { "" } else { "ISRC" },
+		)?;
+		f.write_str(DIVIDER)?;
+
+		let mut total = 0;
+
+		// HTOA.
+		if let Some(t) = self.toc.htoa() {
+			let rng = t.sector_range_normalized();
+			let len = rng.end - rng.start;
+			writeln!(
+				f,
+				"## 00  {:>6}  {:>6}  {:>6}          HTOA",
+				rng.start,
+				rng.end - 1,
+				len,
+			)?;
+		}
+		// Leading data track.
+		else if matches!(self.toc.kind(), TocKind::DataFirst) {
+			total += 1;
+			writeln!(
+				f,
+				"## {:02}  {:>6}                    DATA TRACK",
+				total,
+				self.toc.data_sector_normalized().unwrap_or_default(),
+			)?;
+		}
+
+		// The audio tracks.
+		for t in self.toc.audio_tracks() {
+			total += 1;
+			let num = t.number();
+			let rng = t.sector_range_normalized();
+			let len = rng.end - rng.start;
+			let isrc = self.isrc(num).unwrap_or_default();
+			writeln!(
+				f,
+				"## {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
+				rng.start,
+				rng.end - 1,
+			)?;
+		}
+
+		// Trailing data track.
+		if matches!(self.toc.kind(), TocKind::CDExtra) {
+			total += 1;
+			writeln!(
+				f,
+				"## {:02}  {:>6}                    DATA TRACK",
+				total,
+				self.toc.data_sector_normalized().unwrap_or_default(),
+			)?;
+		}
+
+		// The leadout.
+		writeln!(
+			f,
+			"## {}  {:>6}                      LEAD-OUT",
+			CD_LEADOUT_LABEL,
+			self.toc.leadout_normalized(),
+		)?;
+
+		f.write_str(DIVIDER)?;
+		f.write_str("##")
+	}
 }
 
 impl fmt::Display for Disc {
@@ -96,7 +196,7 @@ impl fmt::Display for Disc {
 		// Start the table of contents.
 		write!(
 			f,
-			dim!("\n##   FIRST    LAST  LENGTH          {}\n"),
+			dim!("\nNO   FIRST    LAST  LENGTH          {}\n"),
 			if self.isrcs.is_empty() { "" } else { "ISRC" },
 		)?;
 		f.write_str(DIVIDER)?;
@@ -271,8 +371,7 @@ impl Disc {
 		// Mention all the file paths and statuses, and maybe build a cue
 		// sheet to go along with them.
 		if let Some(saved) = rip.finish() {
-			let writer = std::io::stderr();
-			let mut handle = writer.lock();
+			let mut handle = std::io::stderr().lock();
 			let mut total = 0;
 			let mut good = 0;
 
