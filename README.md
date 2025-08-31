@@ -170,9 +170,9 @@ Debian and Ubuntu users can just grab the pre-built `.deb` package from the [rel
 While specifically written for use on x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
 
 ```bash
-# The libcdio development headers are required when building from source,
-# which in turn probably requires clang. Debian/Ubuntu users, for example,
-# can install both by running the following:
+# When building from source, you'll also need clang and the libcdio
+# development headers. Debian/Ubuntu users, for example, can install
+# both by running the following:
 sudo apt-get install libcdio-dev clang
 
 # See "cargo install --help" for more options.
