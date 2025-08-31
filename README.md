@@ -128,7 +128,7 @@ riprip
 
 Whether you're ripping a few tracks or all tracks, Rip Rip will check them against both the [AccurateRip](http://accuraterip.com/) and [CUETools](http://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they'll speed things up too.
 
-If any tracks _don't_ verify after the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip partially recovered, otherwise you can just open the Rip Rip's cue sheet directly.
+If any tracks _don't_ verify after the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip partially recovered, otherwise you can just open Rip Rip's cue sheet directly.
 
 If automatic repair works, great! You're done!
 
