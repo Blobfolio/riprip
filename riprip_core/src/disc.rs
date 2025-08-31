@@ -34,6 +34,10 @@ use std::{
 	collections::HashMap,
 	ffi::OsStr,
 	fmt,
+	io::{
+		StderrLock,
+		StdoutLock,
+	},
 	path::{
 		Path,
 		PathBuf,
@@ -89,9 +93,9 @@ impl fmt::Debug for Disc {
 		f.write_str(DIVIDER)?;
 
 		// Start the table of contents.
-		write!(
+		writeln!(
 			f,
-			"## NO   FIRST    LAST  LENGTH          {}\n",
+			"## NO   FIRST    LAST  LENGTH          {}",
 			if self.isrcs.is_empty() { "" } else { "ISRC" },
 		)?;
 		f.write_str(DIVIDER)?;
@@ -372,6 +376,9 @@ impl Disc {
 		// sheet to go along with them.
 		if let Some(saved) = rip.finish() {
 			let mut handle = std::io::stderr().lock();
+			let mut handle2 =
+				if opts.verbose() { Some(std::io::stdout().lock()) }
+				else { None };
 			let mut total = 0;
 			let mut good = 0;
 
@@ -380,13 +387,21 @@ impl Disc {
 			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
 			let col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
+			// A header of sorts.
 			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
-
-			// If we did all tracks, make a cue sheet.
-			if let Some(file) = save_cuesheet(&self.toc, &saved) {
-				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+			if let Some(buf) = &mut handle2 {
+				let _res = writeln!(buf, "##\n## The fruits of your labor:");
 			}
 
+			// If we did all tracks, make a cue sheet and print its path.
+			if let Some(file) = save_cuesheet(&self.toc, &saved) {
+				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+				if let Some(buf) = &mut handle2 {
+					let _res = writeln!(buf, "##   {}", file.display());
+				}
+			}
+
+			// Print the verification status for all track(s).
 			for (idx, (file, ar, ctdb)) in saved {
 				total += 1;
 				if ar.is_some() || ctdb.is_some() { good += 1; }
@@ -397,14 +412,31 @@ impl Disc {
 					file.display(),
 					if conf {
 						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "            *")) }
-						else { fmt_ar(ar) }
+						else { fmt_ar(ar, true) }
 					} else { Cow::Borrowed(ansi!((reset, light_red) "            x")) },
 					if conf {
 						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "         *")) }
-						else { fmt_ctdb(ctdb) }
+						else { fmt_ctdb(ctdb, true) }
 					} else { Cow::Borrowed(ansi!((reset, light_red) "         x")) },
 					col1=col1,
 				);
+
+				if let Some(buf) = &mut handle2 {
+					let _res = writeln!(
+						buf,
+						"##   {:<col1$}{}{}",
+						file.display(),
+						if conf {
+							if idx == 0 { Cow::Borrowed("            *") }
+							else { fmt_ar(ar, false) }
+						} else { Cow::Borrowed("            x") },
+						if conf {
+							if idx == 0 { Cow::Borrowed("         *") }
+							else { fmt_ctdb(ctdb, false) }
+						} else { Cow::Borrowed("         x") },
+						col1=col1,
+					);
+				}
 			}
 
 			// Add confirmation column headers.
@@ -424,39 +456,26 @@ impl Disc {
 				good=good,
 				total=total
 			);
-
-			// Mention that the HTOA can't be verified but is probably okay.
-			if htoa_likely {
+			if let Some(buf) = &mut handle2 {
 				let _res = writeln!(
-					&mut handle,
-					concat!(
-						csi!(light_yellow), "\n*",
-						csi!(reset, dim),
-						" HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
-						"  but this rip rates ",
-						csi!(reset, light_yellow), "likely",
-						ansi!((reset, dim) ", which is the next best thing!"),
-					),
-				);
-			}
-			// Mention that the HTOA can't be verified and should be reripped
-			// to increase certainty.
-			else if htoa_any {
-				let _res = writeln!(
-					&mut handle,
-					concat!(
-						csi!(light_yellow), "\n*",
-						csi!(reset, dim),
-						" HTOA tracks cannot be verified w/ AccurateRip or CTDB\n",
-						"  so you should re-rip it until it rates ",
-						csi!(reset, light_yellow), "likely",
-						ansi!((reset, dim) " to be safe."),
-					),
+					buf,
+					"##   {line: >width$}  AccurateRip  CUETools  ({good}/{total})",
+					line="",
+					width=col1,
+					good=good,
+					total=total
 				);
 			}
 
-			// An extra line break for separation.
+			// Add HTOA footnote, if applicable.
+			if htoa_likely { write_htoa_likely(&mut handle, &mut handle2); }
+			else if htoa_any { write_htoa_any(&mut handle, &mut handle2); }
+
+			// Add an extra line break for separation, flush, and quit.
 			let _res = writeln!(&mut handle).and_then(|()| handle.flush());
+			if let Some(buf) = &mut handle2 {
+				let _res = writeln!(buf, "##").and_then(|()| buf.flush());
+			}
 		}
 
 		Ok(())
@@ -483,24 +502,32 @@ impl Disc {
 
 
 /// # Format AccurateRip.
-fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
+fn fmt_ar(ar: Option<(u8, u8)>, color: bool) -> Cow<'static, str> {
 	if let Some((v1, v2)) = ar {
 		let c1 =
-			if v1 == 0 { csi!(reset, light_red) }
+			if ! color { "" }
+			else if v1 == 0 { csi!(reset, light_red) }
 			else if v1 <= 5 { csi!(reset, light_yellow) }
 			else { csi!(reset, light_green) };
 
+		let r1 =
+			if color { csi!(reset, dim) }
+			else { "" };
+
 		let c2 =
-			if v2 == 0 { csi!(reset, light_red) }
+			if ! color { "" }
+			else if v2 == 0 { csi!(reset, light_red) }
 			else if v2 <= 5 { csi!(reset, light_yellow) }
 			else { csi!(reset, light_green) };
 
+		let r2 =
+			if color { csi!() }
+			else { "" };
+
 		Cow::Owned(format!(
-			concat!("        {c1}{:02}", csi!(reset, dim), "+{c2}{:02}", csi!()),
+			"        {c1}{:02}{r1}+{c2}{:02}{r2}",
 			v1.min(99),
 			v2.min(99),
-			c1=c1,
-			c2=c2,
 		))
 	}
 	else { Cow::Borrowed("             ") }
@@ -508,17 +535,21 @@ fn fmt_ar(ar: Option<(u8, u8)>) -> Cow<'static, str> {
 
 #[expect(clippy::option_if_let_else, reason = "Too messy.")]
 /// # Format CUETools.
-fn fmt_ctdb(ctdb: Option<u16>) -> Cow<'static, str> {
+fn fmt_ctdb(ctdb: Option<u16>, color: bool) -> Cow<'static, str> {
 	if let Some(v1) = ctdb {
 		let c1 =
-			if v1 == 0 { csi!(reset, light_red) }
+			if ! color { "" }
+			else if v1 == 0 { csi!(reset, light_red) }
 			else if v1 <= 5 { csi!(reset, light_yellow) }
 			else { csi!(reset, light_green) };
 
+		let r1 =
+			if color { csi!() }
+			else { "" };
+
 		Cow::Owned(format!(
-			concat!("       {c1}{:03}", csi!()),
+			"       {c1}{:03}{r1}",
 			v1.min(999),
-			c1=c1,
 		))
 	}
 	else { Cow::Borrowed("          ") }
@@ -577,4 +608,70 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 
 	// Return the path.
 	Some(dst)
+}
+
+/// # Write HTOA (Likely).
+///
+/// This writes the footnote explaining that the HTOA can't be verified but
+/// ranks likely, which is as good as can be.
+fn write_htoa_likely(stderr: &mut StderrLock<'static>, stdout: &mut Option<StdoutLock<'static>>) {
+	use std::io::Write;
+
+	// Always write to STDERR.
+	let _res = writeln!(
+		stderr,
+		concat!(
+			csi!(light_yellow), "\n*",
+			csi!(reset, dim),
+			" HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
+			"  but this rip rates ",
+			csi!(reset, light_yellow), "likely",
+			ansi!((reset, dim) ", which is the next best thing!"),
+		),
+	);
+
+	// Only write to STDOUT if there's a lock.
+	if let Some(buf) = stdout {
+		let _res = writeln!(
+			buf,
+			concat!(
+				"##\n",
+				"## * HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
+				"##   but this rip rates likely, which is the next best thing!",
+			),
+		);
+	}
+}
+
+/// # Write HTOA (Any).
+///
+/// This writes the footnote explaining that HTOA can't be verified and the
+/// ripped version sucks and should be improved.
+fn write_htoa_any(stderr: &mut StderrLock<'static>, stdout: &mut Option<StdoutLock<'static>>) {
+	use std::io::Write;
+
+	// Always write to STDERR.
+	let _res = writeln!(
+		stderr,
+		concat!(
+			csi!(light_yellow), "\n*",
+			csi!(reset, dim),
+			" HTOA tracks cannot be verified w/ AccurateRip or CTDB\n",
+			"  so you should re-rip it until it rates ",
+			csi!(reset, light_yellow), "likely",
+			ansi!((reset, dim) " to be safe."),
+		),
+	);
+
+	// Only write to STDOUT if there's a lock.
+	if let Some(buf) = stdout {
+		let _res = writeln!(
+			buf,
+			concat!(
+				"##\n",
+				"## * HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
+				"##   so you should re-rip it until it rates likely to be safe.",
+			),
+		);
+	}
 }
