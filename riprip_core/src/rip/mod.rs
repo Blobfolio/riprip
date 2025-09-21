@@ -887,6 +887,7 @@ fn happy_track_msg(track: Track) -> Msg {
 }
 
 #[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+#[expect(clippy::useless_let_if_seq, reason = "I don't think so…")]
 /// # Max Confidence.
 ///
 /// Return the largest confidence value.
