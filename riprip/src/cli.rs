@@ -2,7 +2,6 @@
 # Rip Rip Hooray: CLI
 */
 
-use argyle::Argument;
 use dactyl::traits::BytesToUnsigned;
 use riprip_core::{
 	Disc,
@@ -28,10 +27,32 @@ pub(super) type Parsed = (
 
 
 
+#[expect(clippy::too_many_lines, reason = "There's a lot to parse.")]
 /// # Parse Options.
 pub(super) fn parse() -> Result<Parsed, RipRipError> {
-	let args = argyle::args()
-		.with_keywords(include!(concat!(env!("OUT_DIR"), "/argyle.rs")));
+	argyle::argue! {
+		Backward       "--backward"    "--backwards",
+		FlipFlop       "--flip-flop",
+		Help      "-h" "--help",
+		NoResume       "--no-resume",
+		NoRip          "--no-rip",
+		NoSummary      "--no-summary",
+		Reset          "--reset",
+		Status         "--status",
+		Strict         "--strict",
+		Sync           "--sync",
+		Verbose   "-v" "--verbose",
+		Version   "-V" "--version",
+
+		@options
+		Cache     "-c" "--cache",
+		Device    "-d" "--dev",
+		Confidence     "--confidence",
+		Offset    "-o" "--offset",
+		Passes    "-p" "--pass"        "--passes",
+		ReRead    "-r" "--reread"      "--rereads",
+		Tracks    "-t" "--track"       "--tracks",
+	}
 
 	let mut opts = RipOptions::default();
 	let mut no_rip = false;
@@ -41,50 +62,56 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	let mut dev = None;
 	let mut offset = None;
 	let mut tracks = String::new();
-	for arg in args {
+	for arg in Argument::args_os() {
 		match arg {
-			Argument::Key("--backward" | "--backwards") => {
+			Argument::Backward => {
 				opts = opts.with_backwards(true);
 			},
-			Argument::Key("--flip-flop") => {
+			Argument::FlipFlop => {
 				opts = opts.with_flip_flop(true);
 			},
-			Argument::Key("-h" | "--help") => return Err(RipRipError::PrintHelp),
-			Argument::Key("--no-resume") => { opts = opts.with_resume(false); },
-			Argument::Key("--no-rip") => { no_rip = true; },
-			Argument::Key("--no-summary") => { no_summary = true; },
-			Argument::Key("--reset") => { opts = opts.with_reset(true); },
-			Argument::Key("--status") => { status = true; },
-			Argument::Key("--strict") => { opts = opts.with_strict(true); },
-			Argument::Key("--sync") => { opts = opts.with_sync(true); },
-			Argument::Key("-v" | "--verbose") => { opts = opts.with_verbose(true); },
-			Argument::Key("-V" | "--version") => return Err(RipRipError::PrintVersion),
+			Argument::Help => return Err(RipRipError::PrintHelp),
+			Argument::NoResume => { opts = opts.with_resume(false); },
+			Argument::NoRip => { no_rip = true; },
+			Argument::NoSummary => { no_summary = true; },
+			Argument::Reset => { opts = opts.with_reset(true); },
+			Argument::Status => { status = true; },
+			Argument::Strict => { opts = opts.with_strict(true); },
+			Argument::Sync => { opts = opts.with_sync(true); },
+			Argument::Verbose => { opts = opts.with_verbose(true); },
+			Argument::Version => return Err(RipRipError::PrintVersion),
 
-			Argument::KeyWithValue("-c" | "--cache", s) => {
+			Argument::Cache(s) => {
 				let s = parse_rip_option_cache(s)?;
 				cache.replace(s);
 			},
-			Argument::KeyWithValue("-d" | "--dev", s) => { dev.replace(s); },
-			Argument::KeyWithValue("-o" | "--offset", s) => {
+			Argument::Confidence(s) => {
+				let s = u8::btou(s.trim().as_bytes())
+					.ok_or(RipRipError::CliParse("--confidence"))?;
+				opts = opts.with_confidence(s);
+			},
+			Argument::Device(s) => { dev.replace(s); },
+			Argument::Offset(s) => {
 				let s = ReadOffset::try_from(s.trim().as_bytes())
 					.map_err(|_| RipRipError::CliParse("-o/--offset"))?;
 				offset.replace(s);
 			},
-			Argument::KeyWithValue("-p" | "--pass" | "--passes", s) => {
+			Argument::Passes(s) => {
 				let s = u8::btou(s.trim().as_bytes())
 					.ok_or(RipRipError::CliParse("-p/--passes"))?;
 				opts = opts.with_passes(s);
 			},
-			Argument::KeyWithValue("-r" | "--reread" | "--rereads", s) => {
+			Argument::ReRead(s) => {
 				let (a, b) = parse_rip_option_reread(s.as_bytes())?;
 				opts = opts.with_rereads(a, b);
 			},
-			Argument::KeyWithValue("-t" | "--track" | "--tracks", s) => {
+			Argument::Tracks(s) => {
 				if ! tracks.is_empty() { tracks.push(','); }
 				tracks.push_str(&s);
 			},
 
-			_ => {},
+			Argument::Other(s) => return Err(RipRipError::CliArg(s)),
+			Argument::OtherOs(s) => return Err(RipRipError::CliArg(s.to_string_lossy().into_owned())),
 		}
 	}
 

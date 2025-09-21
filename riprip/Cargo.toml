@@ -125,11 +125,8 @@ label = "<NUM>"
 description = "Rip one or more specific tracks (rather than the whole disc). Multiple tracks can be separated by commas (2,3), specified as an inclusive range (2-3), and/or given their own -t/--track (-t 2 -t 3). Track 0 can be used to rip the HTOA, if any. [default: the whole disc]"
 duplicate = true
 
-[build-dependencies]
-argyle = "0.13.*"
-
 [dependencies]
-argyle = "0.13.*"
+argyle = "0.14.*"
 dactyl = "0.13.*"
 oxford_join = "0.7.*"
 utc2k = "0.17.*"
