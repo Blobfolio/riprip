@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.5.2"
+version = "0.5.3"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -129,7 +129,7 @@ duplicate = true
 argyle = "0.14.*"
 dactyl = "0.13.*"
 oxford_join = "0.7.*"
-utc2k = "0.17.*"
+utc2k = "0.18.*"
 
 [dependencies.fyi_msg]
 version = "2.4.*"
