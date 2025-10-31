@@ -165,7 +165,7 @@ Good luck!
 
 ## Installation
 
-Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page.
+Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can grab it from [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
 While specifically written for use on x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
 
