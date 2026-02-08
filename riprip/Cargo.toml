@@ -126,7 +126,7 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [dependencies]
-argyle = "0.14.*"
+argyle = "0.15.*"
 dactyl = "0.13.*"
 oxford_join = "0.7.*"
 utc2k = "0.19.*"
