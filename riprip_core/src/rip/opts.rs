@@ -371,6 +371,7 @@ impl RipOptions {
 
 
 
+/// # Helper: Get Flag.
 macro_rules! get_flag {
 	($fn:ident, $flag:ident, $title:literal) => (
 		#[must_use]
