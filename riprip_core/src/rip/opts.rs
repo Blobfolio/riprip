@@ -205,7 +205,7 @@ impl RipOptions {
 	/// to read data a little earlier or later than another drive might.
 	///
 	/// To normalize the data obtained across different drives, it is critical
-	/// to set the appropriate count-offset. See [here](http://www.accuraterip.com/driveoffsets.htm) if you're not sure
+	/// to set the appropriate count-offset. See [here](https://www.accuraterip.com/driveoffsets.htm) if you're not sure
 	/// what your drive's offset is.
 	pub const fn with_offset(self, offset: ReadOffset) -> Self {
 		Self {

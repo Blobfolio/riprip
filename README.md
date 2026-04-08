@@ -10,7 +10,7 @@ Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
 It doesn't beat a drive senseless every time a read error is encountered; it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
-Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](http://cue.tools/wiki/CUETools_Database) to finish up for you.
+Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](https://cue.tools/wiki/CUETools_Database) to finish up for you.
 
 Total recovery is not always possible — drives can only read what they can read — but Rip Rip Hooray! will rescue more data than traditional CD-ripping software, more accurately, and in significantly less time.
 
@@ -26,8 +26,8 @@ Beyond that, it supports all the good things:
 * Subchannel timecode synchronization
 * Drive read offset auto-detection
 * Drive read offset correction
-* [AccurateRip](http://accuraterip.com/) checksum verification
-* [CUETools](http://cue.tools/wiki/CUETools_Database) checksum verification
+* [AccurateRip](https://accuraterip.com/) checksum verification
+* [CUETools](https://cue.tools/wiki/CUETools_Database) checksum verification
 * HTOA (can rip the pre-gap track, if any)
 * Cache busting
 * Sample re/confirmation
@@ -39,9 +39,9 @@ Rip Rip Hooray! **does not** aspire to manage your media library, so doesn't muc
 
 But it does print a nice little summary of the disc's table of contents and its various TOC-derived and encoded identifiers:
 
-* [AccurateRip](http://accuraterip.com/) ID
+* [AccurateRip](https://accuraterip.com/) ID
 * [CDDB](https://en.wikipedia.org/wiki/CDDB) ID
-* [CUETools](http://cue.tools/wiki/CUETools_Database) ID
+* [CUETools](https://cue.tools/wiki/CUETools_Database) ID
 * [MusicBrainz](https://musicbrainz.org/) ID
 * Track ISRCs (if present)
 * UPC/EAN (if present)
@@ -63,7 +63,7 @@ Because of its focus on _recovery_, Rip Rip Hooray! imposes stricter requirement
 * SCSI/MMC 2+ (again, most modern drives qualify)
 * C2 Error Pointers
 
-The drive will also need a known [read offset](http://www.accuraterip.com/driveoffsets.htm) to be auto-detected, or you'll need to know and enter the appropriate value using the `-o`/`--offset` option.
+The drive will also need a known [read offset](https://www.accuraterip.com/driveoffsets.htm) to be auto-detected, or you'll need to know and enter the appropriate value using the `-o`/`--offset` option.
 
 If your drive has a read buffer cache that isn't auto-detected, enter its size in kilobytes with the `-c`/`--cache` option so Rip Rip can try to mitigate its effects.
 
@@ -126,7 +126,7 @@ If you'd rather stick with one program to keep things simple, that's fine too. R
 riprip
 ```
 
-Whether you're ripping a few tracks or all tracks, Rip Rip will check them against both the [AccurateRip](http://accuraterip.com/) and [CUETools](http://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they'll speed things up too.
+Whether you're ripping a few tracks or all tracks, Rip Rip will check them against both the [AccurateRip](https://accuraterip.com/) and [CUETools](https://cue.tools/wiki/CUETools_Database) databases to verify their accuracy. Confirmed tracks are exempted from subsequent rip passes, so aside from being perfect, they'll speed things up too.
 
 If any tracks _don't_ verify after the initial Rip Rip rip, check to see if _enough_ data was recovered for [CUETools](http://cue.tools/wiki/CUETools) repair. You'll need the whole album for this, so if you used a different program for the good tracks, you'll need to merge those files with the ones Rip Rip partially recovered, otherwise you can just open Rip Rip's cue sheet directly.
 
