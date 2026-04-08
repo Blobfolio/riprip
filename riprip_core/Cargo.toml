@@ -29,8 +29,7 @@ default-features = false
 [dependencies.minreq]
 version = "2.14.*"
 default-features = false
-# Neither AccurateRip nor CTDB use SSL for whatever
-# reason so we don't need any minreq features at all!
+features = [ "https" ]
 
 [build-dependencies]
 dactyl = "0.13.*"
