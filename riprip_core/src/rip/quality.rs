@@ -322,7 +322,7 @@ impl TrackQuality {
 
 			// Remove the second percentage if it matches the first when
 			// rounded.
-			if low.zip(high).filter(|(l, h)| l.precise_str(3) == h.precise_str(3)).is_some() {
+			if low.zip(high).is_some_and(|(l, h)| l.precise_str(3) == h.precise_str(3)) {
 				high = None;
 			}
 

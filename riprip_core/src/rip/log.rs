@@ -142,7 +142,7 @@ impl RipLog {
 
 		// Sample issues.
 		if ! self.sectors.is_empty() {
-			self.sectors.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+			self.sectors.sort_unstable_by_key(|a| a.1);
 			for (track, lsn, samples, kind) in self.sectors.drain(..) {
 				let _res = writeln!(
 					&mut handle,
