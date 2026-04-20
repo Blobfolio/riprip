@@ -26,9 +26,10 @@ features = [ "signals" ]
 version = "=2.0.0"
 default-features = false
 
-[dependencies.reqwest]
-version = "0.13.*"
-features = [ "blocking", "gzip" ]
+[dependencies.minreq]
+version = "3.0.0-rc.0"
+default-features = false
+features = [ "https" ]
 
 [build-dependencies]
 dactyl = "0.13.*"
@@ -39,9 +40,10 @@ version = "0.13.*"
 default-features = false
 features = [ "accuraterip" ]
 
-[build-dependencies.reqwest]
-version = "0.13.*"
-features = [ "blocking" ]
+[build-dependencies.minreq]
+version = "3.0.0-rc.0"
+default-features = false
+features = [ "https" ]
 
 [dev-dependencies]
 fastrand = "2"
