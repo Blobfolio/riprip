@@ -17,6 +17,10 @@ use cdtoc::{
 	Toc,
 	Track,
 };
+use reqwest::blocking::{
+	Client,
+	ClientBuilder,
+};
 use std::{
 	num::Wrapping,
 	path::Path,
@@ -27,7 +31,9 @@ use std::{
 			Ordering::Relaxed,
 		},
 		Mutex,
+		OnceLock,
 	},
+	time::Duration,
 };
 
 /// # Maximum CTDB Offset Shift (in bytes).
@@ -43,6 +49,9 @@ const UA: &str = concat!(
 	") RipRip/",
 	env!("CARGO_PKG_VERSION"),
 );
+
+/// # HTTP Client.
+static CLIENT: OnceLock<Option<Client>> = OnceLock::new();
 
 
 
@@ -313,16 +322,26 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	use std::io::Write;
 
-	// Download the data into a vector.
-	let res = minreq::get(url)
-		.with_header("user-agent", UA)
-		.with_timeout(15)
+	// Fetch the client.
+	let client = CLIENT.get_or_init(||
+		ClientBuilder::new()
+			.gzip(true)
+			.timeout(Some(Duration::from_secs(15)))
+			.user_agent(UA)
+			.build()
+			.ok()
+	)
+	.as_ref()?;
+
+	// Send the request.
+	let res = client.get(url)
 		.send()
 		.ok()?;
 
 	// Only accept happy response codes with sized bodies.
-	if (200..=399).contains(&res.status_code) {
-		let out = res.into_bytes();
+	let status = res.status();
+	if status.is_success() || status.is_redirection() {
+		let out = res.bytes().ok()?.to_vec();
 		if ! out.is_empty() {
 			// Cache the contents for next time.
 			let _res = CacheWriter::new(dst).ok()

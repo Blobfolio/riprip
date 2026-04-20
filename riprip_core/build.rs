@@ -11,6 +11,10 @@ use dactyl::{
 	NiceU16,
 };
 use oxford_join::JoinFmt;
+use reqwest::blocking::{
+	ClientBuilder,
+	Response,
+};
 use std::{
 	collections::BTreeMap,
 	env,
@@ -70,26 +74,28 @@ fn fetch_offsets() -> Vec<u8> {
 	if let Some(x) = try_cache(&cache) { return x; }
 
 	// Download it fresh.
-	let res = minreq::get(AccurateRip::DRIVE_OFFSET_URL)
-		.with_header("user-agent", "Mozilla/5.0")
-		.send()
+	let res: Response = ClientBuilder::new()
+		.user_agent("Mozilla/5.0")
+		.build()
+		.and_then(|v| v.get(AccurateRip::DRIVE_OFFSET_URL).send())
 		.expect("Unable to download AccurateRip drive offsets.");
 
 	// Only accept happy response codes with sized bodies.
-	if ! (200..=399).contains(&res.status_code) {
-		panic!("AccurateRip returned {}.", res.status_code);
+	let status = res.status();
+	if ! status.is_success() && ! status.is_redirection() {
+		panic!("AccurateRip returned {status}.");
 	}
 
-	let out = res.into_bytes();
-	if out.is_empty() {
+	if let Ok(out) = res.bytes() && ! out.is_empty() {
+		// Try to cache for next time.
+		let _res = File::create(cache)
+			.and_then(|mut f| f.write_all(&out).and_then(|_| f.flush()));
+
+		out.to_vec()
+	}
+	else {
 		panic!("The AccurateRip drive offset server response was empty.");
 	}
-
-	// Try to cache for next time.
-	let _res = File::create(cache)
-		.and_then(|mut f| f.write_all(&out).and_then(|_| f.flush()));
-
-	out
 }
 
 /// # Nice Drive Caches.
