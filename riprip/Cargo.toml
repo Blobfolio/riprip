@@ -129,7 +129,7 @@ duplicate = true
 argyle = "0.15.*"
 dactyl = "0.13.*"
 oxford_join = "0.7.*"
-utc2k = "0.19.*"
+utc2k = "0.20.*"
 
 [dependencies.fyi_msg]
 version = "2.6.*"
