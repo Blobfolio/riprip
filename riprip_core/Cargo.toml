@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.5.7"
+version = "0.5.8"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -16,7 +16,7 @@ dactyl = "0.13.*"
 oxford_join = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.9.*"
-utc2k = "0.19.*"
+utc2k = "0.20.*"
 
 [dependencies.fyi_msg]
 version = "2.6.*"
@@ -26,9 +26,10 @@ features = [ "signals" ]
 version = "=2.0.0"
 default-features = false
 
-[dependencies.reqwest]
-version = "0.13.*"
-features = [ "blocking", "gzip" ]
+[dependencies.minreq]
+version = "3.0.0-rc.0"
+default-features = false
+features = [ "https" ]
 
 [build-dependencies]
 dactyl = "0.13.*"
@@ -39,9 +40,10 @@ version = "0.13.*"
 default-features = false
 features = [ "accuraterip" ]
 
-[build-dependencies.reqwest]
-version = "0.13.*"
-features = [ "blocking" ]
+[build-dependencies.minreq]
+version = "3.0.0-rc.0"
+default-features = false
+features = [ "https" ]
 
 [dev-dependencies]
 fastrand = "2"
