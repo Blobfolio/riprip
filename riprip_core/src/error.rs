@@ -145,6 +145,9 @@ pub enum RipRipError {
 	/// # CD read error.
 	CdRead,
 
+	/// # Operation not permitted.
+	CdReadNotPermitted,
+
 	/// # CD read operation terminal failure.
 	CdReadUnsupported,
 
@@ -246,7 +249,8 @@ impl fmt::Display for RipRipError {
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
 			Self::CachePath(s) => write!(f, "Invalid cache path {s}."),
 			Self::CdRead => f.write_str("Read error."),
-			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
+			Self::CdReadNotPermitted => f.write_str("Unable to read CD; settings are probably wrong."),
+			Self::CdReadUnsupported => f.write_str("Unable to read CD; driver doesn't support a particular operation."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
 			Self::Device(s) => write!(f, "Invalid device path {s}."),
 			Self::DeviceOpen(s) =>
