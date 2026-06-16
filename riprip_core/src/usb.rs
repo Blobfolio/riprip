@@ -121,13 +121,13 @@ impl CommandStatusWrapper {
 }
 
 #[derive(Debug, Default)]
-struct UsbEndpoints {
-    pub bulk_in: Option<u8>,
-    pub bulk_out: Option<u8>,
+struct Endpoints {
+    pub bulk_in: u8,
+    pub bulk_out: u8,
 }
 
-fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<UsbEndpoints, rusb::Error> {
-    let mut endpoints = UsbEndpoints::default();
+fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, rusb::Error> {
+    let mut endpoints = Endpoints::default();
 
     // 1. Get the active configuration descriptor
     let config_desc = device.active_config_descriptor()?;
@@ -148,10 +148,10 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<UsbEndpoin
                         // 5. Check the direction bitmask
                         match endpoint_desc.direction() {
                             Direction::In => {
-                                endpoints.bulk_in = Some(address);
+                                endpoints.bulk_in = address;
                             }
                             Direction::Out => {
-                                endpoints.bulk_out = Some(address);
+                                endpoints.bulk_out = address;
                             }
                         }
                     }
@@ -172,6 +172,8 @@ pub(super) struct LibusbInstance<C: UsbContext = GlobalContext> {
     device_handle: DeviceHandle<C>,
 
     interface_id: u8,
+
+    endpoints: Endpoints,
 
     cbw_tag: AtomicU32,
 }
@@ -230,6 +232,7 @@ impl<C: UsbContext> LibusbInstance<C> {
         Ok(Self {
             device_handle,
             interface_id,
+            endpoints,
             cbw_tag: AtomicU32::new(0x10000001),
         })
     }
@@ -248,10 +251,6 @@ impl LibusbInstance<GlobalContext> {
         Self::with_context(GlobalContext::default(), vid, pid)
     }
 }
-
-// --- SCSI / USB Constants ---
-const BULK_OUT_EP: u8 = 0x02; // Replace with our device's actual bulk OUT endpoint
-const BULK_IN_EP: u8 = 0x81; // Replace with our device's actual bulk IN endpoint
 
 impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
@@ -275,18 +274,18 @@ impl<T: UsbContext> LibusbInstance<T> {
         // 1. Send Command Block Wrapper (CBW)
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
-            .write_bulk(BULK_OUT_EP, &cbw_bytes, Duration::from_millis(2000))
+            .write_bulk(self.endpoints.bulk_out, &cbw_bytes, Duration::from_secs(2))
             .map_err(|_| RipRipError::CdRead)?;
 
         // 2. Data Transfer Phase
         if data_len > 0 {
             let data_res =
                 self.device_handle
-                    .read_bulk(BULK_IN_EP, buf, Duration::from_millis(5000));
+                    .read_bulk(self.endpoints.bulk_in, buf, Duration::from_secs(5));
 
             if let Err(rusb::Error::Pipe) = data_res {
                 self.device_handle
-                    .clear_halt(BULK_IN_EP)
+                    .clear_halt(self.endpoints.bulk_in)
                     .map_err(|_| RipRipError::CdRead)?;
             } else {
                 data_res.map_err(|_| RipRipError::CdRead)?;
@@ -296,7 +295,7 @@ impl<T: UsbContext> LibusbInstance<T> {
         // 3. Read Command Status Wrapper (CSW)
         let mut csw_raw = [0u8; CSW_LEN];
         self.device_handle
-            .read_bulk(BULK_IN_EP, &mut csw_raw, Duration::from_millis(2000))
+            .read_bulk(self.endpoints.bulk_in, &mut csw_raw, Duration::from_secs(2))
             .map_err(|_| RipRipError::CdRead)?;
 
         let csw = CommandStatusWrapper::from_bytes(&csw_raw);
