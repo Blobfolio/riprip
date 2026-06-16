@@ -63,6 +63,7 @@ mod disc;
 mod drive;
 mod error;
 mod rip;
+mod usb;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
@@ -74,6 +75,7 @@ pub(crate) use cache::{
 	track_path,
 };
 pub(crate) use cdio::LibcdioInstance;
+pub(crate) use usb::LibusbInstance;
 pub use cdtext::CDTextKind;
 pub(crate) use chk::{
 	chk_accuraterip,

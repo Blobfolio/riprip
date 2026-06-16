@@ -8,6 +8,7 @@ use crate::{
 	CD_DATA_SUBCHANNEL_SIZE,
 	KillSwitch,
 	LibcdioInstance,
+	LibusbInstance,
 	RipOptions,
 	RipRipError,
 	Sample,
@@ -39,7 +40,7 @@ impl RipBuffer {
 	/// See `LibcdioInstance::cache_bust` for the complete rant.
 	pub(crate) fn cache_bust(
 		&mut self,
-		cdio: &LibcdioInstance,
+		cdio: &LibusbInstance,
 		len: u32,
 		rng: &Range<i32>,
 		leadout: i32,
@@ -62,7 +63,7 @@ impl RipBuffer {
 	///
 	/// This will return any I/O related errors encountered, or if timestamp
 	/// verification fails, a desync error.
-	pub(crate) fn read_sector(&mut self, cdio: &LibcdioInstance, lsn: i32, opts: &RipOptions)
+	pub(crate) fn read_sector(&mut self, cdio: &LibusbInstance, lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Subchannel sync?
 		if opts.sync() {
@@ -91,7 +92,7 @@ impl RipBuffer {
 	/// will be marked as having an error.
 	///
 	/// Returns true if no C2 errors were reported.
-	fn read_c2(&mut self, cdio: &LibcdioInstance, lsn: i32, opts: &RipOptions)
+	fn read_c2(&mut self, cdio: &LibusbInstance, lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Just in case the read is bogus, let's flip all C2 to bad beforehand.
 		self.set_bad();
@@ -115,7 +116,7 @@ impl RipBuffer {
 	/// we're requesting.
 	///
 	/// In the case of a desync, the data will be added to the state as "bad".
-	fn read_subchannel(&mut self, cdio: &LibcdioInstance, lsn: i32)
+	fn read_subchannel(&mut self, cdio: &LibusbInstance, lsn: i32)
 	-> Result<(), RipRipError> {
 		cdio.read_subchannel(
 			&mut self.0[..usize::from(CD_DATA_SUBCHANNEL_SIZE)],

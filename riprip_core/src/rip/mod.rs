@@ -21,6 +21,7 @@ use crate::{
 	Disc,
 	KillSwitch,
 	LibcdioInstance,
+	LibusbInstance,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -805,8 +806,8 @@ struct RipShare<'a> {
 	/// # Last Read Track Number.
 	last_read_track: u8,
 
-	/// # CDIO Instance.
-	cdio: &'a LibcdioInstance,
+	/// # USB Instance.
+	cdio: &'a LibusbInstance,
 
 	/// # Progress Instance.
 	progress: &'a Progless,

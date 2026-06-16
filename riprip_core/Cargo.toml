@@ -26,6 +26,13 @@ features = [ "signals" ]
 version = "=2.0.0"
 default-features = false
 
+[dependencies.rusb]
+version = "0.9.4"
+
+[dependencies.nix]
+version = "0.31.3"
+features = ["user"]
+
 [dependencies.minreq]
 version = "3.0.0-rc.0"
 default-features = false

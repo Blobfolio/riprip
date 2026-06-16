@@ -15,6 +15,7 @@ use crate::{
 	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
+	LibusbInstance,
 	RipOptions,
 	Ripper,
 	RipRipError,
@@ -50,8 +51,8 @@ use std::{
 ///
 /// A loaded and parsed compact disc.
 pub struct Disc {
-	/// # CDIO Instance.
-	cdio: LibcdioInstance,
+	/// # USB Instance.
+	cdio: LibusbInstance,
 
 	/// # Disc Table of Contents.
 	toc: Toc,
@@ -281,7 +282,7 @@ impl Disc {
 	/// drive, the disc is unsupported, etc.
 	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		let cdio = LibcdioInstance::new(dev)?;
+		let cdio = LibusbInstance::new_global(None)?;
 
 		// Parse the table of contents into the pieces needed for `Toc`.
 		let mut audio = Vec::new();
@@ -350,8 +351,8 @@ impl Disc {
 	pub const fn toc(&self) -> &Toc { &self.toc }
 
 	#[must_use]
-	/// # Internal CDIO.
-	pub(super) const fn cdio(&self) -> &LibcdioInstance { &self.cdio }
+	/// # Internal USB.
+	pub(super) const fn cdio(&self) -> &LibusbInstance { &self.cdio }
 }
 
 impl Disc {
