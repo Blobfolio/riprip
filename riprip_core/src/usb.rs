@@ -13,7 +13,10 @@ use crate::{
 
 use dactyl::{traits::SaturatingFrom, NoHash};
 use nix::unistd::{setuid, Uid};
-use rusb::{Context, Device, DeviceHandle, Direction, GlobalContext, TransferType, UsbContext};
+use rusb::{
+    Context, Device, DeviceHandle, DeviceList, Direction, Error, GlobalContext, TransferType,
+    UsbContext,
+};
 
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -198,30 +201,80 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
     }
 }
 
-impl<C: UsbContext> LibusbInstance<C> {
-    pub(super) fn with_context(context: C, vid: u16, pid: u16) -> Result<Self, RipRipError> {
-        // let device_handle = context
-        //     .open_device_with_vid_pid(vid, pid)
-        //     .ok_or_else(|| RipRipError::DeviceOpen(Some("open_device_with_vid_pid".into())))?;
+fn find_and_open_device<C: UsbContext>(
+    devices: DeviceList<C>,
+    pid: u16,
+    vid: u16,
+) -> Result<DeviceHandle<C>, RipRipError> {
+    devices
+        .iter()
+        .find_map(|device| {
+            // If descriptor fails, skip to the next device
+            let desc = device.device_descriptor().ok()?;
 
-        let devices = context.devices().unwrap();
-
-        let mut handle = None;
-
-        for device in devices.iter() {
-            let desc = match device.device_descriptor() {
-                Ok(d) => d,
-                Err(_) => continue,
-            };
-
-            // Match against our target Vendor ID and Product ID safely
-            if desc.vendor_id() == vid && desc.product_id() == pid {
-                handle = Some(device.open().unwrap());
-                break;
+            if desc.product_id() == pid && desc.vendor_id() == vid {
+                Some(
+                    device
+                        .open()
+                        .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
+                )
+            } else {
+                None
             }
-        }
+        })
+        .unwrap_or(Err(RipRipError::DeviceOpen(Some(format!("{pid}:{vid}")))))
+}
 
-        let device_handle = handle.unwrap();
+fn find_and_open_cd_drive<C: UsbContext>(
+    devices: DeviceList<C>,
+) -> Result<DeviceHandle<C>, RipRipError> {
+    devices
+        .iter()
+        .find_map(|device| {
+            let config_desc = device.active_config_descriptor().ok()?;
+
+            let is_cd_drive = config_desc.interfaces().any(|interface| {
+                interface.descriptors().any(|desc| {
+                    let class = desc.class_code();
+                    let subclass = desc.sub_class_code();
+                    let protocol = desc.protocol_code();
+
+                    // Class 0x08 = Mass Storage
+                    // Subclass 0x02/0x05 = CD-ROM, 0x06 = SCSI Transparent (common for USB-SATA bridges)
+                    // Protocol 0x50 = Bulk-Only Transport
+                    class == 0x08
+                        && (subclass == 0x02 || subclass == 0x05 || subclass == 0x06)
+                        && protocol == 0x50
+                })
+            });
+
+            if is_cd_drive {
+                Some(
+                    device
+                        .open()
+                        .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
+                )
+            } else {
+                None
+            }
+        })
+        .unwrap_or(Err(RipRipError::DeviceOpen(None)))
+}
+
+impl<C: UsbContext> LibusbInstance<C> {
+    pub(super) fn with_context(
+        context: C,
+        device: Option<(u16, u16)>,
+    ) -> Result<Self, RipRipError> {
+        let devices = context
+            .devices()
+            .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
+
+        let device_handle = if let Some((pid, vid)) = device {
+            find_and_open_device(devices, pid, vid)?
+        } else {
+            find_and_open_cd_drive(devices)?
+        };
 
         let endpoints = detect_bulk_endpoints(&device_handle.device()).unwrap();
 
@@ -257,10 +310,8 @@ impl LibusbInstance<GlobalContext> {
     ///
     /// This will return an error if initialization fails, or if the provided
     /// vendor and product ids are obviously wrong.
-    pub(super) fn new_global(dev: Option<(u16, u16)>) -> Result<Self, RipRipError> {
-        let (vid, pid) = (0x18a5, 0x428);
-
-        Self::with_context(GlobalContext::default(), vid, pid)
+    pub(super) fn new_global(device: Option<(u16, u16)>) -> Result<Self, RipRipError> {
+        Self::with_context(GlobalContext::default(), device)
     }
 }
 
