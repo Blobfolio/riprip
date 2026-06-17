@@ -29,13 +29,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-const CBW_SIGNATURE: u32 = 0x43425355; // "USBC"
-const CSW_SIGNATURE: u32 = 0x53425355; // "USBS"
+/// The `CommandBlockWrapper` signature.
+const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
+/// The `CommandStatusWrapper` signature.
+const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
 const CBW_LEN: usize = 31;
 const CSW_LEN: usize = 13;
 
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// # Write Bulk Timeout.
+const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// # Read Bulk Timeout.
+const READ_BULK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// # Status Read Timeout.
+const STATUS_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 thread_local! {
     /// # Sector Shitlist.
@@ -257,7 +268,7 @@ impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
     /// and read back the resulting data payload.
     fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<(), RipRipError> {
-        // Read and increment the local counter attached directly to this specific drive
+        // Read and increment the local counter attached directly to this specific drive.
         let current_tag = self.cbw_tag.fetch_add(1, Ordering::SeqCst);
         let data_len = buf.len();
 
@@ -272,17 +283,15 @@ impl<T: UsbContext> LibusbInstance<T> {
         };
         cbw.cdb[..cmd.len()].copy_from_slice(&cmd);
 
-        // 1. Send Command Block Wrapper (CBW)
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
-            .write_bulk(self.endpoints.bulk_out, &cbw_bytes, Duration::from_secs(2))
+            .write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
             .map_err(|_| RipRipError::CdRead)?;
 
-        // 2. Data Transfer Phase
         if data_len > 0 {
             let data_res =
                 self.device_handle
-                    .read_bulk(self.endpoints.bulk_in, buf, Duration::from_secs(5));
+                    .read_bulk(self.endpoints.bulk_in, buf, READ_BULK_TIMEOUT);
 
             if let Err(rusb::Error::Pipe) = data_res {
                 self.device_handle
@@ -293,15 +302,14 @@ impl<T: UsbContext> LibusbInstance<T> {
             }
         }
 
-        // 3. Read Command Status Wrapper (CSW)
         let mut csw_raw = [0u8; CSW_LEN];
         self.device_handle
-            .read_bulk(self.endpoints.bulk_in, &mut csw_raw, Duration::from_secs(2))
+            .read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
             .map_err(|_| RipRipError::CdRead)?;
 
         let csw = CommandStatusWrapper::from_bytes(&csw_raw);
 
-        // 4. Verify Protocol Sync State against our local tag
+        // Verify protocol sync state against our local tag.
         if csw.signature != CSW_SIGNATURE || csw.tag != current_tag {
             return Err(RipRipError::Bug(
                 "Fatal Protocol Desync: CSW validation error.",
