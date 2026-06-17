@@ -694,10 +694,8 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
         cdb[0] = mmc::READ_CD;
         cdb[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio
 
-        // Convert the logical sector number (LSN) into the drive's expected absolute LBA value.
-        // Our code passes around LSNs. In SCSI MMC, the drive maps sectors via raw LBA.
-        // Because LBA = LSN + 150, we translate it here.
-        let lba = (lsn + 150) as u32;
+        // riprip's addressing parameters are already absolute LBAs.
+        let lba = lsn as u32;
         cdb[2..6].copy_from_slice(&lba.to_be_bytes());
 
         // Transfer exactly 1 sector at a time
