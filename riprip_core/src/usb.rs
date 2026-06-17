@@ -2,7 +2,8 @@
 # Rip Rip Hooray: `libusb` Wrappers
 
 Somewhat useful documentation:
-<https://docs.rs/rusb/latest/rusb/>
+- <https://docs.rs/rusb/0.9.4/rusb/>
+- <https://www.13thmonkey.org/documentation/SCSI/mmc1r09.pdf>
 */
 
 use crate::{
