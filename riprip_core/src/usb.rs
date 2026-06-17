@@ -180,7 +180,7 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints,
 /// Pretty much all CD-related communications run through a single `LibusbInstance`
 /// object.
 pub(super) struct LibusbInstance<C: UsbContext = GlobalContext> {
-    /// # Device.
+    /// # Device Handle.
     device_handle: DeviceHandle<C>,
 
     interface_id: u8,
@@ -192,9 +192,9 @@ pub(super) struct LibusbInstance<C: UsbContext = GlobalContext> {
 
 impl<C: UsbContext> Drop for LibusbInstance<C> {
     fn drop(&mut self) {
-        self.device_handle
-            .release_interface(self.interface_id)
-            .unwrap();
+        if let Err(e) = self.device_handle.release_interface(self.interface_id) {
+            eprintln!("Error releasing USB interface {}: {}", self.interface_id, e);
+        }
     }
 }
 
