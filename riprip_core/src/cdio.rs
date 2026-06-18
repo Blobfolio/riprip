@@ -28,6 +28,7 @@ use libcdio_sys::{
 	driver_id_t_DRIVER_DEVICE, // The equivalent of "use whatever's best".
 	driver_return_code_t_DRIVER_OP_NOT_PERMITTED,
 	driver_return_code_t_DRIVER_OP_SUCCESS,
+	driver_return_code_t_DRIVER_OP_UNSUPPORTED,
 	track_format_t_TRACK_FORMAT_AUDIO,
 	track_format_t_TRACK_FORMAT_ERROR,
 	track_format_t_TRACK_FORMAT_PSX,
@@ -600,8 +601,9 @@ impl LibcdioInstance {
 		};
 
 		match res {
-			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadUnsupported),
+			driver_return_code_t_DRIVER_OP_NOT_PERMITTED => Err(RipRipError::CdReadNotPermitted),
 			driver_return_code_t_DRIVER_OP_SUCCESS => Ok(()),
+			driver_return_code_t_DRIVER_OP_UNSUPPORTED => Err(RipRipError::CdReadUnsupported),
 			_ => {
 				SHITLIST.with(|q| q.borrow_mut().insert(lsn));
 				Err(RipRipError::CdRead)
