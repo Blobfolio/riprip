@@ -329,7 +329,7 @@ impl<T: UsbContext> LibusbInstance<T> {
         };
 
         // Read and increment the local counter attached directly to this specific drive.
-        let current_tag = self.cbw_tag.fetch_add(1, Ordering::SeqCst);
+        let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
         let data_len = buf.len();
 
         let mut cbw = CommandBlockWrapper {
@@ -346,7 +346,7 @@ impl<T: UsbContext> LibusbInstance<T> {
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
             .write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
-            .map_err(|_| RipRipError::CdRead)?;
+            .map_err(|e| RipRipError::Internal(e.to_string()))?;
 
         if data_len > 0 {
             let data_res =
@@ -356,16 +356,21 @@ impl<T: UsbContext> LibusbInstance<T> {
             if let Err(rusb::Error::Pipe) = data_res {
                 self.device_handle
                     .clear_halt(self.endpoints.bulk_in)
-                    .map_err(|_| RipRipError::CdRead)?;
+                    .map_err(|e| RipRipError::Internal(e.to_string()))?;
             } else {
-                data_res.map_err(|_| RipRipError::CdRead)?;
+                data_res.map_err(|e| RipRipError::Internal(e.to_string()))?;
             }
         }
 
         let mut csw_raw = [0u8; CSW_LEN];
-        self.device_handle
+        let len = self
+            .device_handle
             .read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
-            .map_err(|_| RipRipError::CdRead)?;
+            .map_err(|e| RipRipError::Internal(e.to_string()))?;
+
+        if len != CSW_LEN {
+            return Err(RipRipError::Bug("Short read during CSW status phase."));
+        }
 
         let csw = CommandStatusWrapper::from_bytes(&csw_raw);
 
@@ -376,11 +381,12 @@ impl<T: UsbContext> LibusbInstance<T> {
             ));
         }
 
-        if csw.status != 0 {
-            return Err(RipRipError::CdRead);
+        match csw.status {
+            0 => Ok(()),
+            1 => Err(RipRipError::CdRead),
+            2 => Err(RipRipError::Bug("USB BOT phase error.")),
+            _ => Err(RipRipError::Bug("Undefined status code.")),
         }
-
-        Ok(())
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
@@ -390,8 +396,6 @@ impl<T: UsbContext> LibusbInstance<T> {
         cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents
         cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1
 
-        // Enforce the 12-byte allocation length across bytes 7 and 8 (Big-Endian u16)
-        // This ensures the drive returns the header + the first track descriptor without stalling.
         let alloc_len: u16 = 12;
         cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
 
