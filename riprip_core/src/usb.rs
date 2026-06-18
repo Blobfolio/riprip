@@ -405,7 +405,8 @@ impl<T: UsbContext> LibusbInstance<T> {
         cmd[6] = idx;
 
         // 4 bytes for the TOC response header + 8 bytes for a single track descriptor entry.
-        cmd[8] = 12;
+        let alloc_len: u16 = 12;
+        cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
 
         let mut buf = [0u8; 12];
         self.exec_scsi_read(&cmd, &mut buf)?;
