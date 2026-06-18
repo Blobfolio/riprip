@@ -27,7 +27,7 @@ version = "=2.0.0"
 default-features = false
 
 [dependencies.minreq]
-version = "3.0.0-rc.0"
+version = "3.0.*"
 default-features = false
 features = [ "https" ]
 
@@ -41,7 +41,7 @@ default-features = false
 features = [ "accuraterip" ]
 
 [build-dependencies.minreq]
-version = "3.0.0-rc.0"
+version = "3.0.*"
 default-features = false
 features = [ "https" ]
 
