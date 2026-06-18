@@ -32,13 +32,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The `CommandBlockWrapper` signature.
-const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
-/// The `CommandStatusWrapper` signature.
-const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
-const CBW_LEN: usize = 31;
-const CSW_LEN: usize = 13;
-
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -69,7 +62,7 @@ mod spc {
     pub(super) const MODE_SENSE_10: u8 = 0x5A;
 }
 
-/// `mmc` (Multi-Media Commands) covers commands, tracks, and structures specifically unique to
+/// `mmc` (Multi-Media Commands) covers commands and tracks specifically unique to
 /// optical discs (CDs, DVDs, Blu-rays).
 mod mmc {
     pub(super) const READ_SUB_CHANNEL: u8 = 0x42;
@@ -91,63 +84,71 @@ mod mmc {
     pub(super) const SUB_FORMAT_ISRC: u8 = 0x03;
 }
 
-/// USB Interface Class, Subclass, and Protocol codes
-/// defined by the USB-IF (USB Implementers Forum).
+/// `usb-if` (USB Implementers Forum).
 mod usb_if {
     pub(super) const CLASS_MASS_STORAGE: u8 = 0x08;
     pub(super) const PROTOCOL_BULK_ONLY: u8 = 0x50;
 
     pub(super) const SUBCLASS_CD_ROM: u8 = 0x02;
-    pub(super) const SUBCLASS_SFF_8070I: u8 = 0x05;
-    pub(super) const SUBCLASS_SCSI_TRANSPARENT: u8 = 0x06;
+    pub(super) const SUBCLASS_SFF_8070I: u8 = 0x05; // Often used for legacy/ATAPI CD-ROMs.
+    pub(super) const SUBCLASS_SCSI_TRANSPARENT: u8 = 0x06; // Common for modern USB-SATA bridges.
 
-    pub(super) const OPTICAL_DRIVES: [u8; 3] = [
+    pub(super) const OPTICAL_DRIVE_SUBCLASSES: [u8; 3] = [
         SUBCLASS_CD_ROM,
         SUBCLASS_SFF_8070I,
         SUBCLASS_SCSI_TRANSPARENT,
     ];
-}
 
-#[derive(Debug, Default)]
-struct CommandBlockWrapper {
-    pub signature: u32,
-    pub tag: u32,
-    pub data_transfer_length: u32,
-    pub flags: u8,
-    pub lun: u8,
-    pub cb_length: u8,
-    pub cdb: [u8; 16],
-}
+    /// The `CommandBlockWrapper` signature.
+    pub(super) const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
 
-impl CommandBlockWrapper {
-    fn to_bytes(&self) -> [u8; CBW_LEN] {
-        let mut buf = [0u8; CBW_LEN];
-        buf[0..4].copy_from_slice(&self.signature.to_le_bytes());
-        buf[4..8].copy_from_slice(&self.tag.to_le_bytes());
-        buf[8..12].copy_from_slice(&self.data_transfer_length.to_le_bytes());
-        buf[12] = self.flags;
-        buf[13] = self.lun;
-        buf[14] = self.cb_length;
-        buf[15..31].copy_from_slice(&self.cdb);
-        buf
+    /// The `CommandStatusWrapper` signature.
+    pub(super) const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
+
+    pub(super) const CBW_LEN: usize = 31;
+    pub(super) const CSW_LEN: usize = 13;
+
+    #[derive(Debug, Default)]
+    pub(super) struct CommandBlockWrapper {
+        pub signature: u32,
+        pub tag: u32,
+        pub data_transfer_length: u32,
+        pub flags: u8,
+        pub lun: u8,
+        pub cb_length: u8,
+        pub cdb: [u8; 16],
     }
-}
 
-#[derive(Debug, Default)]
-struct CommandStatusWrapper {
-    pub signature: u32,
-    pub tag: u32,
-    pub data_residue: u32,
-    pub status: u8,
-}
+    impl CommandBlockWrapper {
+        pub(super) fn to_bytes(&self) -> [u8; CBW_LEN] {
+            let mut buf = [0u8; CBW_LEN];
+            buf[0..4].copy_from_slice(&self.signature.to_le_bytes());
+            buf[4..8].copy_from_slice(&self.tag.to_le_bytes());
+            buf[8..12].copy_from_slice(&self.data_transfer_length.to_le_bytes());
+            buf[12] = self.flags;
+            buf[13] = self.lun;
+            buf[14] = self.cb_length;
+            buf[15..31].copy_from_slice(&self.cdb);
+            buf
+        }
+    }
 
-impl CommandStatusWrapper {
-    fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
-        Self {
-            signature: u32::from_le_bytes(buf[0..4].try_into().unwrap()),
-            tag: u32::from_le_bytes(buf[4..8].try_into().unwrap()),
-            data_residue: u32::from_le_bytes(buf[8..12].try_into().unwrap()),
-            status: buf[12],
+    #[derive(Debug, Default)]
+    pub(super) struct CommandStatusWrapper {
+        pub signature: u32,
+        pub tag: u32,
+        pub data_residue: u32,
+        pub status: u8,
+    }
+
+    impl CommandStatusWrapper {
+        pub(super) fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
+            Self {
+                signature: u32::from_le_bytes(buf[0..4].try_into().unwrap()),
+                tag: u32::from_le_bytes(buf[4..8].try_into().unwrap()),
+                data_residue: u32::from_le_bytes(buf[8..12].try_into().unwrap()),
+                status: buf[12],
+            }
         }
     }
 }
@@ -245,7 +246,7 @@ fn find_and_open_cd_drive<C: UsbContext>(
             let is_cd_drive = config_desc.interfaces().any(|interface| {
                 interface.descriptors().any(|desc| {
                     desc.class_code() == usb_if::CLASS_MASS_STORAGE
-                        && (usb_if::OPTICAL_DRIVES.contains(&desc.sub_class_code()))
+                        && (usb_if::OPTICAL_DRIVE_SUBCLASSES.contains(&desc.sub_class_code()))
                         && desc.protocol_code() == usb_if::PROTOCOL_BULK_ONLY
                 })
             });
@@ -323,6 +324,10 @@ impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
     /// and read back the resulting data payload.
     fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<(), RipRipError> {
+        use usb_if::{
+            CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
+        };
+
         // Read and increment the local counter attached directly to this specific drive.
         let current_tag = self.cbw_tag.fetch_add(1, Ordering::SeqCst);
         let data_len = buf.len();
