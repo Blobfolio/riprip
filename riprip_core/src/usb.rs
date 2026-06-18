@@ -91,6 +91,23 @@ mod mmc {
     pub(super) const SUB_FORMAT_ISRC: u8 = 0x03;
 }
 
+/// USB Interface Class, Subclass, and Protocol codes
+/// defined by the USB-IF (USB Implementers Forum).
+mod usb_if {
+    pub(super) const CLASS_MASS_STORAGE: u8 = 0x08;
+    pub(super) const PROTOCOL_BULK_ONLY: u8 = 0x50;
+
+    pub(super) const SUBCLASS_CD_ROM: u8 = 0x02;
+    pub(super) const SUBCLASS_SFF_8070I: u8 = 0x05;
+    pub(super) const SUBCLASS_SCSI_TRANSPARENT: u8 = 0x06;
+
+    pub(super) const OPTICAL_DRIVES: [u8; 3] = [
+        SUBCLASS_CD_ROM,
+        SUBCLASS_SFF_8070I,
+        SUBCLASS_SCSI_TRANSPARENT,
+    ];
+}
+
 #[derive(Debug, Default)]
 struct CommandBlockWrapper {
     pub signature: u32,
@@ -144,23 +161,15 @@ struct Endpoints {
 fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, rusb::Error> {
     let mut endpoints = Endpoints::default();
 
-    // 1. Get the active configuration descriptor
     let config_desc = device.active_config_descriptor()?;
 
-    // 2. Iterate through interfaces (Mass Storage is typically Interface 0)
     for interface in config_desc.interfaces() {
-        // 3. Look at the primary setting (Setting 0)
         for interface_desc in interface.descriptors() {
-            // Optional: You can verify this is a Mass Storage Interface
-            // Class 0x08 = Mass Storage, SubClass 0x06 = SCSI Transparent, Protocol 0x50 = Bulk-Only (BOT)
-            if interface_desc.class_code() == 0x08 {
-                // Found Mass Storage interface! Let's parse its endpoints.
+            if interface_desc.class_code() == usb_if::CLASS_MASS_STORAGE {
                 for endpoint_desc in interface_desc.endpoint_descriptors() {
-                    // 4. Check if the endpoint transfer type is BULK
                     if endpoint_desc.transfer_type() == TransferType::Bulk {
                         let address = endpoint_desc.address();
 
-                        // 5. Check the direction bitmask
                         match endpoint_desc.direction() {
                             Direction::In => {
                                 endpoints.bulk_in = address;
@@ -235,16 +244,9 @@ fn find_and_open_cd_drive<C: UsbContext>(
 
             let is_cd_drive = config_desc.interfaces().any(|interface| {
                 interface.descriptors().any(|desc| {
-                    let class = desc.class_code();
-                    let subclass = desc.sub_class_code();
-                    let protocol = desc.protocol_code();
-
-                    // Class 0x08 = Mass Storage
-                    // Subclass 0x02/0x05 = CD-ROM, 0x06 = SCSI Transparent (common for USB-SATA bridges)
-                    // Protocol 0x50 = Bulk-Only Transport
-                    class == 0x08
-                        && (subclass == 0x02 || subclass == 0x05 || subclass == 0x06)
-                        && protocol == 0x50
+                    desc.class_code() == usb_if::CLASS_MASS_STORAGE
+                        && (usb_if::OPTICAL_DRIVES.contains(&desc.sub_class_code()))
+                        && desc.protocol_code() == usb_if::PROTOCOL_BULK_ONLY
                 })
             });
 
