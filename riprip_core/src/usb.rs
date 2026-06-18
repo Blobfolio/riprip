@@ -144,9 +144,9 @@ mod usb_if {
     impl CommandStatusWrapper {
         pub(super) fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
             Self {
-                signature: u32::from_le_bytes(buf[0..4].try_into().unwrap()),
-                tag: u32::from_le_bytes(buf[4..8].try_into().unwrap()),
-                data_residue: u32::from_le_bytes(buf[8..12].try_into().unwrap()),
+                signature: u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]),
+                tag: u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]),
+                data_residue: u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]),
                 status: buf[12],
             }
         }
