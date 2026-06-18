@@ -282,7 +282,9 @@ impl<C: UsbContext> LibusbInstance<C> {
 
         // Check if kernel driver is owning our device and detach it if so
         if let Ok(true) = device_handle.kernel_driver_active(interface_id) {
-            device_handle.detach_kernel_driver(interface_id).unwrap();
+            device_handle
+                .detach_kernel_driver(interface_id)
+                .map_err(|e| RipRipError::Device(e.to_string()))?;
         }
 
         device_handle.claim_interface(interface_id).unwrap();
