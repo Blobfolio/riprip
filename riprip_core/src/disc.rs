@@ -21,6 +21,7 @@ use crate::{
 	RipRipError,
 	SavedRips,
 };
+use crate::Cdda;
 use dactyl::NoHash;
 use fyi_msg::{
 	fyi_ansi::{

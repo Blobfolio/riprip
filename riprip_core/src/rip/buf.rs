@@ -3,12 +3,11 @@
 */
 
 use crate::{
+	Cdda,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_DATA_SUBCHANNEL_SIZE,
 	KillSwitch,
-	LibcdioInstance,
-	LibusbInstance,
 	RipOptions,
 	RipRipError,
 	Sample,
@@ -40,14 +39,14 @@ impl RipBuffer {
 	/// See `LibcdioInstance::cache_bust` for the complete rant.
 	pub(crate) fn cache_bust(
 		&mut self,
-		cdio: &LibusbInstance,
+		cdda: &impl Cdda,
 		len: u32,
 		rng: &Range<i32>,
 		leadout: i32,
 		backwards: bool,
 		killed: KillSwitch,
 	) {
-		cdio.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
+		cdda.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
 	}
 
 	/// # Read Sector.
@@ -63,17 +62,17 @@ impl RipBuffer {
 	///
 	/// This will return any I/O related errors encountered, or if timestamp
 	/// verification fails, a desync error.
-	pub(crate) fn read_sector(&mut self, cdio: &LibusbInstance, lsn: i32, opts: &RipOptions)
+	pub(crate) fn read_sector(&mut self, cdda: &impl Cdda, lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Subchannel sync?
 		if opts.sync() {
-			self.read_subchannel(cdio, lsn)?;
+			self.read_subchannel(cdda, lsn)?;
 
 			// Hash the data so we can compare it with the C2 version.
 			let hash = crc32fast::hash(self.data_slice());
 
 			// Read again with C2 details.
-			let good = self.read_c2(cdio, lsn, opts)?;
+			let good = self.read_c2(cdda, lsn, opts)?;
 
 			// Make sure we got the same data both times.
 			if hash == crc32fast::hash(self.data_slice()) { Ok(good) }
@@ -81,7 +80,7 @@ impl RipBuffer {
 			else { Err(RipRipError::CdRead) }
 		}
 		// Normal read.
-		else { self.read_c2(cdio, lsn, opts) }
+		else { self.read_c2(cdda, lsn, opts) }
 	}
 
 	/// # Read C2.
@@ -92,13 +91,13 @@ impl RipBuffer {
 	/// will be marked as having an error.
 	///
 	/// Returns true if no C2 errors were reported.
-	fn read_c2(&mut self, cdio: &LibusbInstance, lsn: i32, opts: &RipOptions)
+	fn read_c2(&mut self, cdda: &impl Cdda, lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Just in case the read is bogus, let's flip all C2 to bad beforehand.
 		self.set_bad();
 
 		// Okay, read away!
-		cdio.read_cd_c2(&mut self.0, lsn)?;
+		cdda.read_cd_c2(&mut self.0, lsn)?;
 
 		// How'd we do?
 		let good = self.all_good();
@@ -116,9 +115,9 @@ impl RipBuffer {
 	/// we're requesting.
 	///
 	/// In the case of a desync, the data will be added to the state as "bad".
-	fn read_subchannel(&mut self, cdio: &LibusbInstance, lsn: i32)
+	fn read_subchannel(&mut self, cdda: &impl Cdda, lsn: i32)
 	-> Result<(), RipRipError> {
-		cdio.read_subchannel(
+		cdda.read_subchannel(
 			&mut self.0[..usize::from(CD_DATA_SUBCHANNEL_SIZE)],
 			lsn,
 		)

@@ -56,6 +56,7 @@
 mod abort;
 mod barcode;
 mod cache;
+mod cdda;
 mod cdio;
 mod cdtext;
 mod chk;
@@ -74,6 +75,7 @@ pub(crate) use cache::{
 	state_path,
 	track_path,
 };
+pub(crate) use cdda::Cdda;
 pub(crate) use cdio::LibcdioInstance;
 pub(crate) use usb::LibusbInstance;
 pub use cdtext::CDTextKind;

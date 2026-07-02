@@ -10,7 +10,7 @@ mod cdtext;
 mod language;
 
 use crate::{
-    Barcode, CDTextKind, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE, CD_DATA_SIZE,
+    Barcode, Cdda, CDTextKind, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE, CD_DATA_SIZE,
     CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
 };
 
@@ -465,12 +465,8 @@ impl<T: UsbContext> LibusbInstance<T> {
     }
 }
 
-impl<C: rusb::UsbContext> LibusbInstance<C> {
-    /// # First Track Number.
-    ///
-    /// Return the first track number on the disc, almost always but not
-    /// necessarily `1`.
-    pub(super) fn first_track_num(&self) -> Result<u8, RipRipError> {
+impl<C: UsbContext> Cdda for LibusbInstance<C> {
+    fn first_track_num(&self) -> Result<u8, RipRipError> {
         let (first, _) = self.get_toc_header()?;
 
         if first == 0 {
@@ -480,20 +476,13 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
         }
     }
 
-    /// # Leadout.
-    ///
-    /// Return the LBA — including the leading `150` — of the disc leadout.
-    pub(super) fn leadout_lba(&self) -> Result<u32, RipRipError> {
+    fn leadout_lba(&self) -> Result<u32, RipRipError> {
         // In the SCSI MMC specification, the leadout track information is
         // explicitly queried using the standard magic track index 0xAA.
         self.track_lba_start(mmc::LEAD_OUT)
     }
 
-    /// # Get the Number of Tracks.
-    ///
-    /// Return the total number of tracks, or the last track number, however
-    /// you want to think of it.
-    pub(super) fn num_tracks(&self) -> Result<u8, RipRipError> {
+    fn num_tracks(&self) -> Result<u8, RipRipError> {
         let (first, last) = self.get_toc_header()?;
 
         if last == 0 {
@@ -504,11 +493,7 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
         }
     }
 
-    /// # Track Format.
-    ///
-    /// Returns `true` for audio, `false` for data, and an error for anything
-    /// else.
-    pub(super) fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
+    fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
         let (control_adr, _) = self
             .get_track_descriptor(idx)
             .map_err(|_| RipRipError::TrackFormat(idx))?;
@@ -520,11 +505,7 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
         Ok(!is_data)
     }
 
-    /// # Track LBA Start.
-    ///
-    /// Return the starting LBA — including the leading `150` — for a given
-    /// track.
-    pub(super) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
+    fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
         if idx == 0 {
             return Err(RipRipError::TrackNumber(0));
         }
@@ -539,57 +520,47 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
             Ok(lba + u32::from(CD_LEADIN))
         }
     }
-}
 
-impl<C: UsbContext> LibusbInstance<C> {
-    /// # CDText Value.
-    ///
-    pub(super) fn cdtext(&self, _idx: u8, _kind: CDTextKind) -> Option<String> {
-        // Implementation depends on whether we run a raw lead-in scan during boot.
-        // For standard direct SCSI layouts, this acts as an interface lookup hook.
+    fn cdtext(&self, _idx: u8, _kind: CDTextKind) -> Option<String> {
         None
     }
 
-    /// # Track ISRC.
-    ///
-    /// Fetches the International Standard Recording Code directly from the sub-Q channel
-    /// using SCSI opcode 0x42 (READ SUB-CHANNEL).
-    pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
-        let mut cmd = [0u8; 12];
-        cmd[0] = mmc::READ_SUB_CHANNEL;
-        cmd[1] = 0x02; // MSF Address Mode format flag (Bit 1 set)
-        cmd[2] = 0x40; // Sub-Q Channel Data Enable (Bit 6 set)
-        cmd[3] = mmc::SUB_FORMAT_ISRC; // Data Format: 0x03 (International Standard Recording Code)
-        cmd[6] = idx; // Target Track index parameter
+    // /// # Track ISRC.
+    // ///
+    // /// Fetches the International Standard Recording Code directly from the sub-Q channel
+    // /// using SCSI opcode 0x42 (READ SUB-CHANNEL).
+    // pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
+    //     let mut cmd = [0u8; 12];
+    //     cmd[0] = mmc::READ_SUB_CHANNEL;
+    //     cmd[1] = 0x02; // MSF Address Mode format flag (Bit 1 set)
+    //     cmd[2] = 0x40; // Sub-Q Channel Data Enable (Bit 6 set)
+    //     cmd[3] = mmc::SUB_FORMAT_ISRC; // Data Format: 0x03 (International Standard Recording Code)
+    //     cmd[6] = idx; // Target Track index parameter
 
-        cmd[8] = 24; // Allocation Length: 24 Bytes allocation footprint
+    //     cmd[8] = 24; // Allocation Length: 24 Bytes allocation footprint
 
-        let mut buf = [0u8; 24];
-        self.exec_scsi_read(&cmd, &mut buf).ok()?;
+    //     let mut buf = [0u8; 24];
+    //     self.exec_scsi_read(&cmd, &mut buf).ok()?;
 
-        // Verify sub-channel execution parameters
-        let data_format = buf[3];
-        let subq_element_valid = buf[4]; // Sub-Q channel data status indicator flag
+    //     // Verify sub-channel execution parameters
+    //     let data_format = buf[3];
+    //     let subq_element_valid = buf[4]; // Sub-Q channel data status indicator flag
 
-        // If the drive confirms sub-Q tracking sync data exists
-        if data_format == mmc::SUB_FORMAT_ISRC && subq_element_valid == 0x01 {
-            let is_isrc_valid = (buf[12] & 0x80) != 0; // Bit 7 maps existence state
-            if is_isrc_valid {
-                // Raw string slice extraction out of the fixed-offset 12-byte block
-                let raw_ascii = &buf[13..25];
-                return String::from_utf8(raw_ascii.to_vec())
-                    .ok()
-                    .map(|s| s.trim().to_string());
-            }
-        }
-        None
-    }
+    //     // If the drive confirms sub-Q tracking sync data exists
+    //     if data_format == mmc::SUB_FORMAT_ISRC && subq_element_valid == 0x01 {
+    //         let is_isrc_valid = (buf[12] & 0x80) != 0; // Bit 7 maps existence state
+    //         if is_isrc_valid {
+    //             // Raw string slice extraction out of the fixed-offset 12-byte block
+    //             let raw_ascii = &buf[13..25];
+    //             return String::from_utf8(raw_ascii.to_vec())
+    //                 .ok()
+    //                 .map(|s| s.trim().to_string());
+    //         }
+    //     }
+    //     None
+    // }
 
-    /// # MCN.
-    ///
-    /// Return the disc's associated UPC/EAN barcode, if present. Evaluates local caches
-    /// first, then fires a dedicated hardware request sequence.
-    pub(super) fn mcn(&self) -> Option<Barcode> {
+    fn mcn(&self) -> Option<Barcode> {
         if let Some(barcode_str) = self.cdtext(0, CDTextKind::Barcode) {
             if let Ok(barcode) = Barcode::try_from(barcode_str.as_bytes()) {
                 return Some(barcode);
@@ -599,42 +570,7 @@ impl<C: UsbContext> LibusbInstance<C> {
         self.mcn__()
     }
 
-    /// # MCN Fallback.
-    ///
-    /// Pulls the absolute Media Catalog Number via explicit SCSI sub-channel reads.
-    fn mcn__(&self) -> Option<Barcode> {
-        let mut cmd = [0u8; 12];
-        cmd[0] = mmc::READ_SUB_CHANNEL; // Opcode: READ SUB-CHANNEL
-        cmd[1] = 0x02; // MSF Address mode format flag
-        cmd[2] = 0x40; // Sub-Q Channel tracking bit
-        cmd[3] = mmc::SUB_FORMAT_MCN; // Data Format: 0x02 (Media Catalog Number)
-
-        // Request 26 bytes (Standard Sub-channel header + MCN data block size)
-        cmd[8] = 26;
-
-        let mut buf = [0u8; 26];
-        self.exec_scsi_read(&cmd, &mut buf).ok()?;
-
-        let data_format = buf[3];
-        let subq_element_valid = buf[4];
-
-        if data_format == mmc::SUB_FORMAT_MCN && subq_element_valid == 0x01 {
-            // Bit 7 tracks string validation rules (MCVAL flag in MMC spec)
-            let is_mcn_valid = (buf[12] & 0x80) != 0;
-            if is_mcn_valid {
-                let raw_ascii = &buf[13..26];
-                return Barcode::try_from(raw_ascii).ok();
-            }
-        }
-        None
-    }
-}
-
-impl<C: UsbContext> LibusbInstance<C> {
-    /// # Drive Vendor/Model.
-    ///
-    /// Fetch the drive vendor and/or model, if possible.
-    pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+    fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
         let mut cmd = [0u8; 12];
         cmd[0] = spc::INQUIRY;
         cmd[4] = 36; // Allocation Length: Standard INQUIRY data size is 36 bytes
@@ -661,136 +597,11 @@ impl<C: UsbContext> LibusbInstance<C> {
 
         DriveVendorModel::new(vendor_str, model_str).ok()
     }
-}
 
-impl<C: rusb::UsbContext> LibusbInstance<C> {
-    /// # Cache Bust.
-    ///
-    pub(super) fn cache_bust(
-        &self,
-        buf: &mut [u8],
-        mut todo: u32,
-        rng: &Range<i32>,
-        leadout: i32,
-        backwards: bool,
-        killed: KillSwitch,
-    ) {
-        if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
-            let now = Instant::now();
-
-            // If we're moving backwards, try after, then before.
-            if backwards {
-                self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
-                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
-            }
-            // Otherwise before, then after.
-            else {
-                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
-                self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
-            }
-        }
+    fn is_sector_bad(&self, lsn: i32) -> bool {
+        SHITLIST.with_borrow(|q| q.contains(&lsn))
     }
 
-    /// # Actually Cache Bust.
-    ///
-    /// This method attempts to read up to `todo` sectors between `from..to`.
-    /// It is separated from the main method only to cut down on repetitive
-    /// code.
-    fn cache_bust__(
-        &self,
-        buf: &mut [u8],
-        mut from: i32,
-        to: i32,
-        todo: &mut u32,
-        now: Instant,
-        killed: KillSwitch,
-    ) {
-        while from < to && 0 < *todo {
-            if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {
-                *todo = 0;
-                break;
-            }
-            if !SHITLIST.with_borrow(|q| q.contains(&from))
-                && self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
-            {
-                *todo -= 1;
-            }
-            from += 1;
-        }
-    }
-
-    /// # Read Data + C2.
-    ///
-    /// Read a single sector's worth of data and C2 error pointer information
-    /// into the buffer.
-    ///
-    /// ## Errors
-    ///
-    /// This will return an error if the read operation is unsupported or
-    /// otherwise fails.
-    pub(super) fn read_cd_c2(
-        &self,
-        buf: &mut [u8; CD_DATA_C2_SIZE as usize],
-        lsn: i32,
-    ) -> Result<(), RipRipError> {
-        // We can't read negative, so assume everything is good and null.
-        if lsn < 0 {
-            buf.fill(0);
-            return Ok(());
-        }
-
-        // Read it!
-        self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
-    }
-
-    /// # Read Data + Subchannel
-    ///
-    /// Read a single sector's worth of data and formatted 16-byte subchannel
-    /// information into the buffer. The subchannel data will be parsed to
-    /// confirm the timecode matches up with the LSN, where possible, and
-    /// trigger a sync error if that fails.
-    ///
-    /// ## Errors
-    ///
-    /// This will return an error if the read operation is unsupported or
-    /// otherwise fails, or if the timecode does not match the LSN.
-    pub(super) fn read_subchannel(&self, buf: &mut [u8], lsn: i32) -> Result<(), RipRipError> {
-        if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
-            return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
-        }
-
-        // We can't read negative, so assume everything is good and null.
-        if lsn < 0 {
-            buf.fill(0);
-            return Ok(());
-        }
-
-        // Read it!
-        // Subchannel parameter 2 maps to selection choice: "Raw Subchannel data (16 Bytes)"
-        self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
-
-        // We can only get timing information from ADR-1 (check lower nibble of control byte)
-        if 1 == (buf[usize::from(CD_DATA_SIZE)] & 0x0F) {
-            // Extract MSF (Minutes, Seconds, Frames) timecodes out of subchannel payload data indices
-            let m = buf[usize::from(CD_DATA_SIZE) + 7];
-            let s = buf[usize::from(CD_DATA_SIZE) + 8];
-            let f = buf[usize::from(CD_DATA_SIZE) + 9];
-
-            // Native safe safe-checked recalculation to convert MSF format to LSN offset bounds.
-            // Formula: (M * 60 * 75) + (S * 75) + F - 150
-            let parsed_lsn = (i32::from(m) * 60 * 75) + (i32::from(s) * 75) + i32::from(f) - 150;
-
-            if lsn != parsed_lsn {
-                return Err(RipRipError::SubchannelDesync);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// # Execute Read Command.
-    ///
-    /// Emits a raw 12-byte SCSI READ CD (0xBE) packet over the USB pipeline.
     #[inline]
     fn read_cd(
         &self,
@@ -831,5 +642,37 @@ impl<C: rusb::UsbContext> LibusbInstance<C> {
                 Err(RipRipError::CdRead)
             }
         }
+    }
+}
+
+impl<C: UsbContext> LibusbInstance<C> {
+    /// # MCN Fallback.
+    ///
+    /// Pulls the absolute Media Catalog Number via explicit SCSI sub-channel reads.
+    fn mcn__(&self) -> Option<Barcode> {
+        let mut cmd = [0u8; 12];
+        cmd[0] = mmc::READ_SUB_CHANNEL; // Opcode: READ SUB-CHANNEL
+        cmd[1] = 0x02; // MSF Address mode format flag
+        cmd[2] = 0x40; // Sub-Q Channel tracking bit
+        cmd[3] = mmc::SUB_FORMAT_MCN; // Data Format: 0x02 (Media Catalog Number)
+
+        // Request 26 bytes (Standard Sub-channel header + MCN data block size)
+        cmd[8] = 26;
+
+        let mut buf = [0u8; 26];
+        self.exec_scsi_read(&cmd, &mut buf).ok()?;
+
+        let data_format = buf[3];
+        let subq_element_valid = buf[4];
+
+        if data_format == mmc::SUB_FORMAT_MCN && subq_element_valid == 0x01 {
+            // Bit 7 tracks string validation rules (MCVAL flag in MMC spec)
+            let is_mcn_valid = (buf[12] & 0x80) != 0;
+            if is_mcn_valid {
+                let raw_ascii = &buf[13..26];
+                return Barcode::try_from(raw_ascii).ok();
+            }
+        }
+        None
     }
 }
