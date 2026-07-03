@@ -18,10 +18,9 @@ use cdtoc::{
 use crate::{
 	chk_accuraterip,
 	chk_ctdb,
+	Cdda,
 	Disc,
 	KillSwitch,
-	LibcdioInstance,
-	LibusbInstance,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -612,12 +611,12 @@ impl RipEntry {
 					);
 					share.log.add_cache_bust();
 					share.buf.cache_bust(
-						share.cdio,
+						share.cdda,
 						cache_len,
 						&rip_rng,
 						share.leadout,
 						opts.backwards(),
-						share.killed,
+						&share.killed,
 					);
 					set_progress_title(share.progress, self.track.number(), &title);
 				}
@@ -627,7 +626,7 @@ impl RipEntry {
 			// Read and patch!
 			any_read = true;
 			share.pass_reads += 1;
-			match share.buf.read_sector(share.cdio, read_lsn, opts) {
+			match share.buf.read_sector(share.cdda, read_lsn, opts) {
 				// Good is good!
 				Ok(all_good) => if ! share.killed.killed() {
 					// Patch the data, unless the user just aborted, as that
@@ -807,7 +806,7 @@ struct RipShare<'a> {
 	last_read_track: u8,
 
 	/// # USB Instance.
-	cdio: &'a LibusbInstance,
+	cdda: &'a dyn Cdda,
 
 	/// # Progress Instance.
 	progress: &'a Progless,
@@ -819,7 +818,7 @@ struct RipShare<'a> {
 impl<'a> RipShare<'a> {
 	#[expect(clippy::cast_possible_wrap, reason = "False positive.")]
 	/// # New Instance.
-	const fn new(disc: &'a Disc, progress: &'a Progless, killed: KillSwitch) -> Self {
+	fn new(disc: &'a Disc, progress: &'a Progless, killed: KillSwitch) -> Self {
 		Self {
 			buf: RipBuffer::new(),
 			log: RipLog::new(),
@@ -828,7 +827,7 @@ impl<'a> RipShare<'a> {
 			pass_reads: 0,
 			force_bust: false,
 			last_read_track: u8::MAX,
-			cdio: disc.cdio(),
+			cdda: &**disc.cdda(),
 			progress,
 			killed,
 		}

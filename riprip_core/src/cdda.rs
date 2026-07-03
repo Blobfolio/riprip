@@ -123,16 +123,16 @@ pub(super) trait Cdda {
         rng: &Range<i32>,
         leadout: i32,
         backwards: bool,
-        killed: KillSwitch,
+        killed: &KillSwitch,
     ) {
         if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
             let now = Instant::now();
             if backwards {
-                self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
-                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
+                self.cache_bust__(buf, rng.end, leadout, &mut todo, &now, killed);
+                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, &now, killed);
             } else {
-                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
-                self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
+                self.cache_bust__(buf, 0, rng.start - 1, &mut todo, &now, killed);
+                self.cache_bust__(buf, rng.end, leadout, &mut todo, &now, killed);
             }
         }
     }
@@ -148,8 +148,8 @@ pub(super) trait Cdda {
         mut from: i32,
         to: i32,
         todo: &mut u32,
-        now: Instant,
-        killed: KillSwitch,
+        now: &Instant,
+        killed: &KillSwitch,
     ) {
         while from < to && 0 < *todo {
             if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {

@@ -39,12 +39,12 @@ impl RipBuffer {
 	/// See `LibcdioInstance::cache_bust` for the complete rant.
 	pub(crate) fn cache_bust(
 		&mut self,
-		cdda: &impl Cdda,
+		cdda: &(impl Cdda + ?Sized),
 		len: u32,
 		rng: &Range<i32>,
 		leadout: i32,
 		backwards: bool,
-		killed: KillSwitch,
+		killed: &KillSwitch,
 	) {
 		cdda.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
 	}
@@ -62,7 +62,7 @@ impl RipBuffer {
 	///
 	/// This will return any I/O related errors encountered, or if timestamp
 	/// verification fails, a desync error.
-	pub(crate) fn read_sector(&mut self, cdda: &impl Cdda, lsn: i32, opts: &RipOptions)
+	pub(crate) fn read_sector(&mut self, cdda: &(impl Cdda + ?Sized), lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Subchannel sync?
 		if opts.sync() {
@@ -91,7 +91,7 @@ impl RipBuffer {
 	/// will be marked as having an error.
 	///
 	/// Returns true if no C2 errors were reported.
-	fn read_c2(&mut self, cdda: &impl Cdda, lsn: i32, opts: &RipOptions)
+	fn read_c2(&mut self, cdda: &(impl Cdda + ?Sized), lsn: i32, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		// Just in case the read is bogus, let's flip all C2 to bad beforehand.
 		self.set_bad();
@@ -115,7 +115,7 @@ impl RipBuffer {
 	/// we're requesting.
 	///
 	/// In the case of a desync, the data will be added to the state as "bad".
-	fn read_subchannel(&mut self, cdda: &impl Cdda, lsn: i32)
+	fn read_subchannel(&mut self, cdda: &(impl Cdda + ?Sized), lsn: i32)
 	-> Result<(), RipRipError> {
 		cdda.read_subchannel(
 			&mut self.0[..usize::from(CD_DATA_SUBCHANNEL_SIZE)],

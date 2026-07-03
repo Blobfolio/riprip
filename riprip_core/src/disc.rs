@@ -53,7 +53,7 @@ use std::{
 /// A loaded and parsed compact disc.
 pub struct Disc {
 	/// # USB Instance.
-	cdio: LibusbInstance,
+	cdda: Box<dyn Cdda>,
 
 	/// # Disc Table of Contents.
 	toc: Toc,
@@ -283,21 +283,21 @@ impl Disc {
 	/// drive, the disc is unsupported, etc.
 	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		let cdio = LibusbInstance::new_global(None)?;
+		let cdda = Box::new(LibusbInstance::new_global(None)?);
 
 		// Parse the table of contents into the pieces needed for `Toc`.
 		let mut audio = Vec::new();
 		let mut data = None;
 
 		// The inclusive range to search.
-		let from = cdio.first_track_num()?;
-		let to = cdio.num_tracks()?;
+		let from = cdda.first_track_num()?;
+		let to = cdda.num_tracks()?;
 		if to < from { return Err(RipRipError::NumTracks); }
 
 		// Grab the position and type for each track.
 		for idx in from..=to {
-			let start = cdio.track_lba_start(idx)?;
-			if cdio.track_format(idx)? {
+			let start = cdda.track_lba_start(idx)?;
+			if cdda.track_format(idx)? {
 				audio.push(start);
 			}
 			else {
@@ -309,23 +309,23 @@ impl Disc {
 		}
 
 		// Grab the leadout, then build the ToC.
-		let leadout = cdio.leadout_lba()?;
+		let leadout = cdda.leadout_lba()?;
 		let toc = Toc::from_parts(audio, data, leadout)?;
 
 		// Pull the barcode (if any).
-		let barcode = cdio.mcn();
+		let barcode = cdda.mcn();
 
 		// Pull the track ISRCs (if any).
 		let mut isrcs = HashMap::with_hasher(NoHash::default());
 		for t in toc.audio_tracks() {
 			let idx = t.number();
-			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc) {
+			if let Some(isrc) = cdda.cdtext(idx, CDTextKind::Isrc) {
 				isrcs.insert(idx, isrc);
 			}
 		}
 
 		// Finally done!
-		Ok(Self { cdio, toc, barcode, isrcs })
+		Ok(Self { cdda, toc, barcode, isrcs })
 	}
 }
 
@@ -338,7 +338,7 @@ impl Disc {
 	#[inline]
 	/// # Drive Vendor and Model.
 	pub fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-		self.cdio.drive_vendor_model()
+		self.cdda.drive_vendor_model()
 	}
 
 	#[must_use]
@@ -353,7 +353,7 @@ impl Disc {
 
 	#[must_use]
 	/// # Internal USB.
-	pub(super) const fn cdio(&self) -> &LibusbInstance { &self.cdio }
+	pub(super) fn cdda(&self) -> &Box<dyn Cdda> { &self.cdda }
 }
 
 impl Disc {
