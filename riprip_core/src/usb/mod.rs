@@ -10,8 +10,8 @@ mod cdtext;
 mod language;
 
 use crate::{
-    Barcode, Cdda, CDTextKind, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE, CD_DATA_SIZE,
-    CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
+    Barcode, CDTextKind, Cdda, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE,
+    CD_DATA_SIZE, CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
 };
 
 use dactyl::{traits::SaturatingFrom, NoHash};
@@ -245,13 +245,13 @@ pub(super) struct LibusbInstance<C: UsbContext = GlobalContext> {
     device_handle: DeviceHandle<C>,
 
     interface_id: u8,
-    
+
     endpoints: Endpoints,
-    
+
     cbw_tag: AtomicU32,
-    
+
     /// # CD-Text.
-    cdtext: Option<cdtext::Metadata>,
+    metadata: Option<cdtext::Metadata>,
 }
 
 impl<C: UsbContext> Drop for LibusbInstance<C> {
@@ -302,12 +302,12 @@ impl<C: UsbContext> LibusbInstance<C> {
             interface_id,
             endpoints,
             cbw_tag: AtomicU32::new(0x10000001),
-            cdtext: None,
+            metadata: None,
         };
         if let Some(buf) = instance.read_cdtext() {
             let opt = cdtext::Metadata::parse(&buf).map_err(|_| RipRipError::CdText)?;
             if let Some(metadata) = opt {
-                instance.cdtext.replace(metadata);
+                instance.metadata.replace(metadata);
             }
         }
 
@@ -521,8 +521,11 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
     }
 
     fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
-        if let Some(cdtext) = &self.cdtext {
-            return cdtext.layers[0].catalog.get(&(kind.into(), idx)).map(|s| s.clone());
+        if let Some(metadata) = &self.metadata {
+            return metadata.layers[0]
+                .catalog
+                .get(&(kind.into(), idx))
+                .map(|s| s.clone());
         }
         None
     }

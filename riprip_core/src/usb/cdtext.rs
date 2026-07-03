@@ -162,9 +162,9 @@ impl LanguageLayer {
             .and_then(|raw_string| {
                 let mut chars = raw_string.char_indices();
                 chars.next()?;
-                
+
                 let split_idx = chars.next().map(|(idx, _)| idx).unwrap_or(raw_string.len());
-                
+
                 Some(&raw_string[split_idx..])
             })
     }
@@ -385,12 +385,18 @@ impl Metadata {
 
 #[cfg(test)]
 mod test {
-    use super::{Field, Metadata, LanguageLayer};
+    use super::{Field, LanguageLayer, Metadata};
 
     fn dump(metadata: &Metadata) -> String {
         use std::fmt::Write;
 
-        fn dump_field(out: &mut String, label: &str, layer: &LanguageLayer, field: Field, track: u8) {
+        fn dump_field(
+            out: &mut String,
+            label: &str,
+            layer: &LanguageLayer,
+            field: Field,
+            track: u8,
+        ) {
             if let Some(val) = layer.catalog.get(&(field, track)) {
                 writeln!(out, "\t{}: {}", label, val).unwrap();
             }
@@ -403,7 +409,7 @@ mod test {
         for (idx, layer) in metadata.layers.iter().enumerate() {
             writeln!(&mut out, "Language {} '{:?}':", idx, layer.language).unwrap();
             writeln!(&mut out, "CD-TEXT for Disc:").unwrap();
-            
+
             dump_field(&mut out, "TITLE", layer, Field::Title, 0);
             dump_field(&mut out, "PERFORMER", layer, Field::Performer, 0);
             dump_field(&mut out, "SONGWRITER", layer, Field::Songwriter, 0);
