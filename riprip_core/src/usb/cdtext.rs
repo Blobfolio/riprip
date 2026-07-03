@@ -19,8 +19,11 @@ pub(super) enum Field {
     Message = 0x85,
     DiscId = 0x86,
     Genre = 0x87,
+    TocInfo = 0x88,
+    TocInfo2 = 0x89,
     /// UPC/EAN at the disc level or ISRC for individual tracks.
     UpcEan = 0x8E,
+    SizeInfo = 0x8F,
 }
 
 impl TryFrom<u8> for Field {
@@ -29,9 +32,22 @@ impl TryFrom<u8> for Field {
     #[expect(unsafe_code, reason = "For FFI.")]
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x80..=0x87 | 0x8E => unsafe { Ok(std::mem::transmute(value)) },
+            0x80..=0x89 | 0x8E..=0x8F => unsafe { Ok(std::mem::transmute(value)) },
             unmapped => Err(unmapped),
         }
+    }
+}
+
+impl Field {
+    /// Returns `true` if the field contains structured binary data and `false` if it contains
+    /// displayable text strings.
+    fn is_data(&self) -> bool {
+        matches!(self, Field::TocInfo | Field::TocInfo2 | Field::SizeInfo)
+    }
+
+    /// Convenience method to check if the field is text-based.
+    fn is_text(&self) -> bool {
+        !self.is_data()
     }
 }
 
@@ -169,7 +185,8 @@ impl LanguageLayer {
             })
     }
 
-    pub(super) fn genre_code(&self) -> Option<GenreCode> {
+    #[cfg(test)]
+    fn genre_code(&self) -> Option<GenreCode> {
         let genre_str = self.catalog.get(&(Field::Genre, 0))?;
         let bytes = genre_str.as_bytes();
 
@@ -180,16 +197,17 @@ impl LanguageLayer {
     }
 }
 
-#[derive(Debug, Default)]
-pub(super) struct Metadata {
-    pub layers: Vec<LanguageLayer>,
-}
-
 #[derive(Debug)]
 pub(super) enum Error {
     InvalidPack,
     InvalidEncoding,
-    Unsupported,
+    MissingSizeInfo,
+    UnsupportedExtension,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Metadata {
+    pub layers: Vec<LanguageLayer>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -245,10 +263,13 @@ impl Metadata {
         const PACK_LEN: usize = 18;
         const PACK_HEADER_LEN: usize = 4;
         const PACK_PAYLOAD_LEN: usize = 12;
+        const PACK_CRC_OFFSET: usize = PACK_HEADER_LEN + PACK_PAYLOAD_LEN;
+
+        type Pack = [u8; PACK_LEN];
 
         #[derive(Debug, Clone, Default)]
         struct Block {
-            pub buffer: HashMap<(u8, u8), Vec<u8>>,
+            buffer: HashMap<(Field, u8), Vec<u8>>,
         }
 
         #[derive(Debug, Default)]
@@ -258,36 +279,35 @@ impl Metadata {
         }
 
         impl Context {
-            pub(super) fn handle_pack(&mut self, pack: &[u8]) -> Result<(), Error> {
+            pub(super) fn handle_pack(&mut self, pack: &Pack) -> Result<(), Error> {
                 let header = &pack[0..PACK_HEADER_LEN];
-                let payload = &pack[PACK_HEADER_LEN..PACK_HEADER_LEN + PACK_PAYLOAD_LEN];
+                let payload = &pack[PACK_HEADER_LEN..PACK_CRC_OFFSET];
 
                 let (id1, id2, id3, id4) = (header[0], header[1], header[2], header[3]);
 
-                let pack_type = id1;
+                let Ok(field) = Field::try_from(id1) else {
+                    // Safe early exit per CD-Text specification guidelines.
+                    return Ok(());
+                };
                 let is_extension = (id2 & 0x80) != 0; // Extension Flag (0 = normal, 1 = extension)
                 if is_extension {
-                    return Err(Error::Unsupported);
+                    return Err(Error::UnsupportedExtension);
                 }
                 let mut track_number = id2 & 0x7F;
                 let sequence_number = id3;
                 let block_id = (id4 >> 4) & 0x07; // Bits 4-6 define the language block ID.
-                                                  // let char_pos = id4 & 0x0f;
 
                 self.language_blocks
                     .resize(block_id as usize + 1, Block::default());
 
-                // println!("{:?} {} {} {} {} {}", String::from_utf8_lossy(payload), pack_type, sequence_number, block_id, track_number, char_pos);
-
-                let is_text = pack_type != 0x8F;
-                if is_text {
+                if field.is_text() {
                     let char_pos = id4 & 0x0f;
                     let is_double_byte = (id4 & 0x80) != 0;
                     if !is_double_byte {
                         for b in payload {
                             if *b == 0x00 {
                                 if !self.text_buf.is_empty() {
-                                    let key = (pack_type, track_number);
+                                    let key = (field, track_number);
                                     self.language_blocks[block_id as usize]
                                         .buffer
                                         .insert(key, self.text_buf.clone());
@@ -296,13 +316,13 @@ impl Metadata {
                                 track_number += 1;
                             } else if *b == b'\t' {
                                 // Handle repetition.
-                                let last_key = (pack_type, track_number.saturating_sub(1));
+                                let last_key = (field, track_number.saturating_sub(1));
                                 let cloned_buf = self.language_blocks[block_id as usize]
                                     .buffer
                                     .get(&last_key)
                                     .cloned();
                                 if let Some(buf) = cloned_buf {
-                                    let key = (pack_type, track_number);
+                                    let key = (field, track_number);
                                     self.language_blocks[block_id as usize]
                                         .buffer
                                         .insert(key, buf);
@@ -315,7 +335,7 @@ impl Metadata {
                         todo!()
                     }
                 } else {
-                    let key = (pack_type, 0);
+                    let key = (field, 0);
                     let buffer = self.language_blocks[block_id as usize]
                         .buffer
                         .entry(key)
@@ -327,7 +347,7 @@ impl Metadata {
         }
 
         /// Validates a raw 18-byte CD-Text pack using its trailing 2-byte CRC.
-        fn is_pack_valid(pack: &[u8]) -> bool {
+        fn is_pack_valid(pack: &Pack) -> bool {
             use crc::{Algorithm, Crc};
 
             // Define the exact CD-Text CRC-16 specification parameters.
@@ -345,35 +365,47 @@ impl Metadata {
             const ENGINE: Crc<u16> = Crc::<u16>::new(&CDTEXT_CRC);
 
             // Extract the expected CRC from the pack.
-            let expected_crc = u16::from_be_bytes([pack[16], pack[17]]);
+            let crc = u16::from_be_bytes([pack[PACK_CRC_OFFSET], pack[PACK_CRC_OFFSET + 1]]);
 
-            ENGINE.checksum(&pack[0..16]) == expected_crc
+            ENGINE.checksum(&pack[0..PACK_CRC_OFFSET]) == crc
         }
 
         let mut context = Context::default();
-        for pack in pack_data.chunks_exact(PACK_LEN) {
+        let (chunks, _remainder) = pack_data.as_chunks::<PACK_LEN>();
+        for pack in chunks {
             if !is_pack_valid(pack) {
                 return Err(Error::InvalidPack);
             }
-            context.handle_pack(pack).unwrap();
+            context.handle_pack(pack)?;
         }
 
         let mut metadata = Self::default();
-        for (i, block) in context.language_blocks.iter().enumerate() {
-            let slice = block.buffer.get(&(0x8F, 0)).unwrap();
+        for (i, block) in context.language_blocks.into_iter().enumerate() {
+            let slice = block
+                .buffer
+                .get(&(Field::SizeInfo, 0))
+                .ok_or(Error::MissingSizeInfo)?;
             let size_info = SizeInfo::from_bytes(slice);
-            // dbg!(size_info);
-            let language = Language::try_from(size_info.lang_code[i]).unwrap();
-            let encoding = Encoding::try_from(size_info.char_code).unwrap();
+            let lang_code = size_info.lang_code[i];
+            let char_code = size_info.char_code;
+            let language = Language::try_from(lang_code).map_err(|_| Error::InvalidEncoding)?;
+            let encoding = Encoding::try_from(char_code).map_err(|_| Error::InvalidEncoding)?;
 
             let mut layer = LanguageLayer::default();
             layer.first_track = size_info.first_track;
             layer.last_track = size_info.last_track;
             layer.language = language;
-            for (&(pack_type, track), buf) in block.buffer.iter() {
-                if let Ok(field) = Field::try_from(pack_type) {
-                    let s = encoding.decode(&buf);
-                    layer.catalog.insert((field, track), s.clone());
+            for ((field, track), buf) in block.buffer {
+                match field {
+                    _ if field.is_text() => {
+                        layer.catalog.insert((field, track), encoding.decode(&buf));
+                    }
+                    Field::DiscId | Field::UpcEan => {
+                        if let Ok(s) = String::from_utf8(buf) {
+                            layer.catalog.insert((field, track), s);
+                        }
+                    }
+                    _ => (),
                 }
             }
             metadata.layers.push(layer);
