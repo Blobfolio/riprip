@@ -145,6 +145,9 @@ pub enum RipRipError {
 	/// # CDTOC passthrough.
 	Cdtoc(TocError),
 
+	/// # CD-Text error.
+	CdText,
+
 	/// # CD read error.
 	CdRead,
 
@@ -252,6 +255,7 @@ impl fmt::Display for RipRipError {
 			Self::CdRead => f.write_str("Read error."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; settings are probably wrong."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
+			Self::CdText => write!(f, "Unable to decode CD-Text."),
 			Self::Device(s) => write!(f, "Invalid device path {s}."),
 			Self::DeviceOpen(s) =>
 				if let Some(s) = s { write!(f, "Unable to open connection with {s}.") }

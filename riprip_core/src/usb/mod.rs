@@ -251,7 +251,7 @@ pub(super) struct LibusbInstance<C: UsbContext = GlobalContext> {
     cbw_tag: AtomicU32,
     
     /// # CD-Text.
-    cdtext: Option<Vec<u8>>,
+    cdtext: Option<cdtext::Metadata>,
 }
 
 impl<C: UsbContext> Drop for LibusbInstance<C> {
@@ -305,11 +305,10 @@ impl<C: UsbContext> LibusbInstance<C> {
             cdtext: None,
         };
         if let Some(buf) = instance.read_cdtext() {
-            let metadata = cdtext::Metadata::parse(&buf);
-            println!("{:#?}", metadata);
-            println!("{:?}", metadata.unwrap().unwrap().layers[0].album_title());
-
-            instance.cdtext.replace(buf);
+            let opt = cdtext::Metadata::parse(&buf).map_err(|_| RipRipError::CdText)?;
+            if let Some(metadata) = opt {
+                instance.cdtext.replace(metadata);
+            }
         }
 
         Ok(instance)
@@ -521,7 +520,10 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         }
     }
 
-    fn cdtext(&self, _idx: u8, _kind: CDTextKind) -> Option<String> {
+    fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
+        if let Some(cdtext) = &self.cdtext {
+            return cdtext.layers[0].catalog.get(&(kind.into(), idx)).map(|s| s.clone());
+        }
         None
     }
 

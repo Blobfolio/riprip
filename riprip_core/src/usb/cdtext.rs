@@ -1,4 +1,10 @@
+/*!
+# Rip Rip Hooray: CD-Text.
+*/
+
 use std::collections::HashMap;
+
+use crate::cdtext::CDTextKind;
 
 use super::language::Language;
 
@@ -25,6 +31,21 @@ impl TryFrom<u8> for Field {
         match value {
             0x80..=0x87 | 0x8E => unsafe { Ok(std::mem::transmute(value)) },
             unmapped => Err(unmapped),
+        }
+    }
+}
+
+impl From<CDTextKind> for Field {
+    fn from(value: CDTextKind) -> Self {
+        match value {
+            CDTextKind::Arranger => Self::Arranger,
+            CDTextKind::Barcode => Self::UpcEan,
+            CDTextKind::Composer => Self::Composer,
+            CDTextKind::Isrc => Self::UpcEan,
+            CDTextKind::Message => Self::Message,
+            CDTextKind::Performer => Self::Performer,
+            CDTextKind::Songwriter => Self::Songwriter,
+            CDTextKind::Title => Self::Title,
         }
     }
 }
