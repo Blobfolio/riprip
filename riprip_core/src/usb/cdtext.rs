@@ -279,7 +279,7 @@ impl Metadata {
         }
 
         impl Context {
-            pub(super) fn handle_pack(&mut self, pack: &Pack) -> Result<(), Error> {
+            pub(super) fn parse_pack(&mut self, pack: &Pack) -> Result<(), Error> {
                 let header = &pack[0..PACK_HEADER_LEN];
                 let payload = &pack[PACK_HEADER_LEN..PACK_CRC_OFFSET];
 
@@ -376,7 +376,7 @@ impl Metadata {
             if !is_pack_valid(pack) {
                 return Err(Error::InvalidPack);
             }
-            context.handle_pack(pack)?;
+            context.parse_pack(pack)?;
         }
 
         let mut metadata = Self::default();

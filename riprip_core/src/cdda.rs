@@ -1,5 +1,5 @@
 /*!
-# Rip Rip Hooray: Cdda trait (Compact Disc Digital Audio).
+# Rip Rip Hooray: CDDA (Compact Disc Digital Audio) Driver.
 
 This trait acts as an interface to an underlying optical drive driver, abstracting hardware-specific
 MMC commands and metadata extraction across implementations like `libcdio` or `libusb`.

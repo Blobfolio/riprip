@@ -52,7 +52,7 @@ use std::{
 ///
 /// A loaded and parsed compact disc.
 pub struct Disc {
-	/// # USB Instance.
+	/// # CDDA Driver.
 	cdda: Box<dyn Cdda>,
 
 	/// # Disc Table of Contents.
