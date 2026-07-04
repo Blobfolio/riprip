@@ -18,6 +18,10 @@ tempfile = "3.8.0"
 trimothy = "0.9.*"
 utc2k = "0.20.*"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-io-kit = "0.3.2"
+objc2-core-foundation = "0.3.2"
+
 [dependencies.fyi_msg]
 version = "2.6.*"
 features = [ "signals" ]

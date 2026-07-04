@@ -283,7 +283,9 @@ impl Disc {
 	/// drive, the disc is unsupported, etc.
 	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		let cdda = Box::new(LibusbInstance::new_global(None)?);
+		let ids = dev.and_then(|dev| crate::macos::get_device_desc(dev));
+
+		let cdda = Box::new(LibusbInstance::new_global(ids)?);
 
 		// Parse the table of contents into the pieces needed for `Toc`.
 		let mut audio = Vec::new();

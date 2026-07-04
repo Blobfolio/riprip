@@ -159,8 +159,8 @@ mod usb_if {
 
 fn find_and_open_device<C: UsbContext>(
     devices: DeviceList<C>,
-    pid: u16,
     vid: u16,
+    pid: u16,
 ) -> Result<DeviceHandle<C>, RipRipError> {
     devices
         .iter()
@@ -168,7 +168,7 @@ fn find_and_open_device<C: UsbContext>(
             // If descriptor fails, skip to the next device
             let desc = device.device_descriptor().ok()?;
 
-            if desc.product_id() == pid && desc.vendor_id() == vid {
+            if desc.vendor_id() == vid && desc.product_id() == pid {
                 Some(
                     device
                         .open()
@@ -271,8 +271,8 @@ impl<C: UsbContext> LibusbInstance<C> {
             .devices()
             .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
-        let device_handle = if let Some((pid, vid)) = device {
-            find_and_open_device(devices, pid, vid)?
+        let device_handle = if let Some((vid, pid)) = device {
+            find_and_open_device(devices, vid, pid)?
         } else {
             find_and_open_cd_drive(devices)?
         };
