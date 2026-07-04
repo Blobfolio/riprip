@@ -259,6 +259,10 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
         if let Err(e) = self.device_handle.release_interface(self.interface_id) {
             eprintln!("Error releasing USB interface {}: {}", self.interface_id, e);
         }
+
+        if let Err(e) = self.device_handle.attach_kernel_driver(self.interface_id) {
+            eprintln!("Error reattaching kernel driver for interface {}: {}", self.interface_id, e);
+        }
     }
 }
 
