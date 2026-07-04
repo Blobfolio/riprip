@@ -16,6 +16,7 @@ use crate::{
 	KillSwitch,
 	RipRipError,
 };
+use crate::Cdda;
 use dactyl::{
 	NoHash,
 	traits::SaturatingFrom,
@@ -212,103 +213,6 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # First Track Number.
-	///
-	/// Return the first track number on the disc, almost always but not
-	/// necessarily `1`.
-	pub(super) fn first_track_num(&self) -> Result<u8, RipRipError> {
-		// Safety: this is an FFI call…
-		let raw = unsafe {
-			libcdio_sys::cdio_get_first_track_num(self.as_ptr())
-		};
-
-		if raw == 0 { Err(RipRipError::FirstTrackNum) }
-		else { Ok(raw) }
-	}
-
-	/// # Leadout.
-	///
-	/// Return the LBA — including the leading `150` — of the disc leadout.
-	pub(super) fn leadout_lba(&self) -> Result<u32, RipRipError> {
-		let idx = u8::try_from(cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK)
-			.unwrap_or(170);
-		self.track_lba_start(idx)
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Get the Number of Tracks.
-	///
-	/// Return the total number of tracks, or the last track number, however
-	/// you want to think of it.
-	pub(super) fn num_tracks(&self) -> Result<u8, RipRipError> {
-		// Safety: this is an FFI call…
-		let raw = unsafe {
-			libcdio_sys::cdio_get_num_tracks(self.as_ptr())
-		};
-
-		if raw == 0 { Err(RipRipError::NumTracks) }
-		else { Ok(raw) }
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	#[expect(non_upper_case_globals, reason = "We don't control these.")]
-	/// # Track Format.
-	///
-	/// Returns `true` for audio, `false` for data, and an error for anything
-	/// else.
-	pub(super) fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
-		// Safety: this is an FFI call…
-		let kind = unsafe {
-			libcdio_sys::cdio_get_track_format(self.as_ptr(), idx)
-		};
-
-		match kind {
-			track_format_t_TRACK_FORMAT_AUDIO => Ok(true),
-			track_format_t_TRACK_FORMAT_PSX |
-			track_format_t_TRACK_FORMAT_ERROR => Err(RipRipError::TrackFormat(idx)),
-			_ => Ok(false),
-		}
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Track LBA Start.
-	///
-	/// Return the starting LBA — including the leading `150` — for a given
-	/// track.
-	pub(super) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
-		if idx == 0 { Err(RipRipError::TrackNumber(0)) }
-		else {
-			// Safety: this is an FFI call…
-			let raw = unsafe {
-				libcdio_sys::cdio_get_track_lsn(self.as_ptr(), idx)
-			};
-			if raw < 0 { Err(RipRipError::TrackLba(idx)) }
-			else { Ok(raw.abs_diff(0) + u32::from(CD_LEADIN)) }
-		}
-	}
-}
-
-impl LibcdioInstance {
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # CDText Value.
-	///
-	/// Return the value associated with the CDText field, if any. If the track
-	/// number is zero, data associated with the album will be returned.
-	pub(super) fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
-		let ptr = self.cdtext?;
-		// Safety: this is an FFI call…
-		let raw = unsafe {
-			libcdio_sys::cdtext_get_const(
-				ptr.cast(),
-				kind as u32,
-				idx,
-			)
-		};
-
-		c_char_to_string(raw)
-	}
-
 	/*
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Track ISRC.
@@ -330,20 +234,6 @@ impl LibcdioInstance {
 		else { None }
 	}
 	*/
-
-	/// # MCN.
-	///
-	/// Return the disc's associated UPC/EAN, if present. This will try CDText
-	/// first since that data is already loaded, and fall back to the direct
-	/// `cdio_get_mcn` request if that doesn't work.
-	pub(super) fn mcn(&self) -> Option<Barcode> {
-		// It probably isn't in CDText, but we already have it, so might as
-		// well check there first.
-		self.cdtext(0, CDTextKind::Barcode)
-			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
-			// Otherwise try pulling it directly.
-			.or_else(|| self.mcn__())
-	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
@@ -368,12 +258,92 @@ impl LibcdioInstance {
 	}
 }
 
-impl LibcdioInstance {
+impl Cdda for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Drive Vendor/Model.
-	///
-	/// Fetch the drive vendor and/or model, if possible.
-	pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+	fn first_track_num(&self) -> Result<u8, RipRipError> {
+		// Safety: this is an FFI call…
+		let raw = unsafe {
+			libcdio_sys::cdio_get_first_track_num(self.as_ptr())
+		};
+
+		if raw == 0 { Err(RipRipError::FirstTrackNum) }
+		else { Ok(raw) }
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn leadout_lba(&self) -> Result<u32, RipRipError> {
+		let idx = u8::try_from(cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK)
+			.unwrap_or(170);
+		self.track_lba_start(idx)
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn num_tracks(&self) -> Result<u8, RipRipError> {
+		// Safety: this is an FFI call…
+		let raw = unsafe {
+			libcdio_sys::cdio_get_num_tracks(self.as_ptr())
+		};
+
+		if raw == 0 { Err(RipRipError::NumTracks) }
+		else { Ok(raw) }
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	#[expect(non_upper_case_globals, reason = "We don't control these.")]
+	fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
+		// Safety: this is an FFI call…
+		let kind = unsafe {
+			libcdio_sys::cdio_get_track_format(self.as_ptr(), idx)
+		};
+
+		match kind {
+			track_format_t_TRACK_FORMAT_AUDIO => Ok(true),
+			track_format_t_TRACK_FORMAT_PSX |
+			track_format_t_TRACK_FORMAT_ERROR => Err(RipRipError::TrackFormat(idx)),
+			_ => Ok(false),
+		}
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
+		if idx == 0 { Err(RipRipError::TrackNumber(0)) }
+		else {
+			// Safety: this is an FFI call…
+			let raw = unsafe {
+				libcdio_sys::cdio_get_track_lsn(self.as_ptr(), idx)
+			};
+			if raw < 0 { Err(RipRipError::TrackLba(idx)) }
+			else { Ok(raw.abs_diff(0) + u32::from(CD_LEADIN)) }
+		}
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
+		let ptr = self.cdtext?;
+		// Safety: this is an FFI call…
+		let raw = unsafe {
+			libcdio_sys::cdtext_get_const(
+				ptr.cast(),
+				kind as u32,
+				idx,
+			)
+		};
+
+		c_char_to_string(raw)
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn mcn(&self) -> Option<Barcode> {
+		// It probably isn't in CDText, but we already have it, so might as
+		// well check there first.
+		self.cdtext(0, CDTextKind::Barcode)
+			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
+			// Otherwise try pulling it directly.
+			.or_else(|| self.mcn__())
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		let mut raw = cdio_hwinfo {
 			psz_vendor: [0; 9],
 			psz_model: [0; 17],
@@ -411,167 +381,14 @@ impl LibcdioInstance {
 		}
 		else { None }
 	}
-}
 
-impl LibcdioInstance {
-	/// # Cache Bust.
-	///
-	/// There is no simple, universal command to disable or flush a drive's
-	/// read buffer, so we have to do the next best thing: fill it with
-	/// useless crap!
-	///
-	/// There is _also_ no good way to know how much crap we need to fill,
-	/// because that would be too easy. Haha. Instead we'll just assume the
-	/// buffer is 4MiB, and read a teenie bit more than that. That should cover
-	/// most drives.
-	///
-	/// Thankfully, we're never reading the same sector back-to-back, so this
-	/// only has to be done once per track, not after each and every read.
-	///
-	/// For this to work, we have to be able to find regions outside the track
-	/// range. That should usually be possible, but won't _always_ be.
-	/// Sometimes we'll just have to live with cache.
-	///
-	/// Also of note: drives tend to slow down for read errors. This will
-	/// skip any sector which previously returned a read error to keep it from
-	/// being too terrible.
-	pub(super) fn cache_bust(
-		&self,
-		buf: &mut[u8],
-		mut todo: u32,
-		rng: &Range<i32>,
-		leadout: i32,
-		backwards: bool,
-		killed: KillSwitch,
-	) {
-		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
-			let now = Instant::now();
-
-			// If we're moving backwards, try after, then before.
-			if backwards {
-				self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
-				self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
-			}
-			// Otherwise before, then after.
-			else {
-				self.cache_bust__(buf, 0, rng.start - 1, &mut todo, now, killed);
-				self.cache_bust__(buf, rng.end, leadout, &mut todo, now, killed);
-			}
-		}
-	}
-
-	/// # Actually Cache Bust.
-	///
-	/// This method attempts to read up to `todo` sectors between `from..to`.
-	/// It is separated from the main method only to cut down on repetitive
-	/// code.
-	fn cache_bust__(
-		&self,
-		buf: &mut[u8],
-		mut from: i32,
-		to: i32,
-		todo: &mut u32,
-		now: Instant,
-		killed: KillSwitch,
-	) {
-		while from < to && 0 < *todo {
-			if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {
-				*todo = 0;
-				break;
-			}
-			if
-				! SHITLIST.with_borrow(|q| q.contains(&from)) &&
-				self.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok()
-			{ *todo -= 1; }
-			from += 1;
-		}
-	}
-
-	/// # Read Data + C2.
-	///
-	/// Read a single sector's worth of data and C2 error pointer information
-	/// into the buffer.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the read operation is unsupported or
-	/// otherwise fails.
-	pub(super) fn read_cd_c2(
-		&self,
-		buf: &mut [u8; CD_DATA_C2_SIZE as usize],
-		lsn: i32,
-	) -> Result<(), RipRipError> {
-		// We can't read negative, so assume everything is good and null.
-		if lsn < 0 {
-			for v in buf { *v = 0; }
-			return Ok(());
-		}
-
-		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Read Data + Subchannel
-	///
-	/// Read a single sector's worth of data and formatted 16-byte subchannel
-	/// information into the buffer. The subchannel data will be parsed to
-	/// confirm the timecode matches up with the LSN, where possible, and
-	/// trigger a sync error if that fails.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the read operation is unsupported or
-	/// otherwise fails, or if the timecode does not match the LSN.
-	pub(super) fn read_subchannel(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-	) -> Result<(), RipRipError> {
-		// The buffer and block size are equivalent for our purposes.
-		if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
-			return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
-		}
-
-		// We can't read negative, so assume everything is good and null.
-		if lsn < 0 {
-			for v in &mut *buf { *v = 0; }
-			return Ok(());
-		}
-
-		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
-
-		// We can only get timing information from ADR-1.
-		if 1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 {
-			// Confirm the subchannel LSN matches the LSN we requested.
-			let msf = libcdio_sys::msf_s {
-				m: buf[usize::from(CD_DATA_SIZE) + 7],
-				s: buf[usize::from(CD_DATA_SIZE) + 8],
-				f: buf[usize::from(CD_DATA_SIZE) + 9],
-			};
-			// Safety: this is an FFI call…
-			if lsn != unsafe { libcdio_sys::cdio_msf_to_lsn(&raw const msf) } {
-				return Err(RipRipError::SubchannelDesync);
-			}
-		}
-
-		// As good as we can do!
-		Ok(())
+	fn is_sector_bad(&self, lsn: i32) -> bool {
+		SHITLIST.with_borrow(|q| q.contains(&lsn))
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	#[inline]
-	/// # Execute Read Command.
-	///
-	/// This private method executes the million-argument MMC read command with
-	/// values prepared and verified by the caller.
-	///
-	/// ## Errors.
-	///
-	/// This will return an error if the read fails, but provides no other
-	/// sanity checks.
 	fn read_cd(
 		&self,
 		buf: &mut [u8],
