@@ -70,6 +70,7 @@ mod spc {
 mod mmc {
     pub(super) const READ_SUB_CHANNEL: u8 = 0x42;
     pub(super) const READ_TOC: u8 = 0x43;
+    pub(super) const GET_CONFIGURATION: u8 = 0x46;
     pub(super) const READ_CD: u8 = 0xBE;
 
     pub(super) const FIRST_TRACK: u8 = 0x01;
@@ -86,6 +87,10 @@ mod mmc {
 
     pub(super) const SUB_FORMAT_MCN: u8 = 0x02;
     pub(super) const SUB_FORMAT_ISRC: u8 = 0x03;
+
+    pub(super) const PROFILE_CD_ROM: u16 = 0x0008; // Read-only pressed CD.
+    pub(super) const PROFILE_CD_R: u16 = 0x0009; // Write-once CD-Recordable.
+    pub(super) const PROFILE_CD_RW: u16 = 0x000A; // Rewritable CD.
 }
 
 /// `usb-if` (USB Implementers Forum).
@@ -261,7 +266,10 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
         }
 
         if let Err(e) = self.device_handle.attach_kernel_driver(self.interface_id) {
-            eprintln!("Error reattaching kernel driver for interface {}: {}", self.interface_id, e);
+            eprintln!(
+                "Error reattaching kernel driver for interface {}: {}",
+                self.interface_id, e
+            );
         }
     }
 }
@@ -301,21 +309,24 @@ impl<C: UsbContext> LibusbInstance<C> {
             setuid(Uid::from_raw(original_uid)).unwrap();
         }
 
-        let mut instance = Self {
+        let mut out = Self {
             device_handle,
             interface_id,
             endpoints,
             cbw_tag: AtomicU32::new(0x10000001),
             metadata: None,
         };
-        if let Some(buf) = instance.read_cdtext() {
+
+        out.check_disc_mode__()?;
+
+        if let Some(buf) = out.read_cdtext() {
             let opt = cdtext::Metadata::parse(&buf).map_err(|_| RipRipError::CdText)?;
             if let Some(metadata) = opt {
-                instance.metadata.replace(metadata);
+                out.metadata.replace(metadata);
             }
         }
 
-        Ok(instance)
+        Ok(out)
     }
 }
 
@@ -327,6 +338,9 @@ impl LibusbInstance<GlobalContext> {
     /// This will return an error if initialization fails, or if the provided
     /// vendor and product ids are obviously wrong.
     pub(super) fn new_global(device: Option<(u16, u16)>) -> Result<Self, RipRipError> {
+        if let Some((vid, pid)) = device {
+            println!("{vid:04x}:{pid:04x}");
+        }
         Self::with_context(GlobalContext::default(), device)
     }
 }
@@ -335,6 +349,7 @@ impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
     /// and read back the resulting data payload.
     fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<(), RipRipError> {
+        // TODO: returns number or read bytes.
         use usb_if::{
             CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
         };
@@ -400,6 +415,47 @@ impl<T: UsbContext> LibusbInstance<T> {
         }
     }
 
+    /// # Check Disc Mode.
+    ///
+    /// This makes sure an audio CD is actually present in the drive.
+    ///
+    /// ## Errors
+    ///
+    /// Returns an error if the disc is missing or unsupported.
+    fn check_disc_mode__(&self) -> Result<(), RipRipError> {
+        // Worst-case: 4 bytes (header) + (99 tracks * 8 bytes) + 8 bytes (Lead-out).
+        const ALLOC_LEN: u16 = 4 + 99 * 8 + 8;
+
+        let mut cmd = [0u8; 10];
+        cmd[0] = mmc::READ_TOC;
+        cmd[1] = 0x00; // 0x00 = Native LBA Format.
+        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
+        cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
+
+        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+
+        let mut buf = vec![0u8; ALLOC_LEN as usize];
+        self.exec_scsi_read(&cmd, &mut buf)
+            .map_err(|_| RipRipError::DiscMode);
+
+        let first_track = buf[2];
+        let last_track = buf[3];
+
+        // Sanity check.
+        if last_track == 0 || first_track > last_track {
+            return Err(RipRipError::DiscMode);
+        }
+
+        // Search the descriptors. If an audio track is found, early exit,
+        // otherwise default to a DiscMode error.
+        buf[4..]
+            .chunks_exact(8)
+            .take((last_track - first_track + 1) as usize)
+            .any(|desc| (desc[1] & mmc::CTRL_DATA_TRACK) == 0)
+            .then_some(())
+            .ok_or(RipRipError::DiscMode)
+    }
+
     fn read_cdtext(&self) -> Option<Vec<u8>> {
         const TOC_LEN: u16 = 2048;
 
@@ -433,7 +489,7 @@ impl<T: UsbContext> LibusbInstance<T> {
         cmd[0] = mmc::READ_TOC;
         cmd[1] = 0x00; // 0x00 = Native LBA Format
         cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents
-        cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1
+        cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
 
         let alloc_len: u16 = 12;
         cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
