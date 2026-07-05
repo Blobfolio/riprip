@@ -6,8 +6,10 @@ Somewhat useful documentation:
 - <https://www.13thmonkey.org/documentation/SCSI/mmc1r09.pdf>
 */
 
+mod bot;
 mod cdtext;
 mod language;
+mod mmc;
 
 use crate::{
     Barcode, CDTextKind, Cdda, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE,
@@ -35,9 +37,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// # Cache Bust Timeout.
-const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
-
 /// # Write Bulk Timeout.
 const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -53,113 +52,6 @@ thread_local! {
     /// Keep track of sectors that trigger hard read errors so we don't
     /// accidentally try them in a cache-bust situation.
     static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
-}
-
-/// `spc` (SCSI Primary Commands) covers baseline commands that every SCSI device must understand,
-/// regardless of what it is (like INQUIRY or TEST_UNIT_READY).
-mod spc {
-    pub(super) const TEST_UNIT_READY: u8 = 0x00;
-    pub(super) const REQUEST_SENSE: u8 = 0x03;
-    pub(super) const INQUIRY: u8 = 0x12;
-    pub(super) const MODE_SELECT_10: u8 = 0x55;
-    pub(super) const MODE_SENSE_10: u8 = 0x5A;
-}
-
-/// `mmc` (Multi-Media Commands) covers commands and tracks specifically unique to
-/// optical discs (CDs, DVDs, Blu-rays).
-mod mmc {
-    pub(super) const READ_SUB_CHANNEL: u8 = 0x42;
-    pub(super) const READ_TOC: u8 = 0x43;
-    pub(super) const GET_CONFIGURATION: u8 = 0x46;
-    pub(super) const READ_CD: u8 = 0xBE;
-
-    pub(super) const FIRST_TRACK: u8 = 0x01;
-    pub(super) const LEAD_OUT: u8 = 0xAA;
-
-    pub(super) const TOC_FORMAT_TOC: u8 = 0x00;
-    pub(super) const TOC_FORMAT_SESSION: u8 = 0x01;
-    pub(super) const TOC_FORMAT_FULL: u8 = 0x02;
-    pub(super) const TOC_FORMAT_PMA: u8 = 0x03;
-    pub(super) const TOC_FORMAT_ATIP: u8 = 0x04;
-    pub(super) const TOC_FORMAT_CDTEXT: u8 = 0x05;
-
-    pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // 1 = Data track, 0 = Audio track
-
-    pub(super) const SUB_FORMAT_MCN: u8 = 0x02;
-    pub(super) const SUB_FORMAT_ISRC: u8 = 0x03;
-
-    pub(super) const PROFILE_CD_ROM: u16 = 0x0008; // Read-only pressed CD.
-    pub(super) const PROFILE_CD_R: u16 = 0x0009; // Write-once CD-Recordable.
-    pub(super) const PROFILE_CD_RW: u16 = 0x000A; // Rewritable CD.
-}
-
-/// `usb-if` (USB Implementers Forum).
-mod usb_if {
-    pub(super) const CLASS_MASS_STORAGE: u8 = 0x08;
-    pub(super) const PROTOCOL_BULK_ONLY: u8 = 0x50;
-
-    pub(super) const SUBCLASS_CD_ROM: u8 = 0x02;
-    pub(super) const SUBCLASS_SFF_8070I: u8 = 0x05; // Often used for legacy/ATAPI CD-ROMs.
-    pub(super) const SUBCLASS_SCSI_TRANSPARENT: u8 = 0x06; // Common for modern USB-SATA bridges.
-
-    pub(super) const OPTICAL_DRIVE_SUBCLASSES: [u8; 3] = [
-        SUBCLASS_CD_ROM,
-        SUBCLASS_SFF_8070I,
-        SUBCLASS_SCSI_TRANSPARENT,
-    ];
-
-    /// The `CommandBlockWrapper` signature.
-    pub(super) const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
-
-    /// The `CommandStatusWrapper` signature.
-    pub(super) const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
-
-    pub(super) const CBW_LEN: usize = 31;
-    pub(super) const CSW_LEN: usize = 13;
-
-    #[derive(Debug, Default)]
-    pub(super) struct CommandBlockWrapper {
-        pub signature: u32,
-        pub tag: u32,
-        pub data_transfer_length: u32,
-        pub flags: u8,
-        pub lun: u8,
-        pub cb_length: u8,
-        pub cdb: [u8; 16],
-    }
-
-    impl CommandBlockWrapper {
-        pub(super) fn to_bytes(&self) -> [u8; CBW_LEN] {
-            let mut buf = [0u8; CBW_LEN];
-            buf[0..4].copy_from_slice(&self.signature.to_le_bytes());
-            buf[4..8].copy_from_slice(&self.tag.to_le_bytes());
-            buf[8..12].copy_from_slice(&self.data_transfer_length.to_le_bytes());
-            buf[12] = self.flags;
-            buf[13] = self.lun;
-            buf[14] = self.cb_length;
-            buf[15..31].copy_from_slice(&self.cdb);
-            buf
-        }
-    }
-
-    #[derive(Debug, Default)]
-    pub(super) struct CommandStatusWrapper {
-        pub signature: u32,
-        pub tag: u32,
-        pub data_residue: u32,
-        pub status: u8,
-    }
-
-    impl CommandStatusWrapper {
-        pub(super) fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
-            Self {
-                signature: u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]),
-                tag: u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]),
-                data_residue: u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]),
-                status: buf[12],
-            }
-        }
-    }
 }
 
 fn find_and_open_device<C: UsbContext>(
@@ -196,9 +88,9 @@ fn find_and_open_cd_drive<C: UsbContext>(
 
             let is_cd_drive = config_desc.interfaces().any(|interface| {
                 interface.descriptors().any(|desc| {
-                    desc.class_code() == usb_if::CLASS_MASS_STORAGE
-                        && (usb_if::OPTICAL_DRIVE_SUBCLASSES.contains(&desc.sub_class_code()))
-                        && desc.protocol_code() == usb_if::PROTOCOL_BULK_ONLY
+                    desc.class_code() == bot::CLASS_MASS_STORAGE
+                        && (bot::OPTICAL_DRIVE_SUBCLASSES.contains(&desc.sub_class_code()))
+                        && desc.protocol_code() == bot::PROTOCOL_BULK_ONLY
                 })
             });
 
@@ -221,7 +113,7 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints,
     let endpoints = config_desc
         .interfaces()
         .flat_map(|iface| iface.descriptors())
-        .filter(|iface_desc| iface_desc.class_code() == usb_if::CLASS_MASS_STORAGE)
+        .filter(|iface_desc| iface_desc.class_code() == bot::CLASS_MASS_STORAGE)
         .flat_map(|iface_desc| iface_desc.endpoint_descriptors())
         .filter(|ep_desc| ep_desc.transfer_type() == TransferType::Bulk)
         .fold(Endpoints::default(), |mut acc, ep_desc| {
@@ -350,7 +242,7 @@ impl<T: UsbContext> LibusbInstance<T> {
     /// and read back the resulting data payload.
     fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<(), RipRipError> {
         // TODO: returns number or read bytes.
-        use usb_if::{
+        use bot::{
             CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
         };
 
@@ -423,6 +315,8 @@ impl<T: UsbContext> LibusbInstance<T> {
     ///
     /// Returns an error if the disc is missing or unsupported.
     fn check_disc_mode__(&self) -> Result<(), RipRipError> {
+        use RipRipError::DiscMode;
+
         // Worst-case: 4 bytes (header) + (99 tracks * 8 bytes) + 8 bytes (Lead-out).
         const ALLOC_LEN: u16 = 4 + 99 * 8 + 8;
 
@@ -435,15 +329,14 @@ impl<T: UsbContext> LibusbInstance<T> {
         cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
         let mut buf = vec![0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf)
-            .map_err(|_| RipRipError::DiscMode);
+        self.exec_scsi_read(&cmd, &mut buf).map_err(|_| DiscMode)?;
 
         let first_track = buf[2];
         let last_track = buf[3];
 
         // Sanity check.
         if last_track == 0 || first_track > last_track {
-            return Err(RipRipError::DiscMode);
+            return Err(DiscMode);
         }
 
         // Search the descriptors. If an audio track is found, early exit,
@@ -453,7 +346,7 @@ impl<T: UsbContext> LibusbInstance<T> {
             .take((last_track - first_track + 1) as usize)
             .any(|desc| (desc[1] & mmc::CTRL_DATA_TRACK) == 0)
             .then_some(())
-            .ok_or(RipRipError::DiscMode)
+            .ok_or(DiscMode)
     }
 
     fn read_cdtext(&self) -> Option<Vec<u8>> {
@@ -637,7 +530,7 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
 
     fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
         let mut cmd = [0u8; 12];
-        cmd[0] = spc::INQUIRY;
+        cmd[0] = mmc::spc::INQUIRY;
         cmd[4] = 36; // Allocation Length: Standard INQUIRY data size is 36 bytes
 
         let mut buf = [0u8; 36];
