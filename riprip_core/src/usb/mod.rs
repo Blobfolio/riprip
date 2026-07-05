@@ -215,6 +215,7 @@ impl<C: UsbContext> LibusbInstance<C> {
             metadata: None,
         };
 
+        // TODO: check for C2Mode296
         out.check_disc_mode__()?;
 
         if let Some(buf) = out.read_cdtext() {
