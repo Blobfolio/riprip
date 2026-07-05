@@ -107,8 +107,10 @@ fn find_and_open_cd_drive<C: UsbContext>(
         .unwrap_or(Err(RipRipError::DeviceOpen(None)))
 }
 
-fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, rusb::Error> {
-    let config_desc = device.active_config_descriptor()?;
+fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, RipRipError> {
+    let config_desc = device
+        .active_config_descriptor()
+        .map_err(|e| RipRipError::Device(e.to_string()))?;
 
     let endpoints = config_desc
         .interfaces()
@@ -181,7 +183,7 @@ impl<C: UsbContext> LibusbInstance<C> {
             find_and_open_cd_drive(devices)?
         };
 
-        let endpoints = detect_bulk_endpoints(&device_handle.device()).unwrap();
+        let endpoints = detect_bulk_endpoints(&device_handle.device())?;
 
         let interface_id = 0;
 
@@ -192,13 +194,17 @@ impl<C: UsbContext> LibusbInstance<C> {
                 .map_err(|e| RipRipError::Device(e.to_string()))?;
         }
 
-        device_handle.claim_interface(interface_id).unwrap();
+        device_handle
+            .claim_interface(interface_id)
+            .map_err(|_| RipRipError::Bug("Failed to claim iface."))?;
 
-        if let Ok(sudo_uid_str) = env::var("SUDO_UID") {
-            let original_uid: u32 = sudo_uid_str.parse().unwrap();
+        if let Ok(sudo_uid) = env::var("SUDO_UID") {
+            let original_uid: u32 = sudo_uid
+                .parse()
+                .map_err(|_| RipRipError::Bug("SUDO_UID is not a valid integer."))?;
 
-            // Drop privileges
-            setuid(Uid::from_raw(original_uid)).unwrap();
+            setuid(Uid::from_raw(original_uid))
+                .map_err(|_| RipRipError::Bug("Failed to drop process privileges."))?;
         }
 
         let mut out = Self {
