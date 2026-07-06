@@ -247,8 +247,7 @@ impl LibusbInstance<GlobalContext> {
 impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
     /// and read back the resulting data payload.
-    fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<(), RipRipError> {
-        // TODO: returns number or read bytes.
+    fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<usize, RipRipError> {
         use bot::{
             CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
         };
@@ -273,19 +272,24 @@ impl<T: UsbContext> LibusbInstance<T> {
             .write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
             .map_err(|e| RipRipError::Internal(e.to_string()))?;
 
-        if data_len > 0 {
-            let data_res =
-                self.device_handle
-                    .read_bulk(self.endpoints.bulk_in, buf, READ_BULK_TIMEOUT);
-
-            if let Err(rusb::Error::Pipe) = data_res {
-                self.device_handle
-                    .clear_halt(self.endpoints.bulk_in)
-                    .map_err(|e| RipRipError::Internal(e.to_string()))?;
-            } else {
-                data_res.map_err(|e| RipRipError::Internal(e.to_string()))?;
+        // Skip the read phase entirely if no data transfer is expected.
+        let transferred = if data_len > 0 {
+            match self
+                .device_handle
+                .read_bulk(self.endpoints.bulk_in, buf, READ_BULK_TIMEOUT)
+            {
+                Ok(n) => n,
+                Err(rusb::Error::Pipe) => {
+                    self.device_handle
+                        .clear_halt(self.endpoints.bulk_in)
+                        .map_err(|e| RipRipError::Internal(e.to_string()))?;
+                    0
+                }
+                Err(e) => return Err(RipRipError::Internal(e.to_string())),
             }
-        }
+        } else {
+            0
+        };
 
         let mut csw_raw = [0u8; CSW_LEN];
         let len = self
@@ -307,10 +311,10 @@ impl<T: UsbContext> LibusbInstance<T> {
         }
 
         match csw.status {
-            0 => Ok(()),
+            0 => Ok(transferred),
             1 => Err(RipRipError::CdRead),
             2 => Err(RipRipError::Bug("USB BOT phase error.")),
-            _ => Err(RipRipError::Bug("Undefined status code.")),
+            _ => Err(RipRipError::Bug("Illegal status code.")),
         }
     }
 
@@ -322,8 +326,6 @@ impl<T: UsbContext> LibusbInstance<T> {
     ///
     /// Returns an error if the disc is missing or unsupported.
     fn check_disc_mode__(&self) -> Result<(), RipRipError> {
-        use RipRipError::DiscMode;
-
         // Worst-case: 4 bytes (header) + (99 tracks * 8 bytes) + 8 bytes (Lead-out).
         const ALLOC_LEN: u16 = 4 + 99 * 8 + 8;
 
@@ -336,14 +338,15 @@ impl<T: UsbContext> LibusbInstance<T> {
         cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
         let mut buf = vec![0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf).map_err(|_| DiscMode)?;
+        self.exec_scsi_read(&cmd, &mut buf)
+            .or(Err(RipRipError::DiscMode))?;
 
         let first_track = buf[2];
         let last_track = buf[3];
 
         // Sanity check.
         if last_track == 0 || first_track > last_track {
-            return Err(DiscMode);
+            return Err(RipRipError::DiscMode);
         }
 
         // Search the descriptors. If an audio track is found, early exit,
@@ -353,7 +356,7 @@ impl<T: UsbContext> LibusbInstance<T> {
             .take((last_track - first_track + 1) as usize)
             .any(|desc| (desc[1] & mmc::CTRL_DATA_TRACK) == 0)
             .then_some(())
-            .ok_or(DiscMode)
+            .ok_or(RipRipError::DiscMode)
     }
 
     fn read_cdtext(&self) -> Option<Vec<u8>> {
@@ -567,7 +570,6 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         SHITLIST.with_borrow(|q| q.contains(&lsn))
     }
 
-    #[inline]
     fn read_cd(
         &self,
         buf: &mut [u8],
@@ -576,32 +578,32 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         sub: u8,
         _block_size: u16,
     ) -> Result<(), RipRipError> {
-        let mut cdb = [0u8; 12];
-        cdb[0] = mmc::READ_CD;
-        cdb[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio
+        let mut cmd = [0u8; 12];
+        cmd[0] = mmc::READ_CD;
+        cmd[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio
 
         // riprip's addressing parameters are already absolute LBAs.
         let lba = lsn as u32;
-        cdb[2..6].copy_from_slice(&lba.to_be_bytes());
+        cmd[2..6].copy_from_slice(&lba.to_be_bytes());
 
         // Transfer exactly 1 sector at a time
-        cdb[6..9].copy_from_slice(&1u32.to_be_bytes()[1..4]);
+        cmd[6..9].copy_from_slice(&1u32.to_be_bytes()[1..4]);
 
         // Byte 9 is the Selection Field flag byte:
         // Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
         // Bit 2..1: C2 Error Flag selection allocation (10b means include 294 bytes C2 space)
         let user_data_flag = 0x10;
         let c2_flag = if c2 { 0x02 } else { 0x00 };
-        cdb[9] = user_data_flag | c2_flag;
+        cmd[9] = user_data_flag | c2_flag;
 
         // Byte 10 defines the Sub-channel Selection configuration flags:
         // 0x00 = No sub-channel data requested
         // 0x02 = Raw Subchannel Data payload (16 bytes payload space)
-        cdb[10] = sub;
+        cmd[10] = sub;
 
         // Dispatch via your battle-tested SCSI core runner wrapper
-        match self.exec_scsi_read(&cdb, buf) {
-            Ok(()) => Ok(()),
+        match self.exec_scsi_read(&cmd, buf) {
+            Ok(_) => Ok(()),
             Err(_) => {
                 SHITLIST.with(|q| q.borrow_mut().insert(lsn));
                 Err(RipRipError::CdRead)
