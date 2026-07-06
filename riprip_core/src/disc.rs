@@ -292,8 +292,7 @@ impl Disc {
 			{
 				// On macOS, fallback to user-space USB communication via libusb. libcdio on macOS
 				// lacks C2 error reporting, and modern Macs lack integrated disc drives anyway.
-				let ids = dev.and_then(|dev| crate::macos::get_device_desc(dev));
-				Box::new(LibusbInstance::new_global(ids)?)
+				Box::new(LibusbInstance::new_global(dev)?)
 			}
 		};
 

@@ -63,8 +63,6 @@ mod chk;
 mod disc;
 mod drive;
 mod error;
-#[cfg(target_os = "macos")]
-mod macos;
 mod rip;
 mod usb;
 

@@ -9,6 +9,8 @@ Somewhat useful documentation:
 mod bot;
 mod cdtext;
 mod language;
+#[cfg(target_os = "macos")]
+mod macos;
 mod mmc;
 
 use crate::{
@@ -169,15 +171,17 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
 }
 
 impl<C: UsbContext> LibusbInstance<C> {
-    pub(super) fn with_context(
-        context: C,
-        device: Option<(u16, u16)>,
-    ) -> Result<Self, RipRipError> {
+    pub(super) fn with_context<P>(context: C, dev: Option<P>) -> Result<Self, RipRipError>
+    where
+        P: AsRef<Path>,
+    {
         let devices = context
             .devices()
             .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
-        let device_handle = if let Some((vid, pid)) = device {
+        let device_handle = if let Some(path) = dev {
+            let (vid, pid) = macos::get_device_desc(path).unwrap();
+            eprintln!("{vid:04x}:{pid:04x}");
             find_and_open_device(devices, vid, pid)?
         } else {
             find_and_open_cd_drive(devices)?
@@ -234,13 +238,13 @@ impl LibusbInstance<GlobalContext> {
     ///
     /// Initialize a new instance, optionally connecting to a specific device.
     ///
-    /// This will return an error if initialization fails, or if the provided
-    /// vendor and product ids are obviously wrong.
-    pub(super) fn new_global(device: Option<(u16, u16)>) -> Result<Self, RipRipError> {
-        if let Some((vid, pid)) = device {
-            println!("{vid:04x}:{pid:04x}");
-        }
-        Self::with_context(GlobalContext::default(), device)
+	/// This will return an error if initialization fails, or if the provided
+	/// device path is obviously wrong.
+    pub(super) fn new_global<P>(dev: Option<P>) -> Result<Self, RipRipError>
+    where
+        P: AsRef<Path>,
+    {
+        Self::with_context(GlobalContext::default(), dev)
     }
 }
 
