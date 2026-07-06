@@ -5,14 +5,21 @@ Provides opcodes, profiles, and format constants for SCSI MMC and core SPC comma
 used to inspect and read audio CDs.
 */
 
+// SCSI Opcodes
 pub(super) const READ_SUB_CHANNEL: u8 = 0x42;
 pub(super) const READ_TOC: u8 = 0x43;
 pub(super) const GET_CONFIGURATION: u8 = 0x46;
 pub(super) const READ_CD: u8 = 0xBE;
 
+// Architectural Constraints
 pub(super) const FIRST_TRACK: u8 = 0x01;
 pub(super) const LEAD_OUT: u8 = 0xAA;
 
+// READ_TOC Time/Address Format
+pub(super) const FORMAT_LBA: u8 = 0x00;
+pub(super) const FORMAT_MSF: u8 = 0x02;
+
+// READ_TOC Format Codes
 pub(super) const TOC_FORMAT_TOC: u8 = 0x00;
 pub(super) const TOC_FORMAT_SESSION: u8 = 0x01;
 pub(super) const TOC_FORMAT_FULL: u8 = 0x02;
@@ -22,6 +29,7 @@ pub(super) const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
 
+// READ_SUB_CHANNEL Data Formats
 pub(super) const SUB_FORMAT_MCN: u8 = 0x02;
 pub(super) const SUB_FORMAT_ISRC: u8 = 0x03;
 

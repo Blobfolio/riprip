@@ -238,8 +238,8 @@ impl LibusbInstance<GlobalContext> {
     ///
     /// Initialize a new instance, optionally connecting to a specific device.
     ///
-	/// This will return an error if initialization fails, or if the provided
-	/// device path is obviously wrong.
+    /// This will return an error if initialization fails, or if the provided
+    /// device path is obviously wrong.
     pub(super) fn new_global<P>(dev: Option<P>) -> Result<Self, RipRipError>
     where
         P: AsRef<Path>,
@@ -335,13 +335,13 @@ impl<T: UsbContext> LibusbInstance<T> {
 
         let mut cmd = [0u8; 10];
         cmd[0] = mmc::READ_TOC;
-        cmd[1] = 0x00; // 0x00 = Native LBA Format.
+        cmd[1] = mmc::FORMAT_LBA;
         cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
         cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
 
         cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = vec![0u8; ALLOC_LEN as usize];
+        let mut buf = [0u8; ALLOC_LEN as usize];
         self.exec_scsi_read(&cmd, &mut buf)
             .or(Err(RipRipError::DiscMode))?;
 
@@ -364,17 +364,16 @@ impl<T: UsbContext> LibusbInstance<T> {
     }
 
     fn read_cdtext(&self) -> Option<Vec<u8>> {
-        const TOC_LEN: u16 = 2048;
+        const ALLOC_LEN: u16 = 2048;
 
         let mut cmd = [0u8; 10];
         cmd[0] = mmc::READ_TOC;
         cmd[2] = mmc::TOC_FORMAT_CDTEXT;
         cmd[6] = 0x00; // Track number to start reading from (0 = entire disc).
 
-        let alloc_len = TOC_LEN;
-        cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
+        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = vec![0u8; TOC_LEN as usize];
+        let mut buf = vec![0u8; ALLOC_LEN as usize];
         self.exec_scsi_read(&cmd, &mut buf).ok()?;
 
         let len = u16::from_be_bytes([buf[0], buf[1]]);
@@ -392,16 +391,17 @@ impl<T: UsbContext> LibusbInstance<T> {
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-        let mut cmd = [0u8; 12];
+        const ALLOC_LEN: u16 = 12;
+
+        let mut cmd = [0u8; 10];
         cmd[0] = mmc::READ_TOC;
-        cmd[1] = 0x00; // 0x00 = Native LBA Format
-        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents
+        cmd[1] = mmc::FORMAT_LBA;
+        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
         cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
 
-        let alloc_len: u16 = 12;
-        cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
+        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; 12];
+        let mut buf = [0u8; ALLOC_LEN as usize];
         self.exec_scsi_read(&cmd, &mut buf)?;
 
         let first_track = buf[2];
@@ -411,17 +411,18 @@ impl<T: UsbContext> LibusbInstance<T> {
     }
 
     fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
-        let mut cmd = [0u8; 12];
+        const ALLOC_LEN: u16 = 12;
+
+        let mut cmd = [0u8; 10];
         cmd[0] = mmc::READ_TOC;
-        cmd[1] = 0x00; // 0x00 = Native LBA Format
-        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents
+        cmd[1] = mmc::FORMAT_LBA;
+        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
         cmd[6] = idx;
 
         // 4 bytes for the TOC response header + 8 bytes for a single track descriptor entry.
-        let alloc_len: u16 = 12;
-        cmd[7..9].copy_from_slice(&alloc_len.to_be_bytes());
+        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; 12];
+        let mut buf = [0u8; ALLOC_LEN as usize];
         self.exec_scsi_read(&cmd, &mut buf)?;
 
         let control_adr = buf[5];
@@ -584,18 +585,18 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
     ) -> Result<(), RipRipError> {
         let mut cmd = [0u8; 12];
         cmd[0] = mmc::READ_CD;
-        cmd[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio
+        cmd[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio.
 
         // riprip's addressing parameters are already absolute LBAs.
         let lba = lsn as u32;
         cmd[2..6].copy_from_slice(&lba.to_be_bytes());
 
-        // Transfer exactly 1 sector at a time
+        // Transfer exactly 1 sector at a time.
         cmd[6..9].copy_from_slice(&1u32.to_be_bytes()[1..4]);
 
         // Byte 9 is the Selection Field flag byte:
         // Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
-        // Bit 2..1: C2 Error Flag selection allocation (10b means include 294 bytes C2 space)
+        // Bit 2..1: C2 Error Flag selection allocation (0x02 means include 294 bytes C2 space)
         let user_data_flag = 0x10;
         let c2_flag = if c2 { 0x02 } else { 0x00 };
         cmd[9] = user_data_flag | c2_flag;
@@ -605,7 +606,6 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         // 0x02 = Raw Subchannel Data payload (16 bytes payload space)
         cmd[10] = sub;
 
-        // Dispatch via your battle-tested SCSI core runner wrapper
         match self.exec_scsi_read(&cmd, buf) {
             Ok(_) => Ok(()),
             Err(_) => {
@@ -621,16 +621,18 @@ impl<C: UsbContext> LibusbInstance<C> {
     ///
     /// Pulls the absolute Media Catalog Number via explicit SCSI sub-channel reads.
     fn mcn__(&self) -> Option<Barcode> {
-        let mut cmd = [0u8; 12];
-        cmd[0] = mmc::READ_SUB_CHANNEL; // Opcode: READ SUB-CHANNEL
-        cmd[1] = 0x02; // MSF Address mode format flag
+        const ALLOC_LEN: u16 = 26;
+
+        let mut cmd = [0u8; 10];
+        cmd[0] = mmc::READ_SUB_CHANNEL;
+        cmd[1] = mmc::FORMAT_MSF;
         cmd[2] = 0x40; // Sub-Q Channel tracking bit
-        cmd[3] = mmc::SUB_FORMAT_MCN; // Data Format: 0x02 (Media Catalog Number)
+        cmd[3] = mmc::SUB_FORMAT_MCN;
 
         // Request 26 bytes (Standard Sub-channel header + MCN data block size)
-        cmd[8] = 26;
+        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; 26];
+        let mut buf = [0u8; ALLOC_LEN as usize];
         self.exec_scsi_read(&cmd, &mut buf).ok()?;
 
         let data_format = buf[3];
