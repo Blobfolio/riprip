@@ -1,4 +1,5 @@
 use std::ffi::CString;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use objc2_core_foundation::{
@@ -14,13 +15,14 @@ use objc2_io_kit::{
 /// Retrieves the `(Vendor ID, Product ID)` for a macOS device path (e.g., `"/dev/disk4"`).
 ///
 /// Returns `None` if the path is invalid or not a USB device.
-pub(super) fn get_device_desc<P>(dev_path: P) -> Option<(u16, u16)>
+pub(super) fn get_device_desc<P>(dev_path: &P) -> Option<(u16, u16)>
 where
     P: AsRef<Path>,
 {
-    let file_name = dev_path.as_ref().file_name()?;
-
-    let bsd_name = CString::new(file_name.to_string_lossy().into_owned()).ok()?;
+    let bsd_name = dev_path
+        .as_ref()
+        .file_name()
+        .and_then(|name| CString::new(name.as_bytes()).ok())?;
 
     // Find the specific IOMedia service for this BSD name.
     let matching_mut = unsafe { IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr()) };
@@ -28,7 +30,11 @@ where
         return None;
     }
 
-    let matching: Option<CFRetained<CFDictionary>> = unsafe { std::mem::transmute(matching_mut) };
+    let matching = matching_mut.map(|dict| {
+        // `CFMutableDictionary` structurally inherits from `CFDictionary`, so reinterpreting it
+        // as its base type is entirely valid.
+        unsafe { CFRetained::cast_unchecked::<CFDictionary>(dict) }
+    });
 
     let mut iterator = 0;
     let res = unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &mut iterator) };

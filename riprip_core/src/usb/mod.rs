@@ -180,9 +180,13 @@ impl<C: UsbContext> LibusbInstance<C> {
             .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
         let device_handle = if let Some(path) = dev {
-            let (vid, pid) = macos::get_device_desc(path).unwrap();
-            eprintln!("{vid:04x}:{pid:04x}");
-            find_and_open_device(devices, vid, pid)?
+            if let Some((vid, pid)) = macos::get_device_desc(&path) {
+                // eprintln!("{vid:04x}:{pid:04x}");
+                find_and_open_device(devices, vid, pid)?
+            } else {
+                let path_str = path.as_ref().to_string_lossy().to_string();
+                return Err(RipRipError::DeviceOpen(Some(path_str)));
+            }
         } else {
             find_and_open_cd_drive(devices)?
         };
