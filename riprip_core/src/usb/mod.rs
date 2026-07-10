@@ -312,7 +312,7 @@ impl<T: UsbContext> LibusbInstance<T> {
         let csw = CommandStatusWrapper::from_bytes(&csw_raw);
 
         // Verify protocol sync state against our local tag.
-        if csw.signature != CSW_SIGNATURE || csw.tag != current_tag {
+        if !csw.is_valid(current_tag) {
             return Err(RipRipError::Bug(
                 "Fatal Protocol Desync: CSW validation error.",
             ));
