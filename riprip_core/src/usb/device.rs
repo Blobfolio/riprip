@@ -9,6 +9,7 @@ use std::path::Path;
 
 use crate::RipRipError;
 
+#[cfg(target_os = "macos")]
 mod macos {
     use super::*;
 
