@@ -8,9 +8,8 @@ Somewhat useful documentation:
 
 mod bot;
 mod cdtext;
+mod device;
 mod language;
-#[cfg(target_os = "macos")]
-mod macos;
 mod mmc;
 
 use crate::{
@@ -180,7 +179,7 @@ impl<C: UsbContext> LibusbInstance<C> {
             .map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
         let device_handle = if let Some(path) = dev {
-            if let Some((vid, pid)) = macos::get_device_desc(&path)? {
+            if let Some((vid, pid)) = device::get_desc(&path)? {
                 // eprintln!("{vid:04x}:{pid:04x}");
                 find_and_open_device(devices, vid, pid)?
             } else {
