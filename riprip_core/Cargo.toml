@@ -71,3 +71,5 @@ default = []
 # This feature adds a few generic RipRipError types for the binary.
 # It is not something external crates need to worry about.
 bin = []
+cdio = []
+usb = []

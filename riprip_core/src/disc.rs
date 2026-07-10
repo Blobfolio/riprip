@@ -283,18 +283,15 @@ impl Disc {
 	/// drive, the disc is unsupported, etc.
 	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		let cdda = {
-			#[cfg(not(target_os = "macos"))]
-			{
-				Box::new(LibcdioInstance::new(dev)?)
-			}
-			#[cfg(target_os = "macos")]
-			{
-				// On macOS, fallback to user-space USB communication via libusb. libcdio on macOS
-				// lacks C2 error reporting, and modern Macs lack integrated disc drives anyway.
-				Box::new(LibusbInstance::new_global(dev)?)
-			}
-		};
+		let cdda: Box<dyn Cdda + 'static>;
+		#[cfg(feature = "cdio")]
+		{
+			cdda = Box::new(LibcdioInstance::new(dev)?);
+		}
+		#[cfg(feature = "usb")]
+		{
+			cdda = Box::new(LibusbInstance::new_global(dev)?);
+		}
 
 		// Parse the table of contents into the pieces needed for `Toc`.
 		let mut audio = Vec::new();

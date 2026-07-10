@@ -138,3 +138,9 @@ features = [ "signals" ]
 [dependencies.riprip_core]
 path = "../riprip_core"
 features = [ "bin" ]
+default-features = false
+
+[features]
+default = ["cdio"]
+cdio = ["riprip_core/cdio"]
+usb = ["riprip_core/usb"]
