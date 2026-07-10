@@ -64,6 +64,7 @@ mod disc;
 mod drive;
 mod error;
 mod rip;
+#[cfg(feature = "usb")]
 mod usb;
 
 pub use abort::KillSwitch;
@@ -77,6 +78,7 @@ pub(crate) use cache::{
 };
 pub(crate) use cdda::Cdda;
 pub(crate) use cdio::LibcdioInstance;
+#[cfg(feature = "usb")]
 pub(crate) use usb::LibusbInstance;
 pub use cdtext::CDTextKind;
 pub(crate) use chk::{

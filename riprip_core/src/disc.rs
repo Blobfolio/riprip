@@ -15,7 +15,6 @@ use crate::{
 	DriveVendorModel,
 	KillSwitch,
 	LibcdioInstance,
-	LibusbInstance,
 	RipOptions,
 	Ripper,
 	RipRipError,
@@ -290,7 +289,7 @@ impl Disc {
 		}
 		#[cfg(feature = "usb")]
 		{
-			cdda = Box::new(LibusbInstance::new_global(dev)?);
+			cdda = Box::new(crate::LibusbInstance::new_global(dev)?);
 		}
 
 		// Parse the table of contents into the pieces needed for `Toc`.
