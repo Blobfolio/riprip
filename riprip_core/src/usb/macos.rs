@@ -6,28 +6,54 @@ use objc2_core_foundation::{
     kCFAllocatorDefault, CFDictionary, CFNumber, CFRetained, CFString, CFType,
 };
 use objc2_io_kit::{
-    kIOMainPortDefault, kIORegistryIterateParents, kIORegistryIterateRecursively, kIOServicePlane,
-    IOBSDNameMatching, IOIteratorNext, IOObjectRelease, IORegistryEntrySearchCFProperty,
-    IOServiceGetMatchingServices,
+    kIOMainPortDefault, kIORegistryIterateParents, kIORegistryIterateRecursively, kIOReturnSuccess,
+    kIOServicePlane, IOBSDNameMatching, IOIteratorNext, IOObjectRelease,
+    IORegistryEntrySearchCFProperty, IOServiceGetMatchingServices,
 };
+
+use crate::RipRipError;
+
+#[expect(unsafe_code, reason = "For FFI.")]
+fn get_numeric_property(media_service: u32, key: &str) -> Option<u16> {
+    let cf_key = CFString::from_str(key);
+
+    let prop = unsafe {
+        IORegistryEntrySearchCFProperty(
+            media_service,
+            kIOServicePlane.as_ptr() as *mut _,
+            Some(&cf_key),
+            kCFAllocatorDefault,
+            kIORegistryIterateRecursively | kIORegistryIterateParents,
+        )
+    };
+
+    let cf_val = prop?;
+    let number = CFType::downcast_ref::<CFNumber>(&cf_val)?;
+    let val_i32 = number.as_i32()?;
+
+    u16::try_from(val_i32).ok()
+}
 
 #[expect(unsafe_code, reason = "For FFI.")]
 /// Retrieves the `(Vendor ID, Product ID)` for a macOS device path (e.g., `"/dev/disk4"`).
 ///
-/// Returns `None` if the path is invalid or not a USB device.
-pub(super) fn get_device_desc<P>(dev_path: &P) -> Option<(u16, u16)>
+/// Returns `Ok(None)` if the path is invalid or not a USB device.
+pub(super) fn get_device_desc<P>(dev_path: &P) -> Result<Option<(u16, u16)>, RipRipError>
 where
     P: AsRef<Path>,
 {
-    let bsd_name = dev_path
+    let Some(bsd_name) = dev_path
         .as_ref()
         .file_name()
-        .and_then(|name| CString::new(name.as_bytes()).ok())?;
+        .and_then(|name| CString::new(name.as_bytes()).ok())
+    else {
+        return Ok(None);
+    };
 
     // Find the specific IOMedia service for this BSD name.
     let matching_mut = unsafe { IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr()) };
     if matching_mut.is_none() {
-        return None;
+        return Ok(None);
     }
 
     let matching = matching_mut.map(|dict| {
@@ -38,47 +64,25 @@ where
 
     let mut iterator = 0;
     let res = unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &mut iterator) };
-    if res != 0 || iterator == 0 {
-        return None;
+    if res != kIOReturnSuccess {
+        return Err(RipRipError::Bug("IOServiceGetMatchingServices failed."));
+    }
+    if iterator == 0 {
+        return Ok(None);
     }
 
     let media_service = IOIteratorNext(iterator);
     IOObjectRelease(iterator);
 
     if media_service == 0 {
-        return None;
+        return Ok(None);
     }
 
-    let vid_key = CFString::from_str("idVendor");
-    let vid_prop = unsafe {
-        IORegistryEntrySearchCFProperty(
-            media_service,
-            kIOServicePlane.as_ptr() as *mut _,
-            Some(&vid_key),
-            kCFAllocatorDefault,
-            kIORegistryIterateRecursively | kIORegistryIterateParents,
-        )
-    };
-
-    let pid_key = CFString::from_str("idProduct");
-    let pid_prop = unsafe {
-        IORegistryEntrySearchCFProperty(
-            media_service,
-            kIOServicePlane.as_ptr() as *mut _,
-            Some(&pid_key),
-            kCFAllocatorDefault,
-            kIORegistryIterateRecursively | kIORegistryIterateParents,
-        )
-    };
-
-    let props = vid_prop.zip(pid_prop);
+    let vid_opt = get_numeric_property(media_service, "idVendor");
+    let pid_opt = get_numeric_property(media_service, "idProduct");
+    let result = Ok(vid_opt.zip(pid_opt));
 
     IOObjectRelease(media_service);
 
-    props.and_then(|(v, p)| {
-        let vid = CFType::downcast_ref::<CFNumber>(&v)?.as_i32()?;
-        let pid = CFType::downcast_ref::<CFNumber>(&p)?.as_i32()?;
-
-        Some((vid as u16, pid as u16))
-    })
+    result
 }
