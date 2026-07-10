@@ -9,7 +9,6 @@ Somewhat useful documentation:
 mod bot;
 mod cdtext;
 mod device;
-mod language;
 mod mmc;
 
 use crate::{
