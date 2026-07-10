@@ -1,5 +1,5 @@
 /*!
-# Rip Rip Hooray: USB Device.
+# Rip Rip Hooray: USB Device
 
 Provides cross-platform lookup to get a USB drive descriptor (Vendor and Product IDs)
 from an OS device path.

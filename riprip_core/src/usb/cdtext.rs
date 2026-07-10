@@ -1,12 +1,12 @@
 /*!
-# Rip Rip Hooray: CD-Text parser.
+# Rip Rip Hooray: CD-Text Parser
 */
 
 use std::collections::HashMap;
 
 use crate::cdtext::CDTextKind;
 
-/// Enumeration of possible CD-TEXT languages.
+/// Enumeration of possible CD-Text languages.
 ///
 /// The language code is encoded as specified in ANNEX 1 to part 5 of EBU
 /// Tech 32 58 -E (1991).
@@ -166,13 +166,10 @@ impl TryFrom<u8> for Field {
 }
 
 impl Field {
-    /// Returns `true` if the field contains structured binary data and `false` if it contains
-    /// displayable text strings.
     fn is_data(&self) -> bool {
         matches!(self, Field::TocInfo | Field::TocInfo2 | Field::SizeInfo)
     }
 
-    /// Convenience method to check if the field is text-based.
     fn is_text(&self) -> bool {
         !self.is_data()
     }
@@ -218,8 +215,7 @@ impl TryFrom<u8> for Encoding {
 }
 
 impl Encoding {
-    /// Converts raw text pack bytes into a valid Rust UTF-8 String.
-    pub(super) fn decode(&self, bytes: &[u8]) -> String {
+    fn decode(&self, bytes: &[u8]) -> String {
         match self {
             Self::Iso8859_1 | Self::Ascii => {
                 // Try to parse directly as UTF-8/ASCII first without looping.
@@ -343,7 +339,7 @@ struct SizeInfo {
     pub char_code: u8,
     pub first_track: u8,
     pub last_track: u8,
-    pub copyright: u8, // 3: CD-TEXT is copyrighted, 0: no copyright on CD-TEXT
+    pub copyright: u8, // 3: CD-Text is copyrighted, 0: no copyright on CD-Text
     pub pack_counts: [u8; 16], // 16 pack types (0x80 through 0x8F)
     pub last_seq: [u8; 8], // Last sequence number for blocks 0..7
     pub lang_code: [u8; 8], // Language code for blocks 0..7
