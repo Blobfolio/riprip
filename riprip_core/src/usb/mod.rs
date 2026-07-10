@@ -255,10 +255,12 @@ impl LibusbInstance<GlobalContext> {
 impl<T: UsbContext> LibusbInstance<T> {
     /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
     /// and read back the resulting data payload.
-    fn exec_scsi_read(&self, cmd: &[u8], buf: &mut [u8]) -> Result<usize, RipRipError> {
+    fn exec_scsi_read<const N: usize>(&self, cmd: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
         use bot::{
             CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
         };
+
+        const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
 
         // Read and increment the local counter attached directly to this specific drive.
         let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
@@ -270,10 +272,10 @@ impl<T: UsbContext> LibusbInstance<T> {
             data_transfer_length: data_len as u32,
             flags: 0x80, // Device-to-Host
             lun: 0,
-            cb_length: cmd.len() as u8,
+            cb_length: N as u8,
             cdb: [0u8; 16],
         };
-        cbw.cdb[..cmd.len()].copy_from_slice(&cmd);
+        cbw.cdb[..N].copy_from_slice(cmd);
 
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
