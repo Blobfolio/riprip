@@ -14,7 +14,6 @@ use crate::{
 	CDTextKind,
 	DriveVendorModel,
 	KillSwitch,
-	LibcdioInstance,
 	RipOptions,
 	Ripper,
 	RipRipError,
@@ -285,7 +284,7 @@ impl Disc {
 		let cdda: Box<dyn Cdda + 'static>;
 		#[cfg(feature = "cdio")]
 		{
-			cdda = Box::new(LibcdioInstance::new(dev)?);
+			cdda = Box::new(crate::LibcdioInstance::new(dev)?);
 		}
 		#[cfg(feature = "usb")]
 		{

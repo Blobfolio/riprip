@@ -20,8 +20,13 @@ macro_rules! fields {
 		/// friendlier format.
 		pub enum CDTextKind {
 			$(
+				#[cfg(feature = "cdio")]
 				#[doc = concat!("# ", stringify!($k), ".")]
 				$k = libcdio_sys::$v,
+				
+				#[cfg(not(feature = "cdio"))]
+				#[doc = concat!("# ", stringify!($k), ".")]
+				$k,
 			)+
 		}
 

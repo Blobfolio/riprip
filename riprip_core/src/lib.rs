@@ -57,6 +57,7 @@ mod abort;
 mod barcode;
 mod cache;
 mod cdda;
+#[cfg(feature = "cdio")]
 mod cdio;
 mod cdtext;
 mod chk;
@@ -77,6 +78,7 @@ pub(crate) use cache::{
 	track_path,
 };
 pub(crate) use cdda::Cdda;
+#[cfg(feature = "cdio")]
 pub(crate) use cdio::LibcdioInstance;
 #[cfg(feature = "usb")]
 pub(crate) use usb::LibusbInstance;

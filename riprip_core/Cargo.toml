@@ -29,6 +29,7 @@ features = [ "signals" ]
 [dependencies.libcdio-sys]
 version = "=2.0.0"
 default-features = false
+optional = true
 
 [dependencies.rusb]
 version = "0.9.4"
@@ -75,7 +76,9 @@ default = []
 # This feature adds a few generic RipRipError types for the binary.
 # It is not something external crates need to worry about.
 bin = []
-cdio = []
+cdio = [
+    "dep:libcdio-sys"
+]
 usb = [
     "dep:objc2-io-kit",
     "dep:objc2-core-foundation",
