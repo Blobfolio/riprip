@@ -2,8 +2,7 @@
 # Rip Rip Hooray: `libusb` Wrappers
 
 Somewhat useful documentation:
-- <https://docs.rs/rusb/0.9.4/rusb/>
-- <https://www.13thmonkey.org/documentation/SCSI/mmc1r09.pdf>
+<https://docs.rs/rusb/0.9.4/rusb/>
 */
 
 mod bot;
@@ -15,6 +14,8 @@ use crate::{
     Barcode, CDTextKind, Cdda, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE,
     CD_DATA_SIZE, CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
 };
+
+use crate::usb::mmc::{Drive, Transport};
 
 use dactyl::{traits::SaturatingFrom, NoHash};
 use nix::unistd::{setuid, Uid};
@@ -250,10 +251,8 @@ impl LibusbInstance<GlobalContext> {
     }
 }
 
-impl<T: UsbContext> LibusbInstance<T> {
-    /// Helper to send a SCSI MMC command via USB Bulk-Only Transport (BOT)
-    /// and read back the resulting data payload.
-    fn exec_scsi_read<const N: usize>(&self, cmd: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
+impl<T: UsbContext> Transport for LibusbInstance<T> {
+    fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
         use bot::{
             CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
         };
@@ -273,7 +272,7 @@ impl<T: UsbContext> LibusbInstance<T> {
             cb_length: N as u8,
             cdb: [0u8; 16],
         };
-        cbw.cdb[..N].copy_from_slice(cmd);
+        cbw.cdb[..N].copy_from_slice(cdb);
 
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
@@ -325,116 +324,10 @@ impl<T: UsbContext> LibusbInstance<T> {
             _ => Err(RipRipError::Bug("Illegal status code.")),
         }
     }
-
-    /// # Check Disc Mode.
-    ///
-    /// This makes sure an audio CD is actually present in the drive.
-    ///
-    /// ## Errors
-    ///
-    /// Returns an error if the disc is missing or unsupported.
-    fn check_disc_mode__(&self) -> Result<(), RipRipError> {
-        // Worst-case: 4 bytes (header) + (99 tracks * 8 bytes) + 8 bytes (Lead-out).
-        const ALLOC_LEN: u16 = 4 + 99 * 8 + 8;
-
-        let mut cmd = [0u8; 10];
-        cmd[0] = mmc::READ_TOC;
-        cmd[1] = mmc::FORMAT_LBA;
-        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-        cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
-
-        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf)
-            .or(Err(RipRipError::DiscMode))?;
-
-        let first_track = buf[2];
-        let last_track = buf[3];
-
-        // Sanity check.
-        if last_track == 0 || first_track > last_track {
-            return Err(RipRipError::DiscMode);
-        }
-
-        // Search the descriptors. If an audio track is found, early exit,
-        // otherwise default to a DiscMode error.
-        buf[4..]
-            .chunks_exact(8)
-            .take((last_track - first_track + 1) as usize)
-            .any(|desc| (desc[1] & mmc::CTRL_DATA_TRACK) == 0)
-            .then_some(())
-            .ok_or(RipRipError::DiscMode)
-    }
-
-    fn read_cdtext(&self) -> Option<Vec<u8>> {
-        const ALLOC_LEN: u16 = 2048;
-
-        let mut cmd = [0u8; 10];
-        cmd[0] = mmc::READ_TOC;
-        cmd[2] = mmc::TOC_FORMAT_CDTEXT;
-        cmd[6] = 0x00; // Track number to start reading from (0 = entire disc).
-
-        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-        let mut buf = vec![0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf).ok()?;
-
-        let len = u16::from_be_bytes([buf[0], buf[1]]);
-        if len == 0 {
-            return None; // No CD-Text exists on this disc.
-        }
-
-        // Commands like READ_TOC return a 2-byte header containing the data length.
-        // However, this length field excludes the 2 bytes of the length field itself.
-        let total_valid_bytes = (len + 2) as usize;
-        let truncate_len = std::cmp::min(total_valid_bytes, buf.len());
-        buf.truncate(truncate_len);
-
-        Some(buf)
-    }
-
-    fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-        const ALLOC_LEN: u16 = 12;
-
-        let mut cmd = [0u8; 10];
-        cmd[0] = mmc::READ_TOC;
-        cmd[1] = mmc::FORMAT_LBA;
-        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-        cmd[6] = mmc::FIRST_TRACK; // Start reading starting from Track 1.
-
-        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf)?;
-
-        let first_track = buf[2];
-        let last_track = buf[3];
-
-        Ok((first_track, last_track))
-    }
-
-    fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
-        const ALLOC_LEN: u16 = 12;
-
-        let mut cmd = [0u8; 10];
-        cmd[0] = mmc::READ_TOC;
-        cmd[1] = mmc::FORMAT_LBA;
-        cmd[2] = mmc::TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-        cmd[6] = idx;
-
-        // 4 bytes for the TOC response header + 8 bytes for a single track descriptor entry.
-        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf)?;
-
-        let control_adr = buf[5];
-        let lba = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
-
-        Ok((control_adr, lba))
-    }
 }
+
+// Let's Rock.
+impl<T: UsbContext> Drive for LibusbInstance<T> {}
 
 impl<C: UsbContext> Cdda for LibusbInstance<C> {
     fn first_track_num(&self) -> Result<u8, RipRipError> {
@@ -502,41 +395,6 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         None
     }
 
-    // /// # Track ISRC.
-    // ///
-    // /// Fetches the International Standard Recording Code directly from the sub-Q channel
-    // /// using SCSI opcode 0x42 (READ SUB-CHANNEL).
-    // pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
-    //     let mut cmd = [0u8; 12];
-    //     cmd[0] = mmc::READ_SUB_CHANNEL;
-    //     cmd[1] = 0x02; // MSF Address Mode format flag (Bit 1 set)
-    //     cmd[2] = 0x40; // Sub-Q Channel Data Enable (Bit 6 set)
-    //     cmd[3] = mmc::SUB_FORMAT_ISRC; // Data Format: 0x03 (International Standard Recording Code)
-    //     cmd[6] = idx; // Target Track index parameter
-
-    //     cmd[8] = 24; // Allocation Length: 24 Bytes allocation footprint
-
-    //     let mut buf = [0u8; 24];
-    //     self.exec_scsi_read(&cmd, &mut buf).ok()?;
-
-    //     // Verify sub-channel execution parameters
-    //     let data_format = buf[3];
-    //     let subq_element_valid = buf[4]; // Sub-Q channel data status indicator flag
-
-    //     // If the drive confirms sub-Q tracking sync data exists
-    //     if data_format == mmc::SUB_FORMAT_ISRC && subq_element_valid == 0x01 {
-    //         let is_isrc_valid = (buf[12] & 0x80) != 0; // Bit 7 maps existence state
-    //         if is_isrc_valid {
-    //             // Raw string slice extraction out of the fixed-offset 12-byte block
-    //             let raw_ascii = &buf[13..25];
-    //             return String::from_utf8(raw_ascii.to_vec())
-    //                 .ok()
-    //                 .map(|s| s.trim().to_string());
-    //         }
-    //     }
-    //     None
-    // }
-
     fn mcn(&self) -> Option<Barcode> {
         if let Some(barcode_str) = self.cdtext(0, CDTextKind::Barcode) {
             if let Ok(barcode) = Barcode::try_from(barcode_str.as_bytes()) {
@@ -548,32 +406,8 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
     }
 
     fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-        let mut cmd = [0u8; 12];
-        cmd[0] = mmc::spc::INQUIRY;
-        cmd[4] = 36; // Allocation Length: Standard INQUIRY data size is 36 bytes
-
-        let mut buf = [0u8; 36];
-        self.exec_scsi_read(&cmd, &mut buf).ok()?;
-
-        // Standard SCSI Inquiry layout maps fields at fixed offsets:
-        // Bytes 8..16  -> Vendor Identification (8 bytes)
-        // Bytes 16..32 -> Product Identification / Model (16 bytes)
-        let vendor_raw = &buf[8..16];
-        let model_raw = &buf[16..32];
-
-        // Convert the raw bytes into UTF-8 strings, stripping away any
-        // trailing whitespace padding added by the drive firmware.
-        let vendor_str = std::str::from_utf8(vendor_raw).ok()?.trim();
-
-        let model_str = std::str::from_utf8(model_raw).ok()?.trim();
-
-        // Model is required, Vendor might be empty strings
-        if model_str.is_empty() {
-            return None;
-        }
-
-        DriveVendorModel::new(vendor_str, model_str).ok()
-    }
+        self.drive_vendor_model__()
+    } 
 
     fn is_sector_bad(&self, lsn: i32) -> bool {
         SHITLIST.with_borrow(|q| q.contains(&lsn))
@@ -587,69 +421,12 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
         sub: u8,
         _block_size: u16,
     ) -> Result<(), RipRipError> {
-        let mut cmd = [0u8; 12];
-        cmd[0] = mmc::READ_CD;
-        cmd[1] = 0x04; // Expected Sector Type field flag -> 0x04 means CD-DA Audio.
-
-        // riprip's addressing parameters are already absolute LBAs.
-        let lba = lsn as u32;
-        cmd[2..6].copy_from_slice(&lba.to_be_bytes());
-
-        // Transfer exactly 1 sector at a time.
-        cmd[6..9].copy_from_slice(&1u32.to_be_bytes()[1..4]);
-
-        // Byte 9 is the Selection Field flag byte:
-        // Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
-        // Bit 2..1: C2 Error Flag selection allocation (0x02 means include 294 bytes C2 space)
-        let user_data_flag = 0x10;
-        let c2_flag = if c2 { 0x02 } else { 0x00 };
-        cmd[9] = user_data_flag | c2_flag;
-
-        // Byte 10 defines the Sub-channel Selection configuration flags:
-        // 0x00 = No sub-channel data requested
-        // 0x02 = Raw Subchannel Data payload (16 bytes payload space)
-        cmd[10] = sub;
-
-        match self.exec_scsi_read(&cmd, buf) {
+        match self.read_cd__(buf, lsn, c2, sub) {
             Ok(_) => Ok(()),
             Err(_) => {
                 SHITLIST.with(|q| q.borrow_mut().insert(lsn));
                 Err(RipRipError::CdRead)
             }
         }
-    }
-}
-
-impl<C: UsbContext> LibusbInstance<C> {
-    /// # MCN Fallback.
-    ///
-    /// Pulls the absolute Media Catalog Number via explicit SCSI sub-channel reads.
-    fn mcn__(&self) -> Option<Barcode> {
-        const ALLOC_LEN: u16 = 26;
-
-        let mut cmd = [0u8; 10];
-        cmd[0] = mmc::READ_SUB_CHANNEL;
-        cmd[1] = mmc::FORMAT_MSF;
-        cmd[2] = 0x40; // Sub-Q Channel tracking bit
-        cmd[3] = mmc::SUB_FORMAT_MCN;
-
-        // Request 26 bytes (Standard Sub-channel header + MCN data block size)
-        cmd[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.exec_scsi_read(&cmd, &mut buf).ok()?;
-
-        let data_format = buf[3];
-        let subq_element_valid = buf[4];
-
-        if data_format == mmc::SUB_FORMAT_MCN && subq_element_valid == 0x01 {
-            // Bit 7 tracks string validation rules (MCVAL flag in MMC spec)
-            let is_mcn_valid = (buf[12] & 0x80) != 0;
-            if is_mcn_valid {
-                let raw_ascii = &buf[13..26];
-                return Barcode::try_from(raw_ascii).ok();
-            }
-        }
-        None
     }
 }

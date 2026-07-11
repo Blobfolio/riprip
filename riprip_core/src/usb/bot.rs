@@ -1,5 +1,5 @@
 /*!
-# Rip Rip Hooray: Bulk-Only Transport (`bot`)
+# Rip Rip Hooray: Bulk-Only Transport
 
 Provides the `CommandBlockWrapper` and `CommandStatusWrapper` structures required to transport
 SCSI MMC commands over USB.

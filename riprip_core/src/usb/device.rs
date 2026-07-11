@@ -98,6 +98,7 @@ mod macos {
     }
 }
 
+#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
 
