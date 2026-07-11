@@ -132,7 +132,7 @@ pub(super) trait Drive: Transport {
         }
     }
 
-    fn supports_c2__(&self) -> bool {
+    fn check_c2__(&self) -> Result<(), RipRipError> {
         // Request header (8 bytes) + feature descriptor payload (8 bytes).
         const ALLOC_LEN: u16 = 16;
 
@@ -145,7 +145,7 @@ pub(super) trait Drive: Transport {
 
         let mut buf = [0u8; ALLOC_LEN as usize];
         if self.submit(&cdb, &mut buf).is_err() {
-            return false;
+            return Err(RipRipError::C2Mode296);
         }
 
         let desc = &buf[8..16];
@@ -153,10 +153,12 @@ pub(super) trait Drive: Transport {
         if u16::from_be_bytes([desc[0], desc[1]]) == FEATURE_CD_AUDIO_C2 {
             // Byte 4 houses the Feature-Specific configuration flags.
             // Bit 0 is the C2 Validity flag (indicates drive can deliver C2 data over bus pipelines).
-            return (desc[4] & 0x01) != 0;
+            if (desc[4] & 0x01) != 0 {
+                return Ok(());
+            }
         }
 
-        false
+        Err(RipRipError::C2Mode296)
     }
 
     fn read_cdtext(&self) -> Option<Vec<u8>> {

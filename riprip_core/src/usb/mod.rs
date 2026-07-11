@@ -224,9 +224,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 
         out.check_disc_mode__()?;
 
-        if !out.supports_c2__() {
-            return Err(RipRipError::C2Mode296);
-        }
+        out.check_c2__()?;
 
         if let Some(buf) = out.read_cdtext() {
             let opt = cdtext::Metadata::parse(&buf).map_err(|_| RipRipError::CdText)?;
