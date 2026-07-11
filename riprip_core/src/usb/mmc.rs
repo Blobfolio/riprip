@@ -33,6 +33,9 @@ const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
 
+// GET_CONFIGURATION Features
+const FEATURE_CD_AUDIO_C2: u16 = 0x001E;
+
 const PROFILE_CD_ROM: u16 = 0x0008; // Read-only pressed CD.
 const PROFILE_CD_R: u16 = 0x0009; // Write-once CD-Recordable.
 const PROFILE_CD_RW: u16 = 0x000A; // Rewritable CD.
@@ -127,6 +130,33 @@ pub(super) trait Drive: Transport {
         } else {
             Err(RipRipError::DiscMode)
         }
+    }
+
+    fn supports_c2__(&self) -> bool {
+        // Request header (8 bytes) + feature descriptor payload (8 bytes).
+        const ALLOC_LEN: u16 = 16;
+
+        let mut cdb = [0u8; 10];
+        cdb[0] = GET_CONFIGURATION;
+        cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
+        cdb[2..4].copy_from_slice(&FEATURE_CD_AUDIO_C2.to_be_bytes());
+        
+        cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+
+        let mut buf = [0u8; ALLOC_LEN as usize];
+        if self.submit(&cdb, &mut buf).is_err() {
+            return false;
+        }
+
+        let desc = &buf[8..16];
+        
+        if u16::from_be_bytes([desc[0], desc[1]]) == FEATURE_CD_AUDIO_C2 {
+            // Byte 4 houses the Feature-Specific configuration flags.
+            // Bit 0 is the C2 Validity flag (indicates drive can deliver C2 data over bus pipelines).
+            return (desc[4] & 0x01) != 0;
+        }
+
+        false
     }
 
     fn read_cdtext(&self) -> Option<Vec<u8>> {
