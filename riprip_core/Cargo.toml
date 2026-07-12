@@ -20,7 +20,7 @@ utc2k = "0.20.*"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-io-kit = { version = "0.3.2", optional = true }
-objc2-core-foundation = { version = "0.3.2", optional = true }
+objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
 
 [dependencies.fyi_msg]
 version = "2.6.*"
