@@ -10,17 +10,8 @@ use crate::{
     CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
 };
 
-use std::env;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use std::{
-    cell::RefCell,
-    collections::HashSet,
-    ffi::{CStr, CString},
     ops::Range,
-    os::{raw::c_char, unix::ffi::OsStrExt},
-    path::Path,
-    sync::Once,
     time::{Duration, Instant},
 };
 

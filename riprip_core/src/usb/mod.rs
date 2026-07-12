@@ -10,33 +10,17 @@ mod cdtext;
 mod device;
 mod mmc;
 
-use crate::{
-    Barcode, CDTextKind, Cdda, DriveVendorModel, KillSwitch, RipRipError, CD_DATA_C2_SIZE,
-    CD_DATA_SIZE, CD_DATA_SUBCHANNEL_SIZE, CD_LEADIN,
-};
+use crate::{Barcode, CDTextKind, Cdda, DriveVendorModel, RipRipError, CD_LEADIN};
 
 use crate::usb::mmc::{Drive, Transport};
 
-use dactyl::{traits::SaturatingFrom, NoHash};
+use dactyl::NoHash;
 use nix::unistd::{setuid, Uid};
-use rusb::{
-    Context, Device, DeviceHandle, DeviceList, Direction, Error, GlobalContext, TransferType,
-    UsbContext,
-};
+use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};
 
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use std::{
-    cell::RefCell,
-    collections::HashSet,
-    ffi::{CStr, CString},
-    ops::Range,
-    os::{raw::c_char, unix::ffi::OsStrExt},
-    path::Path,
-    sync::Once,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, collections::HashSet, path::Path, time::Duration};
 
 /// # Write Bulk Timeout.
 const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
@@ -254,9 +238,7 @@ impl LibusbInstance<GlobalContext> {
 
 impl<T: UsbContext> Transport for LibusbInstance<T> {
     fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
-        use bot::{
-            CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE,
-        };
+        use bot::{CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN};
 
         const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
 
@@ -408,7 +390,7 @@ impl<C: UsbContext> Cdda for LibusbInstance<C> {
 
     fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
         self.drive_vendor_model__()
-    } 
+    }
 
     fn is_sector_bad(&self, lsn: i32) -> bool {
         SHITLIST.with_borrow(|q| q.contains(&lsn))

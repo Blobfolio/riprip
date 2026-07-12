@@ -68,6 +68,6 @@ impl CommandStatusWrapper {
     }
 
     pub(super) fn is_valid(&self, tag: u32) -> bool {
-        self.signature == CSW_SIGNATURE && self.tag == tag 
+        self.signature == CSW_SIGNATURE && self.tag == tag
     }
 }

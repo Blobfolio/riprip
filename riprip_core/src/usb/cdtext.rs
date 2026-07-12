@@ -150,7 +150,7 @@ pub(super) enum Field {
 }
 
 impl Field {
-    pub(super) const Isrc: Field = Field::UpcEan;
+    pub(super) const ISRC: Field = Field::UpcEan;
 }
 
 impl TryFrom<u8> for Field {
@@ -181,7 +181,7 @@ impl From<CDTextKind> for Field {
             CDTextKind::Arranger => Self::Arranger,
             CDTextKind::Barcode => Self::UpcEan,
             CDTextKind::Composer => Self::Composer,
-            CDTextKind::Isrc => Self::Isrc,
+            CDTextKind::Isrc => Self::ISRC,
             CDTextKind::Message => Self::Message,
             CDTextKind::Performer => Self::Performer,
             CDTextKind::Songwriter => Self::Songwriter,
@@ -463,7 +463,7 @@ impl Metadata {
                     .resize(block_id as usize + 1, Block::default());
 
                 self.language_blocks[block_id as usize].pack_count += 1;
-                
+
                 let Ok(field) = Field::try_from(id1) else {
                     // Safe early exit per CD-Text specification guidelines.
                     return Ok(());
@@ -529,7 +529,8 @@ impl Metadata {
             let slice = block
                 .buffer
                 .get(&(Field::SizeInfo, 0))
-                .ok_or(Error::MissingSizeInfo)?.as_slice();
+                .ok_or(Error::MissingSizeInfo)?
+                .as_slice();
             let size_info = SizeInfo::try_from(slice)?;
 
             if block.pack_count != size_info.total_expected_packs() {
@@ -615,7 +616,7 @@ mod test {
                 dump_field(&mut out, "COMPOSER", layer, Field::Composer, track);
                 dump_field(&mut out, "MESSAGE", layer, Field::Message, track);
                 dump_field(&mut out, "ARRANGER", layer, Field::Arranger, track);
-                dump_field(&mut out, "ISRC", layer, Field::Isrc, track);
+                dump_field(&mut out, "ISRC", layer, Field::ISRC, track);
             }
 
             writeln!(&mut out).unwrap();

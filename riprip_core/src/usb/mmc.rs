@@ -140,7 +140,7 @@ pub(super) trait Drive: Transport {
         cdb[0] = GET_CONFIGURATION;
         cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
         cdb[2..4].copy_from_slice(&FEATURE_CD_AUDIO_C2.to_be_bytes());
-        
+
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
         let mut buf = [0u8; ALLOC_LEN as usize];
@@ -149,7 +149,7 @@ pub(super) trait Drive: Transport {
         }
 
         let desc = &buf[8..16];
-        
+
         if u16::from_be_bytes([desc[0], desc[1]]) == FEATURE_CD_AUDIO_C2 {
             // Byte 4 houses the Feature-Specific configuration flags.
             // Bit 0 is the C2 Validity flag (indicates drive can deliver C2 data over bus pipelines).
@@ -173,7 +173,7 @@ pub(super) trait Drive: Transport {
 
         let mut buf = vec![0u8; ALLOC_LEN as usize];
         let len = self.submit(&cdb, &mut buf).ok()?;
-        if len == 0 || (len as usize) > ALLOC_LEN as usize {
+        if len == 0 || len > ALLOC_LEN as usize {
             return None;
         }
 
@@ -183,7 +183,7 @@ pub(super) trait Drive: Transport {
 
         // Commands like READ_TOC return a 2-byte header containing the data length.
         // However, this length field excludes the 2 bytes of the length field itself.
-        let total_valid_bytes = (len + 2) as usize;
+        let total_valid_bytes = len + 2;
         let truncate_len = std::cmp::min(total_valid_bytes, buf.len());
         buf.truncate(truncate_len);
 
