@@ -326,6 +326,7 @@ pub(super) enum Error {
     InvalidEncoding,
     MissingSizeInfo,
     InvalidPayloadLength,
+    InvalidPackCount,
     UnsupportedExtension,
 }
 
@@ -372,6 +373,12 @@ impl TryFrom<&[u8]> for SizeInfo {
             last_seq,
             lang_code,
         })
+    }
+}
+
+impl SizeInfo {
+    fn total_expected_packs(&self) -> usize {
+        self.pack_counts.iter().map(|&count| count as usize).sum()
     }
 }
 
@@ -427,6 +434,7 @@ impl Metadata {
 
         #[derive(Debug, Clone, Default)]
         struct Block {
+            pack_count: usize,
             buffer: HashMap<(Field, u8), Vec<u8>>,
         }
 
@@ -443,23 +451,26 @@ impl Metadata {
 
                 let (id1, id2, id3, id4) = (header[0], header[1], header[2], header[3]);
 
-                let Ok(field) = Field::try_from(id1) else {
-                    // Safe early exit per CD-Text specification guidelines.
-                    return Ok(());
-                };
                 let is_extension = (id2 & 0x80) != 0; // Extension Flag (0 = normal, 1 = extension)
                 if is_extension {
                     return Err(Error::UnsupportedExtension);
                 }
                 let mut track_number = id2 & 0x7F;
-                let sequence_number = id3;
+                let _sequence_number = id3;
                 let block_id = (id4 >> 4) & 0x07; // Bits 4-6 define the language block ID.
 
                 self.language_blocks
                     .resize(block_id as usize + 1, Block::default());
 
+                self.language_blocks[block_id as usize].pack_count += 1;
+                
+                let Ok(field) = Field::try_from(id1) else {
+                    // Safe early exit per CD-Text specification guidelines.
+                    return Ok(());
+                };
+
                 if field.is_text() {
-                    let char_pos = id4 & 0x0f;
+                    let _char_pos = id4 & 0x0f;
                     let is_double_byte = (id4 & 0x80) != 0;
                     if !is_double_byte {
                         for b in payload {
@@ -520,6 +531,10 @@ impl Metadata {
                 .get(&(Field::SizeInfo, 0))
                 .ok_or(Error::MissingSizeInfo)?.as_slice();
             let size_info = SizeInfo::try_from(slice)?;
+
+            if block.pack_count != size_info.total_expected_packs() {
+                return Err(Error::InvalidPackCount);
+            }
             let lang_code = size_info.lang_code[i];
             let char_code = size_info.char_code;
             let language = Language::try_from(lang_code).map_err(|_| Error::InvalidEncoding)?;
