@@ -325,6 +325,7 @@ pub(super) enum Error {
     InvalidPack,
     InvalidEncoding,
     MissingSizeInfo,
+    InvalidPayloadLength,
     UnsupportedExtension,
 }
 
@@ -345,33 +346,37 @@ struct SizeInfo {
     pub lang_code: [u8; 8], // Language code for blocks 0..7
 }
 
-impl SizeInfo {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        assert!(bytes.len() >= 36);
+impl TryFrom<&[u8]> for SizeInfo {
+    type Error = Error;
+
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
+        if buf.len() != 36 {
+            return Err(Error::InvalidPayloadLength);
+        }
 
         let mut pack_counts = [0u8; 16];
-        pack_counts.copy_from_slice(&bytes[4..20]);
+        pack_counts.copy_from_slice(&buf[4..20]);
 
         let mut last_seq = [0u8; 8];
-        last_seq.copy_from_slice(&bytes[20..28]);
+        last_seq.copy_from_slice(&buf[20..28]);
 
         let mut lang_code = [0u8; 8];
-        lang_code.copy_from_slice(&bytes[28..36]);
+        lang_code.copy_from_slice(&buf[28..36]);
 
-        Self {
-            char_code: bytes[0],
-            first_track: bytes[1],
-            last_track: bytes[2],
-            copyright: bytes[3],
+        Ok(Self {
+            char_code: buf[0],
+            first_track: buf[1],
+            last_track: buf[2],
+            copyright: buf[3],
             pack_counts,
             last_seq,
             lang_code,
-        }
+        })
     }
 }
 
 impl Metadata {
-    pub(super) fn parse(buf: &[u8]) -> Result<Option<Self>, Error> {
+    pub(super) fn from_bytes(buf: &[u8]) -> Result<Option<Self>, Error> {
         if buf.len() < 4 {
             return Ok(None);
         }
@@ -389,6 +394,36 @@ impl Metadata {
         const PACK_CRC_OFFSET: usize = PACK_HEADER_LEN + PACK_PAYLOAD_LEN;
 
         type Pack = [u8; PACK_LEN];
+
+        trait PackExt {
+            /// Validates a raw 18-byte CD-Text pack using its trailing 2-byte CRC.
+            fn is_valid(&self) -> bool;
+        }
+
+        impl PackExt for Pack {
+            fn is_valid(&self) -> bool {
+                use crc::{Algorithm, Crc};
+
+                // Define the exact CD-Text CRC-16 specification parameters.
+                const CDTEXT_CRC: Algorithm<u16> = Algorithm {
+                    width: 16,
+                    poly: 0x1021,
+                    init: 0x0000,
+                    refin: false,
+                    refout: false,
+                    xorout: 0xFFFF,
+                    check: 0x2B8C,
+                    residue: 0x0000,
+                };
+
+                const ENGINE: Crc<u16> = Crc::<u16>::new(&CDTEXT_CRC);
+
+                // Extract the expected CRC from the pack.
+                let crc = u16::from_be_bytes([self[PACK_CRC_OFFSET], self[PACK_CRC_OFFSET + 1]]);
+
+                ENGINE.checksum(&self[0..PACK_CRC_OFFSET]) == crc
+            }
+        }
 
         #[derive(Debug, Clone, Default)]
         struct Block {
@@ -469,34 +504,10 @@ impl Metadata {
             }
         }
 
-        /// Validates a raw 18-byte CD-Text pack using its trailing 2-byte CRC.
-        fn is_pack_valid(pack: &Pack) -> bool {
-            use crc::{Algorithm, Crc};
-
-            // Define the exact CD-Text CRC-16 specification parameters.
-            const CDTEXT_CRC: Algorithm<u16> = Algorithm {
-                width: 16,
-                poly: 0x1021,
-                init: 0x0000,
-                refin: false,
-                refout: false,
-                xorout: 0xFFFF,
-                check: 0x2B8C,
-                residue: 0x0000,
-            };
-
-            const ENGINE: Crc<u16> = Crc::<u16>::new(&CDTEXT_CRC);
-
-            // Extract the expected CRC from the pack.
-            let crc = u16::from_be_bytes([pack[PACK_CRC_OFFSET], pack[PACK_CRC_OFFSET + 1]]);
-
-            ENGINE.checksum(&pack[0..PACK_CRC_OFFSET]) == crc
-        }
-
         let mut context = Context::default();
         let (chunks, _remainder) = pack_data.as_chunks::<PACK_LEN>();
         for pack in chunks {
-            if !is_pack_valid(pack) {
+            if !pack.is_valid() {
                 return Err(Error::InvalidPack);
             }
             context.parse_pack(pack)?;
@@ -507,8 +518,8 @@ impl Metadata {
             let slice = block
                 .buffer
                 .get(&(Field::SizeInfo, 0))
-                .ok_or(Error::MissingSizeInfo)?;
-            let size_info = SizeInfo::from_bytes(slice);
+                .ok_or(Error::MissingSizeInfo)?.as_slice();
+            let size_info = SizeInfo::try_from(slice)?;
             let lang_code = size_info.lang_code[i];
             let char_code = size_info.char_code;
             let language = Language::try_from(lang_code).map_err(|_| Error::InvalidEncoding)?;
