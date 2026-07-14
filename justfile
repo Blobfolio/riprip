@@ -27,11 +27,11 @@ doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
 export RUSTFLAGS := "-Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -Clinker-plugin-lto -Clink-arg=-fuse-ld=lld"
-export CC        := "clang"
-export CXX       := "clang++"
-export CFLAGS    := `llvm-config --cflags` + " -march=x86-64-v3 -Wall -Wextra -flto=thin"
-export CXXFLAGS  := `llvm-config --cxxflags` + " -march=x86-64-v3 -Wall -Wextra -flto=thin"
-export LDFLAGS   := `llvm-config --ldflags` + " -fuse-ld=lld -flto=thin"
+#export CC        := "clang"
+#export CXX       := "clang++"
+#export CFLAGS    := `llvm-config --cflags` + " -march=x86-64-v3 -Wall -Wextra -flto=thin"
+#export CXXFLAGS  := `llvm-config --cxxflags` + " -march=x86-64-v3 -Wall -Wextra -flto=thin"
+#export LDFLAGS   := `llvm-config --ldflags` + " -fuse-ld=lld -flto=thin"
 
 
 

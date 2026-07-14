@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.5.8"
+version = "0.5.9"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -27,7 +27,7 @@ version = "=2.0.0"
 default-features = false
 
 [dependencies.minreq]
-version = "3.0.0-rc.0"
+version = "3.0.*"
 default-features = false
 features = [ "https" ]
 
@@ -41,7 +41,7 @@ default-features = false
 features = [ "accuraterip" ]
 
 [build-dependencies.minreq]
-version = "3.0.0-rc.0"
+version = "3.0.*"
 default-features = false
 features = [ "https" ]
 
