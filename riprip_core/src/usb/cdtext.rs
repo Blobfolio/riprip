@@ -629,7 +629,7 @@ mod test {
     // originate from the upstream libcdio GitHub repository reference samples.
     // Note: The text targets have been sanitized to align with our dump format by
     // converting indentation spaces to standard tabs (`\t`) and adding a trailing newline.
-    const SAMPLES: [(&[u8], &str); 3] = [
+    const SAMPLES: [(&[u8], &str); 4] = [
         (
             include_bytes!("../../../fixtures/cdtext.cdt"),
             include_str!("../../../fixtures/cdtext.right"),
@@ -641,6 +641,10 @@ mod test {
         (
             include_bytes!("../../../fixtures/cdtext-krosis.cdt"),
             include_str!("../../../fixtures/cdtext-krosis.right"),
+        ),
+        (
+            include_bytes!("../../../fixtures/simple.cdt"),
+            include_str!("../../../fixtures/simple.right"),
         ),
     ];
 
