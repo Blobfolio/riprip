@@ -328,6 +328,7 @@ pub(super) enum Error {
     InvalidPayloadLength,
     InvalidPackCount,
     UnsupportedExtension,
+    UnsupportedDoubleByte,
 }
 
 #[derive(Debug, Default)]
@@ -472,36 +473,35 @@ impl Metadata {
                 if field.is_text() {
                     let _char_pos = id4 & 0x0f;
                     let is_double_byte = (id4 & 0x80) != 0;
-                    if !is_double_byte {
-                        for b in payload {
-                            if *b == 0x00 {
-                                if !self.text_buf.is_empty() {
-                                    let key = (field, track_number);
-                                    self.language_blocks[block_id as usize]
-                                        .buffer
-                                        .insert(key, self.text_buf.clone());
-                                    self.text_buf.clear();
-                                }
-                                track_number += 1;
-                            } else if *b == b'\t' {
-                                // Handle repetition.
-                                let last_key = (field, track_number.saturating_sub(1));
-                                let cloned_buf = self.language_blocks[block_id as usize]
+                    if is_double_byte {
+                        return Err(Error::UnsupportedDoubleByte);
+                    }
+                    for b in payload {
+                        if *b == 0x00 {
+                            if !self.text_buf.is_empty() {
+                                let key = (field, track_number);
+                                self.language_blocks[block_id as usize]
                                     .buffer
-                                    .get(&last_key)
-                                    .cloned();
-                                if let Some(buf) = cloned_buf {
-                                    let key = (field, track_number);
-                                    self.language_blocks[block_id as usize]
-                                        .buffer
-                                        .insert(key, buf);
-                                }
-                            } else {
-                                self.text_buf.push(*b);
+                                    .insert(key, self.text_buf.clone());
+                                self.text_buf.clear();
                             }
+                            track_number += 1;
+                        } else if *b == b'\t' {
+                            // Handle repetition.
+                            let last_key = (field, track_number.saturating_sub(1));
+                            let cloned_buf = self.language_blocks[block_id as usize]
+                                .buffer
+                                .get(&last_key)
+                                .cloned();
+                            if let Some(buf) = cloned_buf {
+                                let key = (field, track_number);
+                                self.language_blocks[block_id as usize]
+                                    .buffer
+                                    .insert(key, buf);
+                            }
+                        } else {
+                            self.text_buf.push(*b);
                         }
-                    } else {
-                        todo!()
                     }
                 } else {
                     let key = (field, 0);
@@ -629,7 +629,7 @@ mod test {
     // originate from the upstream libcdio GitHub repository reference samples.
     // Note: The text targets have been sanitized to align with our dump format by
     // converting indentation spaces to standard tabs (`\t`) and adding a trailing newline.
-    const SAMPLES: [(&[u8], &str); 4] = [
+    const SAMPLES: [(&[u8], &str); 5] = [
         (
             include_bytes!("../../../fixtures/cdtext.cdt"),
             include_str!("../../../fixtures/cdtext.right"),
@@ -645,6 +645,10 @@ mod test {
         (
             include_bytes!("../../../fixtures/simple.cdt"),
             include_str!("../../../fixtures/simple.right"),
+        ),
+        (
+            include_bytes!("../../../fixtures/double.cdt"),
+            include_str!("../../../fixtures/double.right"),
         ),
     ];
 
