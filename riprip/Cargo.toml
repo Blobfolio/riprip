@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.5.8"
+version = "0.5.9"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -11,7 +11,7 @@ publish = false
 
 [package.metadata.deb]
 maintainer = "Josh Stoik <josh@blobfolio.com>"
-copyright = "2025, Blobfolio, LLC <hello@blobfolio.com>"
+copyright = "2026, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
 depends = "$auto"

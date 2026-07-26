@@ -60,8 +60,8 @@ impl RipLog {
 		self.flush();
 
 		// Unnecessary but unhurtful.
-		self.events.truncate(0);
-		self.sectors.truncate(0);
+		self.events.clear();
+		self.sectors.clear();
 
 		let next = self.pass.map_or(NonZeroU8::MIN, |(p, _)| p.saturating_add(1));
 		self.pass.replace((next, Instant::now()));

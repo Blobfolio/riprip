@@ -183,7 +183,7 @@ impl RipState {
 			.ok_or(RipRipError::RipOverflow)?;
 
 		// Reset the data.
-		self.data.truncate(0);
+		self.data.clear();
 		let len = self.rip_rng.len();
 		self.data.try_reserve_exact(len).map_err(|_| RipRipError::RipOverflow)?;
 
