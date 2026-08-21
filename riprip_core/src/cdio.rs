@@ -504,7 +504,7 @@ impl LibcdioInstance {
 	) -> Result<(), RipRipError> {
 		// We can't read negative, so assume everything is good and null.
 		if lsn < 0 {
-			for v in buf { *v = 0; }
+			buf.fill(0);
 			return Ok(());
 		}
 

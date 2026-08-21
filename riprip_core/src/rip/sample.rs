@@ -260,7 +260,7 @@ impl RipSector {
 		if src.len() != usize::from(SAMPLES_PER_SECTOR) { return None; }
 
 		// Set the type headers.
-		for (k, v) in self.kind.iter_mut().zip(src.chunks_exact(2)) {
+		for (k, v) in self.kind.iter_mut().zip(src.as_chunks::<2>().0) {
 			*k = u4_pack(v[0].data_kind(), v[1].data_kind());
 		}
 
