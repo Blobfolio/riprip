@@ -40,12 +40,12 @@ use std::{
 		CStr,
 		CString,
 	},
-	ops::Range,
 	os::{
 		raw::c_char,
 		unix::ffi::OsStrExt,
 	},
 	path::Path,
+	range::legacy::Range,
 	sync::Once,
 	time::{
 		Duration,

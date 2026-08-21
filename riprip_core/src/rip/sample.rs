@@ -13,7 +13,7 @@ use std::{
 		Read,
 		Write,
 	},
-	ops::Range,
+	range::legacy::Range,
 };
 
 

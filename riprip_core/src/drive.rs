@@ -9,7 +9,7 @@ use crate::{
 use dactyl::traits::BytesToSigned;
 use std::{
 	fmt,
-	ops::RangeInclusive,
+	range::legacy::RangeInclusive,
 };
 
 

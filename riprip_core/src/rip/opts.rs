@@ -10,7 +10,7 @@ use oxford_join::JoinFmt;
 use std::{
 	fmt,
 	num::NonZeroU16,
-	ops::RangeInclusive,
+	range::legacy::RangeInclusive,
 };
 use super::track_idx_to_bits;
 

@@ -25,8 +25,8 @@ use std::{
 		BufReader,
 		BufWriter,
 	},
-	ops::Range,
 	path::PathBuf,
+	range::legacy::Range,
 };
 use super::{
 	OffsetRipIter,
