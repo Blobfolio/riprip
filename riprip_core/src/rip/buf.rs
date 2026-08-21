@@ -13,7 +13,7 @@ use crate::{
 	Sample,
 	SAMPLES_PER_SECTOR,
 };
-use std::ops::Range;
+use std::range::legacy::Range;
 
 
 

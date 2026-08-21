@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{
 	iter::Rev,
-	ops::Range,
+	range::legacy::Range,
 	slice::{
 		ChunksExactMut,
 		RChunksExactMut,
