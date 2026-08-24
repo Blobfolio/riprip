@@ -138,3 +138,12 @@ features = [ "signals" ]
 [dependencies.riprip_core]
 path = "../riprip_core"
 features = [ "bin" ]
+
+[features]
+default = [ "libcdio", "libcdio-vendored" ]
+
+# Use libcdio driver.
+libcdio = [ "riprip_core/libcdio" ]
+
+# Build and link libcdio statically.
+libcdio-vendored = [ "riprip_core/libcdio-vendored" ]

@@ -167,16 +167,31 @@ Good luck!
 
 Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can grab it from [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-While specifically written for use on x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to build it from source on other 64-bit Unixish systems using `cargo`:
+While specifically written for x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to get Rip Rip up and running on other 64-bit Unix systems by building it from source.
+
+> [!NOTE]
+> Apple users should check out — and contribute to — [this in-progress fork](https://github.com/elmattic/riprip/tree/libusb), which is working on a `libusb`-based alternative for OSX.
 
 ```bash
-# When building from source, you'll also need clang and the libcdio
-# development headers. Debian/Ubuntu users, for example, can install
-# both by running the following:
-sudo apt-get install libcdio-dev clang
+# When building from source, you'll also need clang. Debian/Ubuntu users, for
+# example, can install it by running the following:
+sudo apt-get install clang
 
 # See "cargo install --help" for more options.
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
+    --bin riprip
+```
+
+By default, `libcdio` is built and linked statically. If you prefer Rip Rip link to your system's copy instead, two small deviations from the above are required:
+
+```bash
+# Install libcdio development headers in addition to clang, e.g.
+sudo apt-get install libcdio-dev clang
+
+# Set `--no-default-features` flag when building Rip Rip:
+cargo install \
+    --git https://github.com/Blobfolio/riprip.git \
+    --no-default-features \
     --bin riprip
 ```
