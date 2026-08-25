@@ -53,6 +53,9 @@
 #![expect(clippy::doc_markdown, reason = "`RipRip` makes this annoying.")]
 #![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
 
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("Rip Rip requires a 64-bit CPU architecture.");
+
 mod abort;
 mod barcode;
 mod cache;
