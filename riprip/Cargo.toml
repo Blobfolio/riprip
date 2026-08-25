@@ -140,10 +140,10 @@ path = "../riprip_core"
 features = [ "bin" ]
 
 [features]
-default = [ "libcdio", "libcdio-vendored" ]
+default = [ "libcdio", "libcdio-static" ]
 
-# Use libcdio driver.
+# Use libcdio driver. (Currently required.)
 libcdio = [ "riprip_core/libcdio" ]
 
 # Build and link libcdio statically.
-libcdio-vendored = [ "riprip_core/libcdio-vendored" ]
+libcdio-static = [ "riprip_core/libcdio-static" ]

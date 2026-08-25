@@ -16,10 +16,7 @@ use crate::{
 	KillSwitch,
 	RipRipError,
 };
-use dactyl::{
-	NoHash,
-	traits::SaturatingFrom,
-};
+use dactyl::traits::SaturatingFrom;
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -34,8 +31,6 @@ use libcdio_sys::{
 	track_format_t_TRACK_FORMAT_PSX,
 };
 use std::{
-	cell::RefCell,
-	collections::HashSet,
 	ffi::{
 		CStr,
 		CString,
@@ -47,27 +42,17 @@ use std::{
 	path::Path,
 	range::legacy::Range,
 	sync::Once,
-	time::{
-		Duration,
-		Instant,
-	},
+	time::Instant,
+};
+use super::{
+	CACHE_BUST_TIMEOUT,
+	SHITLIST,
 };
 
 
 
-/// # Cache Bust Timeout.
-const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
-
 /// # Initialization Counter.
 static LIBCDIO_INIT: Once = Once::new();
-
-thread_local! {
-	/// # Sector Shitlist.
-	///
-	/// Keep track of sectors that trigger hard read errors so we don't
-	/// accidentally try them in a cache-bust situation.
-	static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
-}
 
 
 
@@ -77,7 +62,7 @@ thread_local! {
 /// Pretty much all CD-related communications run through a single `libcdio`
 /// object. Every interface is unsafe and awkward, so this struct exists to
 /// abstract away the noise and handle cleanup.
-pub(super) struct LibcdioInstance {
+pub(crate) struct LibcdioInstance {
 	/// # Device.
 	dev: Option<CString>,
 
@@ -112,7 +97,7 @@ impl LibcdioInstance {
 	///
 	/// This will return an error if initialization fails, or if the provided
 	/// device path is obviously wrong.
-	pub(super) fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
+	pub(crate) fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
 		// Make sure the library has been initialized.
 		init();
@@ -206,10 +191,10 @@ impl LibcdioInstance {
 
 impl LibcdioInstance {
 	/// # As Ptr.
-	pub(super) const fn as_ptr(&self) -> *const libcdio_sys::CdIo_t { self.ptr.cast() }
+	const fn as_ptr(&self) -> *const libcdio_sys::CdIo_t { self.ptr.cast() }
 
 	/// # As Mut Ptr.
-	pub(super) const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
+	const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
 }
 
 impl LibcdioInstance {
@@ -218,7 +203,7 @@ impl LibcdioInstance {
 	///
 	/// Return the first track number on the disc, almost always but not
 	/// necessarily `1`.
-	pub(super) fn first_track_num(&self) -> Result<u8, RipRipError> {
+	pub(crate) fn first_track_num(&self) -> Result<u8, RipRipError> {
 		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_first_track_num(self.as_ptr())
@@ -231,7 +216,7 @@ impl LibcdioInstance {
 	/// # Leadout.
 	///
 	/// Return the LBA — including the leading `150` — of the disc leadout.
-	pub(super) fn leadout_lba(&self) -> Result<u32, RipRipError> {
+	pub(crate) fn leadout_lba(&self) -> Result<u32, RipRipError> {
 		let idx = u8::try_from(cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK)
 			.unwrap_or(170);
 		self.track_lba_start(idx)
@@ -242,7 +227,7 @@ impl LibcdioInstance {
 	///
 	/// Return the total number of tracks, or the last track number, however
 	/// you want to think of it.
-	pub(super) fn num_tracks(&self) -> Result<u8, RipRipError> {
+	pub(crate) fn num_tracks(&self) -> Result<u8, RipRipError> {
 		// Safety: this is an FFI call…
 		let raw = unsafe {
 			libcdio_sys::cdio_get_num_tracks(self.as_ptr())
@@ -258,7 +243,7 @@ impl LibcdioInstance {
 	///
 	/// Returns `true` for audio, `false` for data, and an error for anything
 	/// else.
-	pub(super) fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
+	pub(crate) fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
 		// Safety: this is an FFI call…
 		let kind = unsafe {
 			libcdio_sys::cdio_get_track_format(self.as_ptr(), idx)
@@ -277,7 +262,7 @@ impl LibcdioInstance {
 	///
 	/// Return the starting LBA — including the leading `150` — for a given
 	/// track.
-	pub(super) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
+	pub(crate) fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
 		if idx == 0 { Err(RipRipError::TrackNumber(0)) }
 		else {
 			// Safety: this is an FFI call…
@@ -291,12 +276,13 @@ impl LibcdioInstance {
 }
 
 impl LibcdioInstance {
+	#[must_use]
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # CDText Value.
 	///
 	/// Return the value associated with the CDText field, if any. If the track
 	/// number is zero, data associated with the album will be returned.
-	pub(super) fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
+	pub(crate) fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
 		let ptr = self.cdtext?;
 		// Safety: this is an FFI call…
 		let raw = unsafe {
@@ -316,7 +302,7 @@ impl LibcdioInstance {
 	///
 	/// This method is used as a fallback when the value is not within the
 	/// CDText, but is relatively slow.
-	pub(super) fn track_isrc(&self, idx: u8) -> Option<String> {
+	pub(crate) fn track_isrc(&self, idx: u8) -> Option<String> {
 		if self.supports_isrc() {
 			// Safety: this is an FFI call…
 			let raw = unsafe {
@@ -332,12 +318,13 @@ impl LibcdioInstance {
 	}
 	*/
 
+	#[must_use]
 	/// # MCN.
 	///
 	/// Return the disc's associated UPC/EAN, if present. This will try CDText
 	/// first since that data is already loaded, and fall back to the direct
 	/// `cdio_get_mcn` request if that doesn't work.
-	pub(super) fn mcn(&self) -> Option<Barcode> {
+	pub(crate) fn mcn(&self) -> Option<Barcode> {
 		// It probably isn't in CDText, but we already have it, so might as
 		// well check there first.
 		self.cdtext(0, CDTextKind::Barcode)
@@ -374,7 +361,7 @@ impl LibcdioInstance {
 	/// # Drive Vendor/Model.
 	///
 	/// Fetch the drive vendor and/or model, if possible.
-	pub(super) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+	pub(crate) fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		let mut raw = cdio_hwinfo {
 			psz_vendor: [0; 9],
 			psz_model: [0; 17],
@@ -436,7 +423,7 @@ impl LibcdioInstance {
 	/// Also of note: drives tend to slow down for read errors. This will
 	/// skip any sector which previously returned a read error to keep it from
 	/// being too terrible.
-	pub(super) fn cache_bust(
+	pub(crate) fn cache_bust(
 		&self,
 		buf: &mut[u8],
 		mut todo: u32,
@@ -497,7 +484,7 @@ impl LibcdioInstance {
 	///
 	/// This will return an error if the read operation is unsupported or
 	/// otherwise fails.
-	pub(super) fn read_cd_c2(
+	pub(crate) fn read_cd_c2(
 		&self,
 		buf: &mut [u8; CD_DATA_C2_SIZE as usize],
 		lsn: i32,
@@ -524,7 +511,7 @@ impl LibcdioInstance {
 	///
 	/// This will return an error if the read operation is unsupported or
 	/// otherwise fails, or if the timecode does not match the LSN.
-	pub(super) fn read_subchannel(
+	pub(crate) fn read_subchannel(
 		&self,
 		buf: &mut [u8],
 		lsn: i32,

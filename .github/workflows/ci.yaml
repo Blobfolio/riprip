@@ -50,10 +50,10 @@ jobs:
     - name: Build
       run: |
         cargo build --target ${{ matrix.target }}
-        cargo build --release --target ${{ matrix.target }}
+        cargo build --no-default-features --features=libcdio --target ${{ matrix.target }}
 
-        cargo build --no-default-features --target ${{ matrix.target }}
-        cargo build --no-default-features --release --target ${{ matrix.target }}
+        cargo build --release --target ${{ matrix.target }}
+        cargo build --release --no-default-features --features=libcdio --target ${{ matrix.target }}
 
     - name: Clippy (Workspace)
       run: |
@@ -61,17 +61,24 @@ jobs:
 
     - name: Clippy (Feature Combinations)
       run: |
-        cargo clippy --release -p riprip --target ${{ matrix.target }}
         cargo clippy --release -p riprip --no-default-features --features=libcdio --target ${{ matrix.target }}
 
-        cargo clippy --release -p riprip_core -features=bin --target ${{ matrix.target }}
-        cargo clippy --release -p riprip_core -features=libcdio-vendored --target ${{ matrix.target }}
-        cargo clippy --release -p riprip_core -features=bin,libcdio-vendored --target ${{ matrix.target }}
+        cargo clippy --release -p riprip_core --features=bin --target ${{ matrix.target }}
+        cargo clippy --release -p riprip_core --features=libcdio-static --target ${{ matrix.target }}
+        cargo clippy --release -p riprip_core --features=bin,libcdio-static --target ${{ matrix.target }}
 
     - name: Tests (Debug)
       run: |
-        cargo test --target ${{ matrix.target }}
+        cargo test -p riprip --no-default-features --features=libcdio --target ${{ matrix.target }}
+
+        cargo test -p riprip_core --features=bin --target ${{ matrix.target }}
+        cargo test -p riprip_core --features=libcdio-static --target ${{ matrix.target }}
+        cargo test -p riprip_core --features=bin,libcdio-static --target ${{ matrix.target }}
 
     - name: Tests (Release)
       run: |
-        cargo test --release --target ${{ matrix.target }}
+        cargo test --release -p riprip --no-default-features --features=libcdio --target ${{ matrix.target }}
+
+        cargo test --release -p riprip_core --features=bin --target ${{ matrix.target }}
+        cargo test --release -p riprip_core --features=libcdio-static --target ${{ matrix.target }}
+        cargo test --release -p riprip_core --features=bin,libcdio-static --target ${{ matrix.target }}

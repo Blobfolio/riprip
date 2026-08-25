@@ -59,26 +59,23 @@ compile_error!("Rip Rip requires a 64-bit CPU architecture.");
 mod abort;
 mod barcode;
 mod cache;
-mod cdio;
-mod cdtext;
 mod chk;
 mod disc;
 mod drive;
+mod drivers;
 mod error;
 mod rip;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
-pub(crate) use cache::{
+use cache::{
 	cache_path,
 	cache_prefix,
 	CacheWriter,
 	state_path,
 	track_path,
 };
-pub(crate) use cdio::LibcdioInstance;
-pub use cdtext::CDTextKind;
-pub(crate) use chk::{
+use chk::{
 	chk_accuraterip,
 	chk_ctdb,
 };
@@ -87,8 +84,10 @@ pub use drive::{
 	DriveVendorModel,
 	ReadOffset,
 };
+use drivers::CdioDriver;
+pub use drivers::CDTextKind;
 pub use error::RipRipError;
-pub(crate) use rip::{
+use rip::{
 	buf::RipBuffer,
 	data::RipState,
 	sample::RipSample,
@@ -99,8 +98,6 @@ use std::{
 	collections::BTreeMap,
 	path::PathBuf,
 };
-
-
 
 /// # 16-bit Stereo Sample (raw PCM bytes).
 type Sample = [u8; 4];

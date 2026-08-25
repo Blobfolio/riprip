@@ -16,11 +16,11 @@ use cdtoc::{
 	Track,
 };
 use crate::{
+	CdioDriver,
 	chk_accuraterip,
 	chk_ctdb,
 	Disc,
 	KillSwitch,
-	LibcdioInstance,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -806,7 +806,7 @@ struct RipShare<'a> {
 	last_read_track: u8,
 
 	/// # CDIO Instance.
-	cdio: &'a LibcdioInstance,
+	cdio: &'a CdioDriver,
 
 	/// # Progress Instance.
 	progress: &'a Progless,
