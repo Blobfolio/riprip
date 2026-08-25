@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.5.10
+    Version:   0.6.0
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2026-08-21 01:48:53 UTC
+    Generated: 2026-08-25 03:21:31 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -12,16 +12,16 @@
 | [bindgen](https://github.com/rust-lang/rust-bindgen) ⚒️ | 0.72.1 | [Jyun-Yan You](mailto:jyyou.tw@gmail.com), [Emilio Cobos Álvarez](mailto:emilio@crisal.io), [Nick Fitzgerald](mailto:fitzgen@gmail.com), and The Servo project developers | BSD-3-Clause |
 | [bitflags](https://github.com/bitflags/bitflags) | 2.13.1 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | RustCrypto Developers | MIT OR Apache-2.0 |
-| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.4.3 |  | MIT OR Apache-2.0 |
+| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.4.4 |  | MIT OR Apache-2.0 |
 | [**cdtoc**](https://github.com/Blobfolio/cdtoc) | 0.14.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [cexpr](https://github.com/jethrogb/rust-cexpr) ⚒️ | 0.6.0 | [Jethro Beekman](mailto:jethro@jbeekman.nl) | Apache-2.0 OR MIT |
-| [cfg-expr](https://github.com/EmbarkStudios/cfg-expr) ⚒️ | 0.20.8 | [Embark](mailto:opensource@embark-studios.com) and [Jake Shadle](mailto:jake.shadle@embark-studios.com) | MIT OR Apache-2.0 |
+| [cfg-expr](https://github.com/EmbarkStudios/cfg-expr) ⚒️ | 0.20.9 | [Embark](mailto:opensource@embark-studios.com) and [Jake Shadle](mailto:jake.shadle@embark-studios.com) | MIT OR Apache-2.0 |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.4 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [clang-sys](https://github.com/KyleMayes/clang-sys) ⚒️ | 1.9.1 | [Kyle Mayes](mailto:kyle@mayeses.com) | Apache-2.0 |
 | [cmake](https://github.com/rust-lang/cmake-rs) ⚒️ | 0.1.58 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [const-oid](https://github.com/RustCrypto/formats) | 0.10.2 | RustCrypto Developers | Apache-2.0 OR MIT |
 | [cpufeatures](https://github.com/RustCrypto/utils) | 0.3.0 | RustCrypto Developers | MIT OR Apache-2.0 |
-| [**crc32fast**](https://github.com/srijs/rust-crc32fast) | 1.5.0 | [Sam Rijs](mailto:srijs@airpost.net) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
+| [**crc32fast**](https://github.com/srijs/rust-crc32fast) | 1.5.1 | [Sam Rijs](mailto:srijs@airpost.net) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [**dactyl**](https://github.com/Blobfolio/dactyl) | 0.13.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [digest](https://github.com/RustCrypto/traits) | 0.11.3 | RustCrypto Developers | MIT OR Apache-2.0 |
@@ -40,10 +40,10 @@
 | [itertools](https://github.com/rust-itertools/itertools) ⚒️ | 0.13.0 | bluss | MIT OR Apache-2.0 |
 | [jobserver](https://github.com/rust-lang/jobserver-rs) ⚒️ | 0.1.35 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [libc](https://github.com/rust-lang/libc) | 0.2.189 |  | MIT OR Apache-2.0 |
-| [**libcdio-sys**](https://github.com/MonterraByte/libcdio-sys) | 2.0.0 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
+| [**libcdio-sys**](https://github.com/libcdio/libcdio-sys) | 3.0.0+2.4.0p2.0.2 | [Joaquim Monteiro](mailto:joaquim.monteiro@protonmail.com) | GPL-3.0+ |
 | [libloading](https://github.com/nagisa/rust_libloading/) ⚒️ | 0.8.9 | [Simonas Kazlauskas](mailto:libloading@kazlauskas.me) | ISC |
 | [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.12.1 | [Dan Gohman](mailto:dev@sunfishcode.online) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| [log](https://github.com/rust-lang/log) | 0.4.33 | The Rust Project Developers | MIT OR Apache-2.0 |
+| [log](https://github.com/rust-lang/log) | 0.4.34 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [memchr](https://github.com/BurntSushi/memchr) ⚒️ | 2.8.3 | [Andrew Gallant](mailto:jamslam@gmail.com) and bluss | Unlicense OR MIT |
 | [minimal-lexical](https://github.com/Alexhuszagh/minimal-lexical) ⚒️ | 0.2.1 | [Alex Huszagh](mailto:ahuszagh@gmail.com) | MIT OR Apache-2.0 |
 | [**minreq**](https://github.com/neonmoe/minreq) | 3.0.0 | [Jens Pitkanen](mailto:jens@neon.moe) | ISC |
@@ -57,12 +57,12 @@
 | [regex](https://github.com/rust-lang/regex) ⚒️ | 1.13.1 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-automata](https://github.com/rust-lang/regex) ⚒️ | 0.4.18 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
 | [regex-syntax](https://github.com/rust-lang/regex) ⚒️ | 0.8.11 | The Rust Project Developers and [Andrew Gallant](mailto:jamslam@gmail.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.5.10 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.6.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) ⚒️ | 2.1.3 | The Rust Project Developers | Apache-2.0 OR MIT |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.43 |  | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 |  | MIT OR Apache-2.0 |
-| [rustls-webpki](https://github.com/rustls/webpki) | 0.103.14 |  | ISC |
+| [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 |  | ISC |
 | [serde_spanned](https://github.com/toml-rs/toml) ⚒️ | 1.1.1 |  | MIT OR Apache-2.0 |
 | [sha1](https://github.com/RustCrypto/hashes) | 0.11.0 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [shlex](https://github.com/comex/rust-shlex) ⚒️ | 1.3.0 | [comex](mailto:comexk@gmail.com), [Fenhl](mailto:fenhl@fenhl.net), [Adrian Taylor](mailto:adetaylor@chromium.org), [Alex Touchet](mailto:alextouchet@outlook.com), [Daniel Parks](mailto:dp&#43;git@oxidized.org), and [Garrett Berg](mailto:googberg@gmail.com) | MIT OR Apache-2.0 |

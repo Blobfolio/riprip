@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.5.10"
+version = "0.6.0"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -138,3 +138,12 @@ features = [ "signals" ]
 [dependencies.riprip_core]
 path = "../riprip_core"
 features = [ "bin" ]
+
+[features]
+default = [ "libcdio", "libcdio-static" ]
+
+# Use libcdio driver. (Currently required.)
+libcdio = [ "riprip_core/libcdio" ]
+
+# Build and link libcdio statically.
+libcdio-static = [ "riprip_core/libcdio-static" ]
