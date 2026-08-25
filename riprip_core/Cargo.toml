@@ -13,7 +13,6 @@ publish = false
 cdtoc = "0.14.*"
 crc32fast = "1.5.*"
 dactyl = "0.13.*"
-oxford_join = "0.7.*"
 tempfile = "3.8.0"
 trimothy = "0.9.*"
 utc2k = "0.20.*"
@@ -31,6 +30,10 @@ optional = true
 version = "3.0.*"
 default-features = false
 features = [ "https" ]
+
+[dependencies.oxford_join]
+version = "0.7.*"
+optional = true
 
 [build-dependencies]
 dactyl = "0.13.*"
@@ -54,7 +57,7 @@ default = [ "libcdio" ]
 
 # This feature adds a few generic RipRipError types for the binary.
 # It is not something external crates need to worry about.
-bin = []
+bin = [ "oxford_join" ]
 
 # Use libcdio driver. (Currently required.)
 libcdio = [ "libcdio-sys" ]

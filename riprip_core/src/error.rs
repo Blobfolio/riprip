@@ -3,16 +3,16 @@
 */
 
 use cdtoc::TocError;
-use fyi_msg::{
-	fyi_ansi::{
-		ansi,
-		csi,
-	},
-	Msg,
-};
+use fyi_msg::Msg;
 use std::{
 	error::Error,
 	fmt,
+};
+
+#[cfg(feature = "bin")]
+use fyi_msg::fyi_ansi::{
+	ansi,
+	csi,
 };
 
 

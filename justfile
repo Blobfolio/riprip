@@ -26,7 +26,7 @@ data_dir    := "/tmp/bench-data"
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
-export RUSTFLAGS := "-Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -Clinker-plugin-lto -Clink-arg=-fuse-ld=lld"
+export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -Clinker-plugin-lto -Clink-arg=-fuse-ld=lld"
 #export CC        := "clang"
 #export CXX       := "clang++"
 #export CFLAGS    := `llvm-config --cflags` + " -march=x86-64-v3 -Wall -Wextra -flto=thin"
@@ -75,10 +75,26 @@ export RUSTFLAGS := "-Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -
 # Clippy.
 @clippy:
 	clear
+
 	cargo clippy \
 		--release \
-		--workspace \
-		--all-features \
+		-p riprip \
+		--no-default-features \
+		--features=libcdio \
+		--target-dir "{{ cargo_dir }}"
+
+	cargo clippy \
+		--release \
+		-p riprip_core \
+		--no-default-features \
+		--features=libcdio \
+		--target-dir "{{ cargo_dir }}"
+
+	cargo clippy \
+		--release \
+		-p riprip_core \
+		--no-default-features \
+		--features=bin,libcdio \
 		--target-dir "{{ cargo_dir }}"
 
 

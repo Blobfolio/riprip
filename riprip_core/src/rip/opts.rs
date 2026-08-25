@@ -6,13 +6,17 @@ use crate::{
 	CD_DATA_SIZE,
 	ReadOffset,
 };
-use oxford_join::JoinFmt;
 use std::{
-	fmt,
 	num::NonZeroU16,
 	range::legacy::RangeInclusive,
 };
 use super::track_idx_to_bits;
+
+#[cfg(feature = "bin")]
+use oxford_join::JoinFmt;
+
+#[cfg(feature = "bin")]
+use std::fmt;
 
 
 
