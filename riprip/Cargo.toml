@@ -69,7 +69,7 @@ long = "--strict"
 description = "Consider C2 errors an all-or-nothing proposition for the sector as a whole, marking all samples bad if any of them are bad. This is most effective when applied consistently from the initial rip and onward."
 
 [[package.metadata.bashman.switches]]
-long = "sync"
+long = "--sync"
 description = "Confirm sector positioning with subchannel data (when available) to make sure the drive is actually reading from the right place, and ignore the data if not. This is prone to false-positives — subchannel data is easily corrupted — so only recommended when disc rot, rather than wear-and-tear, is the sole cause of your woes."
 
 [[package.metadata.bashman.switches]]
