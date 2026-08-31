@@ -126,8 +126,14 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
+// TODO: update logic when there are multiple drivers to ensure that only
+// one is enabled.
 #[cfg(not(feature = "libcdio"))]
-compile_error!("Crate feature 'libcdio' is required.");
+compile_error!("Crate feature `libcdio` is required.");
+
+// TODO: suggest using `libusb` feature when merged.
+#[cfg(all(target_os = "macos", feature = "libcdio"))]
+compile_error!("Apple does not fully support `libcdio`.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
