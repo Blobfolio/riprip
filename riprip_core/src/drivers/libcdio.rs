@@ -330,6 +330,12 @@ impl CddaDriverExt for LibcdioInstance {
 }
 
 impl LibcdioInstance {
+	/// # As Ptr.
+	const fn as_ptr(&self) -> *const libcdio_sys::CdIo_t { self.ptr.cast() }
+
+	/// # As Mut Ptr.
+	const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
+
 	#[expect(unsafe_code, reason = "For FFI.")]
 	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	/// # Check Disc Mode.
@@ -371,37 +377,6 @@ impl LibcdioInstance {
 	}
 }
 
-impl LibcdioInstance {
-	/// # As Ptr.
-	const fn as_ptr(&self) -> *const libcdio_sys::CdIo_t { self.ptr.cast() }
-
-	/// # As Mut Ptr.
-	const fn as_mut_ptr(&self) -> *mut libcdio_sys::CdIo_t { self.ptr }
-}
-
-/*
-impl LibcdioInstance {
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Track ISRC.
-	///
-	/// This method is used as a fallback when the value is not within the
-	/// CDText, but is relatively slow.
-	pub(crate) fn track_isrc(&self, idx: u8) -> Option<String> {
-		if self.supports_isrc() {
-			// Safety: this is an FFI call…
-			let raw = unsafe {
-				libcdio_sys::cdio_get_track_isrc(self.as_ptr(), idx)
-			};
-
-			let out = c_char_to_string(raw.cast());
-			// Safety: this is an FFI call…
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
-			out
-		}
-		else { None }
-	}
-}
-*/
 
 
 #[expect(unsafe_code, reason = "For FFI.")]
