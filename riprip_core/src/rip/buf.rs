@@ -7,6 +7,7 @@ use crate::{
 	CD_DATA_SIZE,
 	CD_DATA_SUBCHANNEL_SIZE,
 	CddaDriver,
+	CddaDriverExt,
 	KillSwitch,
 	RipOptions,
 	RipRipError,

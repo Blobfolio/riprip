@@ -12,6 +12,7 @@ use crate::{
 	CacheWriter,
 	CD_LEADOUT_LABEL,
 	CddaDriver,
+	CddaDriverExt,
 	CDTextKind,
 	DriveVendorModel,
 	KillSwitch,

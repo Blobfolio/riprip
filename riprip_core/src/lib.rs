@@ -88,7 +88,10 @@ use chk::{
 	chk_accuraterip,
 	chk_ctdb,
 };
-use drivers::CddaDriver;
+use drivers::{
+	CddaDriver,
+	CddaDriverExt,
+};
 use rip::{
 	buf::RipBuffer,
 	data::RipState,
@@ -185,6 +188,9 @@ const CD_DATA_SUBCHANNEL_SIZE: u16 = CD_DATA_SIZE + CD_SUBCHANNEL_SIZE;
 /// All discs have a 2-second region at the start before any data. Different
 /// contexts include or exclude this amount, so it's good to keep it handy.
 const CD_LEADIN: u16 = 150;
+
+/// # Frames Per Second.
+const FRAMES_PER_SECOND: u8 = 75;
 
 /// # Lead-out Label.
 ///
