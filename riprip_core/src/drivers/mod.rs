@@ -4,7 +4,7 @@
 This module abstracts CDIO drivers — currently just `libcdio` — to make it
 easier for new ones to be added in the future.
 
-At present, this simply exports a single type alias — `CdioDriver` — for use
+At present, this simply exports a single type alias — `CddaDriver` — for use
 within the rest of the library, but that might change should the needs of
 future drivers grow more complex.
 
@@ -148,7 +148,7 @@ use std::{
 ///
 /// This type alias is how the rest of the library references the chosen
 /// driver.
-pub(crate) type CdioDriver = libcdio::LibcdioInstance;
+pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 
 
 

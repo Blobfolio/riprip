@@ -84,7 +84,7 @@ pub use drive::{
 	DriveVendorModel,
 	ReadOffset,
 };
-use drivers::CdioDriver;
+use drivers::CddaDriver;
 pub use drivers::CDTextKind;
 pub use error::RipRipError;
 use rip::{
