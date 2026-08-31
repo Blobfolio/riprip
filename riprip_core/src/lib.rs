@@ -68,6 +68,15 @@ mod rip;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
+pub use disc::Disc;
+pub use drive::{
+	DriveVendorModel,
+	ReadOffset,
+};
+pub use drivers::CDTextKind;
+pub use error::RipRipError;
+pub use rip::opts::RipOptions;
+
 use cache::{
 	cache_path,
 	cache_prefix,
@@ -79,25 +88,19 @@ use chk::{
 	chk_accuraterip,
 	chk_ctdb,
 };
-pub use disc::Disc;
-pub use drive::{
-	DriveVendorModel,
-	ReadOffset,
-};
-use drivers::CdioDriver;
-pub use drivers::CDTextKind;
-pub use error::RipRipError;
+use drivers::CddaDriver;
 use rip::{
 	buf::RipBuffer,
 	data::RipState,
 	sample::RipSample,
 	Ripper,
 };
-pub use rip::opts::RipOptions;
 use std::{
 	collections::BTreeMap,
 	path::PathBuf,
 };
+
+
 
 /// # 16-bit Stereo Sample (raw PCM bytes).
 type Sample = [u8; 4];

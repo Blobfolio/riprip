@@ -4,7 +4,7 @@
 This module abstracts CDIO drivers — currently just `libcdio` — to make it
 easier for new ones to be added in the future.
 
-At present, this simply exports a single type alias — `CdioDriver` — for use
+At present, this simply exports a single type alias — `CddaDriver` — for use
 within the rest of the library, but that might change should the needs of
 future drivers grow more complex.
 
@@ -126,8 +126,14 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
+// TODO: update logic when there are multiple drivers to ensure that only
+// one is enabled.
 #[cfg(not(feature = "libcdio"))]
-compile_error!("Crate feature 'libcdio' is required.");
+compile_error!("Crate feature `libcdio` is required.");
+
+// TODO: suggest using `libusb` feature when merged.
+#[cfg(all(target_os = "macos", feature = "libcdio"))]
+compile_error!("Apple does not fully support `libcdio`.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
@@ -148,7 +154,7 @@ use std::{
 ///
 /// This type alias is how the rest of the library references the chosen
 /// driver.
-pub(crate) type CdioDriver = libcdio::LibcdioInstance;
+pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 
 
 

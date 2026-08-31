@@ -76,6 +76,7 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 @clippy:
 	clear
 
+	fyi info "riprip/libcdio"
 	cargo clippy \
 		--release \
 		-p riprip \
@@ -83,17 +84,17 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 		--features=libcdio \
 		--target-dir "{{ cargo_dir }}"
 
+	fyi info "riprip_core/libcdio"
 	cargo clippy \
 		--release \
 		-p riprip_core \
-		--no-default-features \
 		--features=libcdio \
 		--target-dir "{{ cargo_dir }}"
 
+	fyi info "riprip_core/bin,libcdio"
 	cargo clippy \
 		--release \
 		-p riprip_core \
-		--no-default-features \
 		--features=bin,libcdio \
 		--target-dir "{{ cargo_dir }}"
 
@@ -121,36 +122,30 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 	exit 0
 
 
-# Test Run.
-@run *ARGS:
-	cargo run \
-		--bin "{{ pkg_id }}" \
-		--release \
-		--target-dir "{{ cargo_dir }}" \
-		-- {{ ARGS }}
-
-
 # Unit tests!
 @test:
 	clear
 
+	fyi info "riprip/libcdio"
 	cargo test \
 		--release \
-		--workspace \
+		-p riprip \
+		--no-default-features \
+		--features=libcdio \
 		--target-dir "{{ cargo_dir }}"
 
-	just _test-debug
-
-
-# Unit tests (Debug).
-_test-debug:
-	#!/usr/bin/env bash
-	set -e
-
-	unset -v RUSTFLAGS CC CXX CFLAGS CXXFLAGS LDFLAGS
-
+	fyi info "riprip_core/libcdio"
 	cargo test \
-		--workspace \
+		--release \
+		-p riprip_core \
+		--features=libcdio \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi info "riprip_core/bin,libcdio"
+	cargo test \
+		--release \
+		-p riprip_core \
+		--features=bin,libcdio \
 		--target-dir "{{ cargo_dir }}"
 
 

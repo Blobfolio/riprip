@@ -11,7 +11,7 @@ use crate::{
 	cache_prefix,
 	CacheWriter,
 	CD_LEADOUT_LABEL,
-	CdioDriver,
+	CddaDriver,
 	CDTextKind,
 	DriveVendorModel,
 	KillSwitch,
@@ -51,7 +51,7 @@ use std::{
 /// A loaded and parsed compact disc.
 pub struct Disc {
 	/// # CDIO Instance.
-	cdio: CdioDriver,
+	cdio: CddaDriver,
 
 	/// # Disc Table of Contents.
 	toc: Toc,
@@ -281,7 +281,7 @@ impl Disc {
 	/// drive, the disc is unsupported, etc.
 	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		let cdio = CdioDriver::new(dev)?;
+		let cdio = CddaDriver::new(dev)?;
 
 		// Parse the table of contents into the pieces needed for `Toc`.
 		let mut audio = Vec::new();
@@ -351,7 +351,7 @@ impl Disc {
 
 	#[must_use]
 	/// # Internal CDIO.
-	pub(super) const fn cdio(&self) -> &CdioDriver { &self.cdio }
+	pub(super) const fn cdio(&self) -> &CddaDriver { &self.cdio }
 }
 
 impl Disc {
