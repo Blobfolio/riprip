@@ -17,11 +17,14 @@ Somewhat useful documentation:
 compile_error!("Crate feature `libcdio` is required.");
 
 // TODO: suggest using `libusb` feature when merged.
-#[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("Apple does not fully support `libcdio`.");
+// #[cfg(all(target_os = "macos", feature = "libcdio"))]
+// compile_error!("Apple does not fully support `libcdio`.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
+
+#[cfg(feature = "libusb")]
+mod libusb;
 
 use crate::{
 	Barcode,
@@ -50,13 +53,19 @@ use std::{
 
 
 
-#[cfg(feature = "libcdio")]
+#[cfg(all(feature = "libcdio", not(feature = "libusb")))]
 /// # CDIO Driver Middleware.
 ///
 /// This type alias is how the rest of the library references the chosen
 /// driver.
 pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 
+#[cfg(feature = "libusb")]
+/// # USB Driver.
+///
+/// This type alias is how the rest of the library references the chosen
+/// driver.
+pub(crate) type CddaDriver = libusb::LibusbInstance;
 
 
 /// # Cache Bust Timeout.
