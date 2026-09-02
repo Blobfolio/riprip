@@ -65,7 +65,7 @@ pub(super) trait Transport {
 /// Relies on the underlying `Transport` trait to handle the hardware bus communication
 /// (e.g. USB BOT or `/dev/sg`).
 pub(super) trait Drive: Transport {
-    fn mcn__(&self) -> Option<Barcode> {
+    fn mcn_subchannel__(&self) -> Option<Barcode> {
         // Request 26 bytes (Standard Sub-channel header + MCN data block size).
         const ALLOC_LEN: u16 = 26;
 

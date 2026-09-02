@@ -108,8 +108,8 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints,
 
 #[derive(Debug, Default)]
 struct Endpoints {
-    pub bulk_in: u8,
-    pub bulk_out: u8,
+    bulk_in: u8,
+    bulk_out: u8,
 }
 
 /// # USB Instance.
@@ -286,10 +286,10 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
     }
 }
 
-// Let's Rock.
 impl<T: UsbContext> Drive for LibusbInstance<T> {}
 
 impl CddaDriverExt for LibusbInstance<GlobalContext> {
+    /// # New!
     fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
     where P: AsRef<Path> {
         Self::with_context(GlobalContext::default(), dev)
@@ -371,7 +371,7 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
     }
 
     fn mcn_subchannel(&self) -> Option<Barcode> {
-        self.mcn__()
+        self.mcn_subchannel__()
     }
 
     fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
