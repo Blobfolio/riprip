@@ -18,7 +18,7 @@ compile_error!("No driver feature is enabled. Enable exactly one of `libcdio` or
 compile_error!("Multiple driver features are enabled. Enable only one of `libcdio` or `libusb`.");
 
 #[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`");
+compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
