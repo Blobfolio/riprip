@@ -11,13 +11,14 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-// TODO: update logic when there are multiple drivers to ensure that only
-// one is enabled.
-#[cfg(not(feature = "libcdio"))]
-compile_error!("Crate feature `libcdio` is required.");
+#[cfg(not(any(feature = "libcdio", feature = "libusb")))]
+compile_error!("No driver feature is enabled. Enable exactly one of `libcdio` or `libusb`.");
 
-#[cfg(all(target_os = "macos", feature = "libcdio", not(feature = "libusb")))]
-compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libcdio,libusb`");
+#[cfg(any(all(feature = "libcdio", feature = "libusb")))]
+compile_error!("Multiple driver features are enabled. Enable only one of `libcdio` or `libusb`.");
+
+#[cfg(all(target_os = "macos", feature = "libcdio"))]
+compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
@@ -52,7 +53,7 @@ use std::{
 
 
 
-#[cfg(all(feature = "libcdio", not(feature = "libusb")))]
+#[cfg(all(feature = "libcdio"))]
 /// # CDIO Driver Middleware.
 ///
 /// This type alias is how the rest of the library references the chosen
