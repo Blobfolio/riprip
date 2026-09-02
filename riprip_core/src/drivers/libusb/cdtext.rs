@@ -441,8 +441,8 @@ impl Metadata {
 
         #[derive(Debug, Default)]
         struct Context {
-            pub text_buf: Vec<u8>,
-            pub language_blocks: Vec<Block>,
+            text_buf: Vec<u8>,
+            language_blocks: Vec<Block>,
         }
 
         impl Context {
@@ -629,27 +629,27 @@ mod test {
     // originate from the upstream libcdio GitHub repository reference samples.
     // Note: The text targets have been sanitized to align with our dump format by
     // converting indentation spaces to standard tabs (`\t`) and adding a trailing newline.
-    const SAMPLES: [(&[u8], &str); 0] = [
-        // (
-        //     include_bytes!("../../../fixtures/cdtext.cdt"),
-        //     include_str!("../../../fixtures/cdtext.right"),
-        // ),
-        // (
-        //     include_bytes!("../../../fixtures/cdtext-libburnia.cdt"),
-        //     include_str!("../../../fixtures/cdtext-libburnia.right"),
-        // ),
-        // (
-        //     include_bytes!("../../../fixtures/cdtext-krosis.cdt"),
-        //     include_str!("../../../fixtures/cdtext-krosis.right"),
-        // ),
-        // (
-        //     include_bytes!("../../../fixtures/simple.cdt"),
-        //     include_str!("../../../fixtures/simple.right"),
-        // ),
-        // (
-        //     include_bytes!("../../../fixtures/double.cdt"),
-        //     include_str!("../../../fixtures/double.right"),
-        // ),
+    const SAMPLES: [(&[u8], &str); 5] = [
+        (
+            include_bytes!("../../../skel/cdtext.cdt"),
+            include_str!("../../../skel/cdtext.right"),
+        ),
+        (
+            include_bytes!("../../../skel/cdtext-libburnia.cdt"),
+            include_str!("../../../skel/cdtext-libburnia.right"),
+        ),
+        (
+            include_bytes!("../../../skel/cdtext-krosis.cdt"),
+            include_str!("../../../skel/cdtext-krosis.right"),
+        ),
+        (
+            include_bytes!("../../../skel/simple.cdt"),
+            include_str!("../../../skel/simple.right"),
+        ),
+        (
+            include_bytes!("../../../skel/double.cdt"),
+            include_str!("../../../skel/double.right"),
+        ),
     ];
 
     #[test]

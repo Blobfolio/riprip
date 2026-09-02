@@ -1,0 +1,71 @@
+
+Language 0 'English':
+CD-TEXT for Disc:
+	TITLE: Night Cats II
+	PERFORMER: United Cat Orchestra
+	SONGWRITER: Various Songwriters
+	COMPOSER: Various Composers
+	MESSAGE: For all our fans
+	ARRANGER: Tom Cat
+	UPC_EAN: 1234567890123
+	GENRE: Feline classic music
+	DISC_ID: 1234567890
+	GENRE_CODE: 5 (Classical)
+CD-TEXT for Track  1:
+	TITLE: Song of Joy
+	PERFORMER: Felix and The Purrs
+	SONGWRITER: Friedrich Schiller
+	COMPOSER: Ludwig van Beethoven
+	MESSAGE: Fritz and Louie once were punks
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1101234
+CD-TEXT for Track  2:
+	TITLE: The Hunt
+	PERFORMER: Catwalk Beauties
+	SONGWRITER: Mother Nature
+	COMPOSER: unknown
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1100005
+CD-TEXT for Track  3:
+	TITLE: Mee Owwww
+	PERFORMER: Mia Kitten
+	SONGWRITER: Mia Kitten
+	COMPOSER: Mia Kitten
+	ARRANGER: Mia Kitten
+	ISRC: XYBLG1100006
+
+Language 1 'German':
+CD-TEXT for Disc:
+	TITLE: Nachtkratz II
+	PERFORMER: Vereinigtes Katzenorchester
+	SONGWRITER: Verschiedene Liedschreiber
+	COMPOSER: Verschiedene Komponisten
+	MESSAGE: Für alle unsere Fans
+	ARRANGER: Tom Cat
+	UPC_EAN: 1234567890123
+	GENRE: Klassische Katzenmusik
+	DISC_ID: 1234567890
+	GENRE_CODE: 5 (Classical)
+CD-TEXT for Track  1:
+	TITLE: Freudenlied
+	PERFORMER: Felix und Die Schnurrer
+	SONGWRITER: Friedrich Schiller
+	COMPOSER: Ludwig van Beethoven
+	MESSAGE: Fritz und Louie waren einmal Punks
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1101234
+CD-TEXT for Track  2:
+	TITLE: Die Jagd
+	PERFORMER: Laufsteg Miezen
+	SONGWRITER: Mutter Natur
+	COMPOSER: unbekannt
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1100005
+CD-TEXT for Track  3:
+	TITLE: Mie auu
+	PERFORMER: Mia Kätzchen
+	SONGWRITER: Mia Kätzchen
+	COMPOSER: Mia Kätzchen
+	ARRANGER: Mia Kätzchen
+	ISRC: XYBLG1100006
+
