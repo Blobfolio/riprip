@@ -14,7 +14,7 @@ Somewhat useful documentation:
 #[cfg(not(any(feature = "libcdio", feature = "libusb")))]
 compile_error!("No driver feature is enabled. Enable exactly one of `libcdio` or `libusb`.");
 
-#[cfg(any(all(feature = "libcdio", feature = "libusb")))]
+#[cfg(all(feature = "libcdio", feature = "libusb"))]
 compile_error!("Multiple driver features are enabled. Enable only one of `libcdio` or `libusb`.");
 
 #[cfg(all(target_os = "macos", feature = "libcdio"))]
@@ -53,7 +53,7 @@ use std::{
 
 
 
-#[cfg(all(feature = "libcdio"))]
+#[cfg(feature = "libcdio")]
 /// # CDIO Driver Middleware.
 ///
 /// This type alias is how the rest of the library references the chosen
