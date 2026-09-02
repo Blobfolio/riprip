@@ -16,9 +16,8 @@ Somewhat useful documentation:
 #[cfg(not(feature = "libcdio"))]
 compile_error!("Crate feature `libcdio` is required.");
 
-// TODO: suggest using `libusb` feature when merged.
-// #[cfg(all(target_os = "macos", feature = "libcdio"))]
-// compile_error!("Apple does not fully support `libcdio`.");
+#[cfg(all(target_os = "macos", feature = "libcdio", not(feature = "libusb")))]
+compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libcdio,libusb`");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
