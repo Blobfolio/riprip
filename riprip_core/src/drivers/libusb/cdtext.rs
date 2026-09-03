@@ -625,30 +625,36 @@ mod test {
         out
     }
 
+    macro_rules! samples_dir {
+        () => {
+            "../../../skel/cdtext/"
+        };
+    }
+
     // Both the `.cdt` binary payloads and their corresponding `.right` text fixtures
     // originate from the upstream libcdio GitHub repository reference samples.
     // Note: The text targets have been sanitized to align with our dump format by
     // converting indentation spaces to standard tabs (`\t`) and adding a trailing newline.
     const SAMPLES: [(&[u8], &str); 5] = [
         (
-            include_bytes!("../../../skel/cdtext.cdt"),
-            include_str!("../../../skel/cdtext.right"),
+            include_bytes!(concat!(samples_dir!(), "cdtext.cdt")),
+            include_str!(concat!(samples_dir!(), "cdtext.right")),
         ),
         (
-            include_bytes!("../../../skel/cdtext-libburnia.cdt"),
-            include_str!("../../../skel/cdtext-libburnia.right"),
+            include_bytes!(concat!(samples_dir!(), "cdtext-libburnia.cdt")),
+            include_str!(concat!(samples_dir!(), "cdtext-libburnia.right")),
         ),
         (
-            include_bytes!("../../../skel/cdtext-krosis.cdt"),
-            include_str!("../../../skel/cdtext-krosis.right"),
+            include_bytes!(concat!(samples_dir!(), "cdtext-krosis.cdt")),
+            include_str!(concat!(samples_dir!(), "cdtext-krosis.right")),
         ),
         (
-            include_bytes!("../../../skel/simple.cdt"),
-            include_str!("../../../skel/simple.right"),
+            include_bytes!(concat!(samples_dir!(), "simple.cdt")),
+            include_str!(concat!(samples_dir!(), "simple.right")),
         ),
         (
-            include_bytes!("../../../skel/double.cdt"),
-            include_str!("../../../skel/double.right"),
+            include_bytes!(concat!(samples_dir!(), "double.cdt")),
+            include_str!(concat!(samples_dir!(), "double.right")),
         ),
     ];
 
