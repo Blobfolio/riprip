@@ -75,7 +75,7 @@ mod macos {
         let res =
             unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &mut iterator) };
         if res != kIOReturnSuccess {
-            return Err(RipRipError::Bug("IOServiceGetMatchingServices failed."));
+            return Err(RipRipError::Internal(format!("IOServiceGetMatchingServices failed: 0x{res:08x}")));
         }
         if iterator == 0 {
             return Ok(None);
