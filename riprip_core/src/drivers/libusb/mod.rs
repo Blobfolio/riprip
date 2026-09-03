@@ -215,7 +215,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 
 impl<T: UsbContext> Transport for LibusbInstance<T> {
     fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
-        use bot::{CommandBlockWrapper, CommandStatusWrapper, CBW_SIGNATURE, CSW_LEN};
+        use bot::{CommandBlockWrapper, CommandStatusWrapper, CSW_LEN};
 
         const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
 
@@ -223,16 +223,13 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
         let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
         let data_len = buf.len();
 
-        let mut cbw = CommandBlockWrapper {
-            signature: CBW_SIGNATURE,
-            tag: current_tag,
-            data_transfer_length: data_len as u32,
-            flags: 0x80, // Device-to-Host
-            lun: 0,
-            cb_length: N as u8,
-            cdb: [0u8; 16],
-        };
-        cbw.cdb[..N].copy_from_slice(cdb);
+        let cbw = CommandBlockWrapper::new(
+            current_tag,
+            data_len as u32,
+            0x80, // Device-to-Host
+            0,
+            cdb
+        );
 
         let cbw_bytes = cbw.to_bytes();
         self.device_handle
@@ -277,7 +274,7 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
             ));
         }
 
-        match csw.status {
+        match csw.status() {
             0 => Ok(transferred),
             1 => Err(RipRipError::CdRead),
             2 => Err(RipRipError::Bug("USB BOT phase error.")),

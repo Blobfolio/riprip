@@ -19,23 +19,47 @@ pub(super) const OPTICAL_DRIVE_SUBCLASSES: [u8; 3] = [
     SUBCLASS_SCSI_TRANSPARENT,
 ];
 
-pub(super) const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
-pub(super) const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
 pub(super) const CBW_LEN: usize = 31;
 pub(super) const CSW_LEN: usize = 13;
 
+const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
+const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
+
 #[derive(Debug, Default)]
 pub(super) struct CommandBlockWrapper {
-    pub signature: u32,
-    pub tag: u32,
-    pub data_transfer_length: u32,
-    pub flags: u8,
-    pub lun: u8,
-    pub cb_length: u8,
-    pub cdb: [u8; 16],
+    signature: u32,
+    tag: u32,
+    data_transfer_length: u32,
+    flags: u8,
+    lun: u8,
+    cb_length: u8,
+    cdb: [u8; 16],
 }
 
 impl CommandBlockWrapper {
+    pub(super) fn new<const N: usize>(
+        tag: u32,
+        data_transfer_length: u32,
+        flags: u8,
+        lun: u8,
+        cdb: &[u8; N],
+    ) -> Self {
+        const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
+
+        let mut cbw = Self {
+            signature: CBW_SIGNATURE,
+            tag,
+            data_transfer_length,
+            flags,
+            lun,
+            cb_length: N as u8,
+            cdb: [0; 16],
+        };
+
+        cbw.cdb[..N].copy_from_slice(cdb);
+        cbw
+    }
+
     pub(super) fn to_bytes(&self) -> [u8; CBW_LEN] {
         let mut buf = [0u8; CBW_LEN];
         buf[0..4].copy_from_slice(&self.signature.to_le_bytes());
@@ -51,10 +75,10 @@ impl CommandBlockWrapper {
 
 #[derive(Debug, Default)]
 pub(super) struct CommandStatusWrapper {
-    pub signature: u32,
-    pub tag: u32,
-    pub data_residue: u32,
-    pub status: u8,
+    signature: u32,
+    tag: u32,
+    data_residue: u32,
+    status: u8,
 }
 
 impl CommandStatusWrapper {
@@ -69,5 +93,9 @@ impl CommandStatusWrapper {
 
     pub(super) fn is_valid(&self, tag: u32) -> bool {
         self.signature == CSW_SIGNATURE && self.tag == tag
+    }
+
+    pub(super) fn status(&self) -> u8 {
+        self.status
     }
 }
