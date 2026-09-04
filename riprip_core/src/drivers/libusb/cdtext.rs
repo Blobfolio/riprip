@@ -329,6 +329,7 @@ pub(super) enum Error {
     InvalidPackCount,
     UnsupportedExtension,
     UnsupportedDoubleByte,
+    IncompleteParse,
 }
 
 #[derive(Debug, Default)]
@@ -516,7 +517,10 @@ impl Metadata {
         }
 
         let mut context = Context::default();
-        let (chunks, _remainder) = pack_data.as_chunks::<PACK_LEN>();
+        let (chunks, remainder) = pack_data.as_chunks::<PACK_LEN>();
+        if !remainder.is_empty() {
+            return Err(Error::IncompleteParse);
+        }
         for pack in chunks {
             if !pack.is_valid() {
                 return Err(Error::InvalidPack);

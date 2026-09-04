@@ -191,33 +191,40 @@ pub(super) trait Drive: Transport {
         Err(RipRipError::C2Mode296)
     }
 
-    fn read_cdtext(&self) -> Option<Vec<u8>> {
-        const ALLOC_LEN: u16 = 2048;
+    fn read_cdtext(&self) -> Result<Option<Vec<u8>>, RipRipError> {
+        let mut buf = vec![];
 
-        let mut cdb = [0u8; 10];
-        cdb[0] = READ_TOC;
-        cdb[2] = TOC_FORMAT_CDTEXT;
-        cdb[6] = 0x00; // Track number to start reading from (0 = entire disc).
+        let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
+            let mut cdb = [0u8; 10];
+            cdb[0] = READ_TOC;
+            cdb[2] = TOC_FORMAT_CDTEXT;
+            cdb[6] = 0x00; // Track number to start reading from (0 = entire disc).
 
-        cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+            cdb[7..9].copy_from_slice(&alloc_len.to_be_bytes());
 
-        let mut buf = vec![0u8; ALLOC_LEN as usize];
-        let len = self.submit(&cdb, &mut buf).ok()?;
-        if len == 0 || len > ALLOC_LEN as usize {
-            return None;
+            buf.clear();
+            buf.resize(alloc_len as usize, 0);
+            
+            self.submit(&cdb, buf).map_err(|_| RipRipError::DiscMode)
+        };
+
+        // Asks only for enough bytes to discover how large the CD-Text is.
+        let len = read_toc(TOC_HEADER_LEN as u16, &mut buf)?;
+        if len < TOC_HEADER_LEN {
+            return Err(RipRipError::DiscMode);
         }
 
-        if u16::from_be_bytes([buf[0], buf[1]]) == 0 {
-            return None; // No CD-Text exists on this disc.
+        let cdtext_len = u16::from_be_bytes([buf[0], buf[1]])
+            .checked_add(2) // Length excludes the 2-byte length field itself.
+            .ok_or(RipRipError::DiscMode)?;
+
+        if cdtext_len as usize == TOC_HEADER_LEN {
+            return Ok(None); // No CD-Text exists on this disc.
         }
+        
+        read_toc(cdtext_len, &mut buf)?;
 
-        // Commands like READ_TOC return a 2-byte header containing the data length.
-        // However, this length field excludes the 2 bytes of the length field itself.
-        let total_valid_bytes = len + 2;
-        let truncate_len = std::cmp::min(total_valid_bytes, buf.len());
-        buf.truncate(truncate_len);
-
-        Some(buf)
+        Ok(Some(buf))
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
