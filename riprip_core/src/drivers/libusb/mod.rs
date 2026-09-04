@@ -20,7 +20,7 @@ use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferT
 
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{cell::RefCell, collections::HashSet, path::Path, time::Duration};
+use std::{path::Path, time::Duration};
 
 /// # Write Bulk Timeout.
 const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
