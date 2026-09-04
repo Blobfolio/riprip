@@ -14,7 +14,6 @@ use crate::{Barcode, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError, C
 
 use mmc::{Drive, Transport};
 
-use dactyl::NoHash;
 use nix::unistd::{setuid, Uid};
 use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};
 

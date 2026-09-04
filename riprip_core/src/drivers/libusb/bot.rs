@@ -98,4 +98,8 @@ impl CommandStatusWrapper {
     pub(super) fn status(&self) -> u8 {
         self.status
     }
+
+    pub(super) fn data_residue(&self) -> u32 {
+        self.data_residue
+    }
 }
