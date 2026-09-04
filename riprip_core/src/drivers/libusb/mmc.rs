@@ -13,6 +13,7 @@ const READ_CD: u8 = 0xBE;
 
 // Architectural Constraints
 const FIRST_TRACK: u8 = 0x01;
+const MAX_TRACK_NUMBER: u8 = 99;
 pub(super) const LEAD_OUT: u8 = 0xAA;
 
 // READ_SUB_CHANNEL Data Formats
@@ -30,6 +31,9 @@ const TOC_FORMAT_FULL: u8 = 0x02;
 const TOC_FORMAT_PMA: u8 = 0x03;
 const TOC_FORMAT_ATIP: u8 = 0x04;
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
+
+const TOC_HEADER_LEN: usize = 4;
+const TOC_TRACK_DESCRIPTOR_LEN: usize = 8;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
 
@@ -95,33 +99,59 @@ pub(super) trait Drive: Transport {
     }
 
     fn check_disc_mode__(&self) -> Result<(), RipRipError> {
-        // Worst-case: 4 bytes (header) + (99 tracks * 8 bytes) + 8 bytes (Lead-out).
-        const ALLOC_LEN: u16 = 4 + 99 * 8 + 8;
+        let mut buf = vec![];
 
-        let mut cdb = [0u8; 10];
-        cdb[0] = READ_TOC;
-        cdb[1] = FORMAT_LBA;
-        cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-        cdb[6] = FIRST_TRACK; // Start reading starting from Track 1.
+        let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
+            let mut cdb = [0u8; 10];
+            cdb[0] = READ_TOC;
+            cdb[1] = FORMAT_LBA;
+            cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
+            cdb[6] = FIRST_TRACK; // Starting track.
 
-        cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+            cdb[7..9].copy_from_slice(&alloc_len.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.submit(&cdb, &mut buf).or(Err(RipRipError::DiscMode))?;
+            buf.clear();
+            buf.resize(alloc_len as usize, 0);
+            
+            self.submit(&cdb, buf).map_err(|_| RipRipError::DiscMode)
+        };
+
+        // Asks only for enough bytes to discover how large the TOC is.
+        let len = read_toc(TOC_HEADER_LEN as u16, &mut buf)?;
+        if len < TOC_HEADER_LEN {
+            return Err(RipRipError::DiscMode);
+        }
+
+        let toc_len = u16::from_be_bytes([buf[0], buf[1]])
+            .checked_add(2) // Length excludes the 2-byte length field itself.
+            .ok_or(RipRipError::DiscMode)?;
+        
+        let len = read_toc(toc_len, &mut buf)?;
+        if len < TOC_HEADER_LEN {
+            return Err(RipRipError::DiscMode);
+        }
 
         let first_track = buf[2];
         let last_track = buf[3];
 
         // Sanity check.
-        if last_track == 0 || first_track > last_track {
+        if last_track == 0 || first_track > last_track || last_track > MAX_TRACK_NUMBER {
+            return Err(RipRipError::DiscMode);
+        }
+
+        let track_count = (last_track - first_track + 1) as usize;
+
+        let total_count = track_count + 1; // Lead-out.
+        
+        let required_len = TOC_HEADER_LEN + total_count * TOC_TRACK_DESCRIPTOR_LEN;
+        if len < required_len {
             return Err(RipRipError::DiscMode);
         }
 
         // Search the descriptors. If an audio track is found, early exit,
         // otherwise default to a DiscMode error.
-        let track_count = (last_track - first_track + 1) as usize;
-        let has_audio = buf[4..]
-            .chunks_exact(8)
+        let has_audio = buf[TOC_HEADER_LEN..]
+            .chunks_exact(TOC_TRACK_DESCRIPTOR_LEN)
             .take(track_count)
             .any(|desc| (desc[1] & CTRL_DATA_TRACK) == 0);
 
