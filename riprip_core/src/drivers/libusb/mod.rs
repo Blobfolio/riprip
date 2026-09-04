@@ -331,6 +331,7 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
         Ok(!is_data)
     }
 
+    /// # Track LBA Start.
     fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
         if idx == 0 {
             return Err(RipRipError::TrackNumber(0));
@@ -340,11 +341,7 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
             .get_track_descriptor(idx)
             .map_err(|_| RipRipError::TrackLba(idx))?;
 
-        if lba < 0 {
-            Err(RipRipError::TrackNumber(idx))
-        } else {
-            Ok(lba + u32::from(CD_LEADIN))
-        }
+        Ok(lba + u32::from(CD_LEADIN))
     }
 
     fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
