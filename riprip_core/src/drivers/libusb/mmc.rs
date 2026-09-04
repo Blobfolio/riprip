@@ -197,8 +197,9 @@ pub(super) trait Drive: Transport {
         let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
             let mut cdb = [0u8; 10];
             cdb[0] = READ_TOC;
+            cdb[1] = FORMAT_LBA;
             cdb[2] = TOC_FORMAT_CDTEXT;
-            cdb[6] = 0x00; // Track number to start reading from (0 = entire disc).
+            cdb[6] = 0; // Track number to start reading from (0 = entire disc).
 
             cdb[7..9].copy_from_slice(&alloc_len.to_be_bytes());
 
@@ -228,19 +229,21 @@ pub(super) trait Drive: Transport {
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-        // 4 bytes for the TOC response header + 8 bytes for a single track descriptor entry.
-        const ALLOC_LEN: u16 = 12;
+        const ALLOC_LEN: u16 = TOC_HEADER_LEN as u16;
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_TOC;
         cdb[1] = FORMAT_LBA;
         cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-        cdb[6] = FIRST_TRACK; // Start reading starting from Track 1.
+        cdb[6] = 0;
 
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
         let mut buf = [0u8; ALLOC_LEN as usize];
-        self.submit(&cdb, &mut buf)?;
+        let len = self.submit(&cdb, &mut buf)?;
+        if len < TOC_HEADER_LEN {
+            return Err(RipRipError::FirstTrackNum);
+        }
 
         let first_track = buf[2];
         let last_track = buf[3];
