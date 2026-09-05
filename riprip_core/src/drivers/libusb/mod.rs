@@ -364,7 +364,7 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
     }
 
     fn mcn_subchannel(&self) -> Option<Barcode> {
-        self.mcn_subchannel__()
+        self.mcn_subchannel__().ok().flatten()
     }
 
     fn drive_vendor_model(&self) -> Option<DriveVendorModel> {

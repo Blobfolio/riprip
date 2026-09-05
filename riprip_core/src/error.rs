@@ -148,6 +148,9 @@ pub enum RipRipError {
 	/// # CD-Text error.
 	CdText,
 
+	/// # Mcn subchannel error.
+	Mcn,
+
 	/// # CD read error.
 	CdRead,
 
@@ -260,6 +263,7 @@ impl fmt::Display for RipRipError {
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; operation unsupported (driver)."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
 			Self::CdText => write!(f, "Unable to decode CD-Text."),
+			Self::Mcn => write!(f, "Unable to read media catalog number."),
 			Self::Device(s) => write!(f, "Invalid device path {s}."),
 			Self::DeviceOpen(s) =>
 				if let Some(s) = s { write!(f, "Unable to open connection with {s}.") }

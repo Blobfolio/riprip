@@ -20,6 +20,9 @@ pub(super) const LEAD_OUT: u8 = 0xAA;
 const SUB_FORMAT_MCN: u8 = 0x02;
 const SUB_FORMAT_ISRC: u8 = 0x03;
 
+const SUB_CHANNEL_HEADER_LEN: usize = 4;
+const SUB_CHANNEL_MCN_DATA_LEN: usize = 22;
+
 // READ_TOC Time/Address Format
 const FORMAT_LBA: u8 = 0x00;
 const FORMAT_MSF: u8 = 0x02;
@@ -59,6 +62,14 @@ mod spc {
 
 use crate::{Barcode, DriveVendorModel, RipRipError};
 
+macro_rules! to_u16 {
+    ($value:expr) => {{
+        const VALUE: usize = $value;
+        const _: () = assert!(VALUE <= u16::MAX as usize);
+        VALUE as u16
+    }};
+}
+
 pub(super) trait Transport {
     /// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
     fn submit<const N: usize>(&self, cdb: &[u8; N], data: &mut [u8]) -> Result<usize, RipRipError>;
@@ -69,9 +80,8 @@ pub(super) trait Transport {
 /// Relies on the underlying `Transport` trait to handle the hardware bus communication
 /// (e.g. USB BOT or `/dev/sg`).
 pub(super) trait Drive: Transport {
-    fn mcn_subchannel__(&self) -> Option<Barcode> {
-        // Request 26 bytes (Standard Sub-channel header + MCN data block size).
-        const ALLOC_LEN: u16 = 26;
+    fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
+        const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_SUB_CHANNEL;
@@ -79,10 +89,12 @@ pub(super) trait Drive: Transport {
         cdb[2] = 0x40; // Sub-Q Channel tracking bit
         cdb[3] = SUB_FORMAT_MCN;
 
-        cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+        cdb[7..9].copy_from_slice(&to_u16!(ALLOC_LEN).to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.submit(&cdb, &mut buf).ok()?;
+        let mut buf = [0u8; ALLOC_LEN];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+            return Err(RipRipError::Mcn)
+        }
 
         let data_format = buf[3];
         let subq_element_valid = buf[4];
@@ -92,10 +104,10 @@ pub(super) trait Drive: Transport {
             let is_mcn_valid = (buf[12] & 0x80) != 0;
             if is_mcn_valid {
                 let raw_ascii = &buf[13..26];
-                return Barcode::try_from(raw_ascii).ok();
+                return Barcode::try_from(raw_ascii).map(Some);
             }
         }
-        None
+        Ok(None)
     }
 
     fn check_disc_mode__(&self) -> Result<(), RipRipError> {
