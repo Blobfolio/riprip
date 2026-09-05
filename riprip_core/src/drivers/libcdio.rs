@@ -11,6 +11,7 @@ use crate::{
 	CddaDriverExt,
 	CDTextKind,
 	DriveVendorModel,
+	macros::log,
 	RipRipError,
 };
 use dactyl::traits::SaturatingFrom;
@@ -87,7 +88,7 @@ impl CddaDriverExt for LibcdioInstance {
 		init();
 
 		// Take a look at the desired device.
-		let dev = {
+		let dev =
 			if let Some(dev) = dev {
 				let dev = dev.as_ref();
 				let original: String = dev.to_string_lossy().into_owned();
@@ -96,10 +97,11 @@ impl CddaDriverExt for LibcdioInstance {
 				}
 				let dev = CString::new(dev.as_os_str().as_bytes())
 					.map_err(|_| RipRipError::Device(original))?;
+
+				log!(@debug "Device path {}.", dev.to_string_lossy());
 				Some(dev)
 			}
-			else { None }
-		};
+			else { None };
 
 		// Connect to it.
 		// Safety: this is an FFI call…
@@ -218,6 +220,26 @@ impl CddaDriverExt for LibcdioInstance {
 	///
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		/// # Parse String.
+		///
+		/// Convert raw vendor/model bytes to a string slice, trimming trailing
+		/// null bytes, but otherwise not worrying about the logical sanity of
+		/// the value.
+		const fn to_str<const N: usize>(raw: &[u8; N]) -> Option<&str> {
+			const { assert!(N != 0, "BUG: N cannot be zero."); }
+
+			// The members of `cdio_hwinfo` are one byte longer than the actual
+			// data so there should always be a trailing null byte.
+			let Ok(cstr) = CStr::from_bytes_until_nul(raw.as_slice()) else {
+				std::hint::cold_path();
+				return None;
+			};
+
+			// UTF-8 validity is less certain. Haha.
+			let Ok(out) = cstr.to_str() else { return None; };
+			Some(out)
+		}
+
 		let mut raw = cdio_hwinfo {
 			psz_vendor: [0; 9],
 			psz_model: [0; 17],
@@ -233,24 +255,14 @@ impl CddaDriverExt for LibcdioInstance {
 			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
 			let model_u8 = raw.psz_model.map(u8::saturating_from);
 
-			// Vendor might be empty.
-			let vendor =
-				if vendor_u8[0] == 0 { "" }
-				else {
-					CStr::from_bytes_until_nul(vendor_u8.as_slice())
-					.ok()
-					.and_then(|v| v.to_str().ok())?
-				};
-
-			// But model is required.
-			let model =
-				if model_u8[0] == 0 { None }
-				else {
-					CStr::from_bytes_until_nul(model_u8.as_slice())
-					.ok()
-					.and_then(|v| v.to_str().ok())
-				}?;
-
+			let Some(vendor) = to_str(&vendor_u8) else {
+				log!(@trace "Invalid drive vendor {vendor_u8:?}.");
+				return None;
+			};
+			let Some(model) = to_str(&model_u8) else {
+				log!(@trace "Invalid drive model {model_u8:?}.");
+				return None;
+			};
 			DriveVendorModel::new(vendor, model).ok()
 		}
 		else { None }
@@ -262,10 +274,11 @@ impl CddaDriverExt for LibcdioInstance {
 	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		// Safety: this is an FFI call…
-		let raw = unsafe {
-			libcdio_sys::cdio_get_mcn(self.as_ptr())
-		};
-		if raw.is_null() { None }
+		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
+		if raw.is_null() {
+			log!(@trace "Subchannel contains no MCN data.");
+			None
+		}
 		else {
 			// Safety: this is an FFI call…
 			let mcn = unsafe { CStr::from_ptr(raw) }
@@ -370,10 +383,14 @@ impl LibcdioInstance {
 	/// together.
 	fn init_cdtext__(&mut self) {
 		// Safety: this is an FFI call…
-		let ptr = unsafe {
-			libcdio_sys::cdio_get_cdtext(self.as_mut_ptr())
-		};
-		if ! ptr.is_null() { self.cdtext.replace(ptr); }
+		let ptr = unsafe { libcdio_sys::cdio_get_cdtext(self.as_mut_ptr()) };
+		if ptr.is_null() {
+			log!(@trace "Disc contains no CDText data.");
+		}
+		else {
+			log!(@trace "Initialized buffer for CDText data.");
+			self.cdtext.replace(ptr);
+		}
 	}
 }
 
@@ -404,6 +421,9 @@ fn c_char_to_string(ptr: *const c_char) -> Option<String> {
 /// This is only called once, but to be safe, it is also wrapped in a static to
 /// make sure it can never re-initialize.
 fn init() {
-	// Safety: this is an FFI call…
-	LIBCDIO_INIT.call_once(|| unsafe { libcdio_sys::cdio_init(); });
+	LIBCDIO_INIT.call_once(|| {
+		log!(@debug "Initializing `libcdio` driver.");
+		// Safety: this is an FFI call…
+		unsafe { libcdio_sys::cdio_init(); }
+	});
 }

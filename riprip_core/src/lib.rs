@@ -64,10 +64,13 @@ mod disc;
 mod drive;
 mod drivers;
 mod error;
+mod loglog;
+pub mod macros;
 mod rip;
 
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
+pub use cdtoc;
 pub use disc::Disc;
 pub use drive::{
 	DriveVendorModel,
@@ -75,6 +78,10 @@ pub use drive::{
 };
 pub use drivers::CDTextKind;
 pub use error::RipRipError;
+pub use loglog::{
+	LogLog,
+	LogLevel,
+};
 pub use rip::opts::RipOptions;
 
 use cache::{
@@ -195,7 +202,7 @@ const FRAMES_PER_SECOND: u8 = 75;
 /// # Lead-out Label.
 ///
 /// This is used solely for the table of contents printout; e.g. 01 02 03 AA.
-const CD_LEADOUT_LABEL: &str = "AA";
+pub const CD_LEADOUT_LABEL: &str = "AA";
 
 /// # Null sample.
 ///

@@ -8,6 +8,7 @@ use crate::{
 	cache_prefix,
 	CACHE_SCRATCH,
 	CacheWriter,
+	macros::log,
 	RipSample,
 	SAMPLE_OVERREAD,
 	SAMPLES_PER_SECTOR,
@@ -46,6 +47,7 @@ const UA: &str = concat!(
 
 
 
+#[expect(clippy::option_if_let_else, reason = "No.")]
 /// # Verify w/ AccurateRip.
 ///
 /// This will download and cache the checksums from AccurateRip's servers, then
@@ -77,11 +79,20 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 			let chk = download(&url, &dst)?;
 			Some(chk)
 		})
-		.and_then(|chk| ar.parse_checksums(&chk).ok())
+		.and_then(|chk|
+			if let Ok(v) = ar.parse_checksums(&chk) { Some(v) }
+			else {
+				log!(@trace "Failed to parse AccurateRip reference checksums.");
+				None
+			}
+		)
 		.and_then(|mut chk| {
 			let idx = usize::from(track.number() - 1);
 			if idx < chk.len() { Some(chk.remove(idx)) }
-			else { None }
+			else {
+				log!(@trace "AccurateRip checksums do not contain track {idx}.");
+				None
+			}
 		})?;
 
 	// Figure out which samples we need to crunch.
@@ -92,7 +103,14 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	let end =
 		if pos.is_last() { data.len().saturating_sub(usize::from(SAMPLES_PER_SECTOR) * 5 + 1) }
 		else { data.len() };
-	if end <= start { return None; }
+	if end <= start {
+		log!(
+			@trace
+			"Track {} is not long enough for AccurateRip checksumming.",
+			track.number(),
+		);
+		return None;
+	}
 
 	// Crunch!
 	let mut crc1 = Wrapping(0_u64); // Version #1.
@@ -122,15 +140,34 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	let crc1 = (crc1.0 & 0xFFFF_FFFF) as u32;
 	let crc2 = (crc2.0 & 0xFFFF_FFFF) as u32;
 
-	// Return the matches, if any.
-	Some((
+	let out = (
 		chk.get(&crc1).copied().unwrap_or(0),
 		chk.get(&crc2).copied().unwrap_or(0),
-	))
+	);
+	if out.0 == 0 && out.1 == 0 {
+		log!(
+			@debug
+			"AccurateRip checksums {crc1:08x} and {crc2:08x} for track {} yielded no match.",
+			track.number(),
+		);
+	}
+	else {
+		log!(
+			@debug
+			"AccurateRip checksums {crc1:08x} and {crc2:08x} for track {} yielded {} and {} matches, respectively.",
+			track.number(),
+			out.0,
+			out.1,
+		);
+	}
+
+	// Return the matches, if any.
+	Some(out)
 }
 
 
 
+#[expect(clippy::too_many_lines, reason = "Logging's what pushed us over. Haha.")]
 /// # Verify w/ CUETools.
 ///
 /// This will download and cache the checksums from CUETools's servers, then
@@ -174,13 +211,24 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 			Some(chk)
 		})
 		.and_then(|chk| {
-			let chk = String::from_utf8(chk).ok()?;
-			toc.ctdb_parse_checksums(&chk).ok()
+			if
+				let Ok(chk) = String::from_utf8(chk) &&
+				let Ok(v) = toc.ctdb_parse_checksums(&chk)
+			{
+				Some(v)
+			}
+			else {
+				log!(@trace "Unable to parse CUETools reference checksums.");
+				None
+			}
 		})
 		.and_then(|mut chk| {
 			let idx = usize::from(track.number() - 1);
 			if idx < chk.len() { Some(chk.remove(idx)) }
-			else { None }
+			else {
+				log!(@trace "CUETools checksums do not contain track {idx}.");
+				None
+			}
 		})?;
 
 	// Our data range is the track with ten extra sectors on either end. We
@@ -209,7 +257,14 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 	// Before we start slicing, make sure there is at least one sector's worth
 	// of data to shove in the middle, or it's too short to bother with.
-	if data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) { return None; }
+	if data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) {
+		log!(
+			@trace
+			"Track {} is not long enough for CUETools checksumming.",
+			track.number(),
+		);
+		return None;
+	}
 
 	// Carve it up! We need to keep the start and end in byte form so they can
 	// be dynamically resliced, but everything else (the middle) can be
@@ -233,10 +288,17 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	crc.update(&start[CTDB_WIGGLE + ignore_first..]);
 	crc.combine(&middle);
 	crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last]);
+	let crc = crc.finalize();
 
 	// Check it!
-	if let Some(v) = chk.remove(&crc.finalize()) {
+	if let Some(v) = chk.remove(&crc) {
 		confidence += v;
+		log!(
+			@debug
+			"CUETools checksum {crc:08x} for track {} has {v} match{}.",
+			track.number(),
+			if v == 1 { "" } else { "es" },
+		);
 		if chk.is_empty() {
 			return Some(if confidence < 2 { 0 } else { confidence });
 		}
@@ -263,9 +325,17 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 				// Check it!
 				if let Ok(mut tmp) = chk.lock() {
+					let crc = crc.finalize();
 					if tmp.is_empty() { break; }
-					else if let Some(v) = tmp.remove(&crc.finalize()) {
+					else if let Some(v) = tmp.remove(&crc) {
 						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+						log!(
+							@debug
+							"CUETools checksum {crc:08x} (offset -{shift}) for track {} has {v} match{}.",
+							track.number(),
+							if v == 1 { "" } else { "es" },
+							shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
+						);
 						confidence.fetch_add(v, Relaxed);
 					}
 				}
@@ -288,9 +358,17 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 				// Check it!
 				if let Ok(mut tmp) = chk.lock() {
+					let crc = crc.finalize();
 					if tmp.is_empty() { break; }
-					else if let Some(v) = tmp.remove(&crc.finalize()) {
+					else if let Some(v) = tmp.remove(&crc) {
 						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+						log!(
+							@debug
+							"CUETools checksum {crc:08x} (offset {shift}) for track {} has {v} match{}.",
+							track.number(),
+							if v == 1 { "" } else { "es" },
+							shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
+						);
 						confidence.fetch_add(v, Relaxed);
 					}
 				}
@@ -302,6 +380,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	// than two, so to avoid confusion, we'll treat them as equivalent to no
 	// matches at all.
 	let confidence = confidence.into_inner();
+	if confidence == 0 {
+		log!(@debug "CUETools checksums for track {} yielded no match.", track.number());
+	}
 	Some(if confidence < 2 { 0 } else { confidence })
 }
 
@@ -313,17 +394,28 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	use std::io::Write;
 
+	log!(@debug "Downloading {url}.");
+
 	// Download the data into a vector.
-	let res = minreq::get(url)
+	let res = match minreq::get(url)
 		.with_header("user-agent", UA)
 		.with_timeout(15)
 		.send()
-		.ok()?;
+	{
+		Ok(v) => v,
+		Err(e) => {
+			log!(@trace "Download failed.\n  {e}");
+			return None;
+		},
+	};
 
 	// Only accept happy response codes with sized bodies.
 	if (200..=399).contains(&res.status_code) {
 		let out = res.into_bytes();
-		if ! out.is_empty() {
+		if out.is_empty() {
+			log!(@trace "Received empty response.");
+		}
+		else {
 			// Cache the contents for next time.
 			let _res = CacheWriter::new(dst).ok()
 				.and_then(|mut writer| {
@@ -333,6 +425,8 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 			return Some(out);
 		}
 	}
+	else { log!(@trace "Download failed with status {}.", res.status_code); }
 
+	// However we got here, there's nothing for it.
 	None
 }
