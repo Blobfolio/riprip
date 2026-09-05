@@ -229,7 +229,8 @@ pub(super) trait Drive: Transport {
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-        const ALLOC_LEN: u16 = TOC_HEADER_LEN as u16;
+        const ALLOC_LEN: usize = TOC_HEADER_LEN;
+        const _: () = assert!(ALLOC_LEN <= u16::MAX as usize);
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_TOC;
@@ -239,9 +240,8 @@ pub(super) trait Drive: Transport {
 
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        let len = self.submit(&cdb, &mut buf)?;
-        if len < TOC_HEADER_LEN {
+        let mut buf = [0u8; ALLOC_LEN];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
             return Err(RipRipError::FirstTrackNum);
         }
 
