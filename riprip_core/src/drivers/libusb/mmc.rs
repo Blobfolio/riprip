@@ -20,8 +20,8 @@ pub(super) const LEAD_OUT: u8 = 0xAA;
 const SUB_FORMAT_MCN: u8 = 0x02;
 const SUB_FORMAT_ISRC: u8 = 0x03;
 
-const SUB_CHANNEL_HEADER_LEN: usize = 4;
-const SUB_CHANNEL_MCN_DATA_LEN: usize = 22;
+const SUB_CHANNEL_HEADER_LEN: u16 = 4;
+const SUB_CHANNEL_MCN_DATA_LEN: u16 = 22;
 
 // READ_TOC Time/Address Format
 const FORMAT_LBA: u8 = 0x00;
@@ -35,8 +35,8 @@ const TOC_FORMAT_PMA: u8 = 0x03;
 const TOC_FORMAT_ATIP: u8 = 0x04;
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
-const TOC_HEADER_LEN: usize = 4;
-const TOC_TRACK_DESCRIPTOR_LEN: usize = 8;
+const TOC_HEADER_LEN: u16 = 4;
+const TOC_TRACK_DESCRIPTOR_LEN: u16 = 8;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
 
@@ -62,14 +62,6 @@ mod spc {
 
 use crate::{Barcode, DriveVendorModel, RipRipError};
 
-macro_rules! to_u16 {
-    ($value:expr) => {{
-        const VALUE: usize = $value;
-        const _: () = assert!(VALUE <= u16::MAX as usize);
-        VALUE as u16
-    }};
-}
-
 pub(super) trait Transport {
     /// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
     fn submit<const N: usize>(&self, cdb: &[u8; N], data: &mut [u8]) -> Result<usize, RipRipError>;
@@ -81,7 +73,7 @@ pub(super) trait Transport {
 /// (e.g. USB BOT or `/dev/sg`).
 pub(super) trait Drive: Transport {
     fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
-        const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
+        const ALLOC_LEN: u16 = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_SUB_CHANNEL;
@@ -89,10 +81,10 @@ pub(super) trait Drive: Transport {
         cdb[2] = 0x40; // Sub-Q Channel tracking bit
         cdb[3] = SUB_FORMAT_MCN;
 
-        cdb[7..9].copy_from_slice(&to_u16!(ALLOC_LEN).to_be_bytes());
+        cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN];
-        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+        let mut buf = [0u8; ALLOC_LEN as usize];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
             return Err(RipRipError::Mcn)
         }
 
@@ -129,8 +121,8 @@ pub(super) trait Drive: Transport {
         };
 
         // Asks only for enough bytes to discover how large the TOC is.
-        let len = read_toc(TOC_HEADER_LEN as u16, &mut buf)?;
-        if len < TOC_HEADER_LEN {
+        let len = read_toc(TOC_HEADER_LEN, &mut buf)?;
+        if len < TOC_HEADER_LEN as usize {
             return Err(RipRipError::DiscMode);
         }
 
@@ -139,7 +131,7 @@ pub(super) trait Drive: Transport {
             .ok_or(RipRipError::DiscMode)?;
         
         let len = read_toc(toc_len, &mut buf)?;
-        if len < TOC_HEADER_LEN {
+        if len < TOC_HEADER_LEN as usize {
             return Err(RipRipError::DiscMode);
         }
 
@@ -155,15 +147,15 @@ pub(super) trait Drive: Transport {
 
         let total_count = track_count + 1; // Lead-out.
         
-        let required_len = TOC_HEADER_LEN + total_count * TOC_TRACK_DESCRIPTOR_LEN;
+        let required_len = TOC_HEADER_LEN as usize + total_count * TOC_TRACK_DESCRIPTOR_LEN as usize;
         if len < required_len {
             return Err(RipRipError::DiscMode);
         }
 
         // Search the descriptors. If an audio track is found, early exit,
         // otherwise default to a DiscMode error.
-        let has_audio = buf[TOC_HEADER_LEN..]
-            .chunks_exact(TOC_TRACK_DESCRIPTOR_LEN)
+        let has_audio = buf[TOC_HEADER_LEN as usize..]
+            .chunks_exact(TOC_TRACK_DESCRIPTOR_LEN as usize)
             .take(track_count)
             .any(|desc| (desc[1] & CTRL_DATA_TRACK) == 0);
 
@@ -222,8 +214,8 @@ pub(super) trait Drive: Transport {
         };
 
         // Asks only for enough bytes to discover how large the CD-Text is.
-        let len = read_toc(TOC_HEADER_LEN as u16, &mut buf)?;
-        if len < TOC_HEADER_LEN {
+        let len = read_toc(TOC_HEADER_LEN, &mut buf)?;
+        if len < TOC_HEADER_LEN as usize {
             return Err(RipRipError::DiscMode);
         }
 
@@ -231,7 +223,7 @@ pub(super) trait Drive: Transport {
             .checked_add(2) // Length excludes the 2-byte length field itself.
             .ok_or(RipRipError::DiscMode)?;
 
-        if cdtext_len as usize == TOC_HEADER_LEN {
+        if cdtext_len == TOC_HEADER_LEN {
             return Ok(None); // No CD-Text exists on this disc.
         }
         
@@ -241,8 +233,7 @@ pub(super) trait Drive: Transport {
     }
 
     fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-        const ALLOC_LEN: usize = TOC_HEADER_LEN;
-        const _: () = assert!(ALLOC_LEN <= u16::MAX as usize);
+        const ALLOC_LEN: u16 = TOC_HEADER_LEN;
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_TOC;
@@ -252,8 +243,8 @@ pub(super) trait Drive: Transport {
 
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN];
-        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+        let mut buf = [0u8; ALLOC_LEN as usize];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
             return Err(RipRipError::FirstTrackNum);
         }
 
@@ -264,8 +255,7 @@ pub(super) trait Drive: Transport {
     }
 
     fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
-        const ALLOC_LEN: usize = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
-        const _: () = assert!(ALLOC_LEN <= u16::MAX as usize);
+        const ALLOC_LEN: u16 = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_TOC;
@@ -275,8 +265,8 @@ pub(super) trait Drive: Transport {
 
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN];
-        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+        let mut buf = [0u8; ALLOC_LEN as usize];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
             return Err(RipRipError::TrackLba(idx));
         }
 
