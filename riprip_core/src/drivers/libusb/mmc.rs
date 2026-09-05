@@ -252,7 +252,8 @@ pub(super) trait Drive: Transport {
     }
 
     fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
-        const ALLOC_LEN: u16 = 12;
+        const ALLOC_LEN: usize = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
+        const _: () = assert!(ALLOC_LEN <= u16::MAX as usize);
 
         let mut cdb = [0u8; 10];
         cdb[0] = READ_TOC;
@@ -262,8 +263,10 @@ pub(super) trait Drive: Transport {
 
         cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
-        let mut buf = [0u8; ALLOC_LEN as usize];
-        self.submit(&cdb, &mut buf)?;
+        let mut buf = [0u8; ALLOC_LEN];
+        if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+            return Err(RipRipError::TrackLba(idx));
+        }
 
         let control_adr = buf[5];
         let lba = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
