@@ -79,8 +79,14 @@ impl DriveVendorModel {
 	/// This will return an error if the lengths are out of range, or the
 	/// model number is missing.
 	pub(crate) fn new(mut vendor: &str, mut model: &str) -> Result<Self, RipRipError> {
-		vendor = vendor.trim();
-		model = model.trim();
+		/// # Trim Callback.
+		///
+		/// This is used to trim both ASCII whitespace and control characters,
+		/// as the raw data isn't afraid to null-pad its entries.
+		const fn trim_vm(c: char) -> bool { c.is_ascii_whitespace() || c.is_ascii_control() }
+
+		vendor = vendor.trim_matches(trim_vm);
+		model = model.trim_matches(trim_vm);
 
 		if DRIVE_VENDOR_LEN < vendor.len() || ! vendor.is_ascii() { Err(RipRipError::DriveVendor) }
 		else if ! (1..=DRIVE_MODEL_LEN).contains(&model.len()) || ! model.is_ascii() {
