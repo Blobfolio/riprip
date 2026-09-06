@@ -15,15 +15,9 @@ use std::{
 	collections::BTreeMap,
 	env,
 	fmt,
-	fs::{
-		File,
-		Metadata,
-	},
+	fs::File,
 	io::Write,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::PathBuf,
 };
 
 
@@ -40,8 +34,7 @@ fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 	println!("cargo:rerun-if-changed=skel");
 
-	let raw = fetch_offsets();
-	let offsets = parse_offsets(&raw);
+	let offsets = parse_offsets();
 	let caches = parse_caches(&offsets);
 
 	// Announce the totals for reference.
@@ -59,38 +52,6 @@ fn main() {
 }
 
 
-
-/// # Download/Cache Raw Data.
-///
-/// This will try to pull the data from the build cache if it exists, otherwise
-/// it will download it fresh (and save it to the build cache for next time).
-fn fetch_offsets() -> Vec<u8> {
-	// Pull from cache?
-	let cache = out_path("DriveOffsets.bin");
-	if let Some(x) = try_cache(&cache) { return x; }
-
-	// Download it fresh.
-	let res = minreq::get(AccurateRip::DRIVE_OFFSET_URL)
-		.with_header("user-agent", "Mozilla/5.0")
-		.send()
-		.expect("Unable to download AccurateRip drive offsets.");
-
-	// Only accept happy response codes with sized bodies.
-	if ! (200..=399).contains(&res.status_code) {
-		panic!("AccurateRip returned {}.", res.status_code);
-	}
-
-	let out = res.into_bytes();
-	if out.is_empty() {
-		panic!("The AccurateRip drive offset server response was empty.");
-	}
-
-	// Try to cache for next time.
-	let _res = File::create(cache)
-		.and_then(|mut f| f.write_all(&out).and_then(|_| f.flush()));
-
-	out
-}
 
 /// # Nice Drive Caches.
 ///
@@ -231,11 +192,14 @@ fn parse_cache_line(line: &str) -> Option<(VendorModel, u16)> {
 /// * 33 bytes (unused by the look of it)
 ///
 /// We only care about the first two parts.
-fn parse_offsets(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
+fn parse_offsets() -> BTreeMap<VendorModel, i16> {
+	let raw = std::fs::read("skel/drive-offsets.bin")
+		.expect("Unable to open skel/drive-offsets.bin");
+
 	// CDTOC does most of the work for us, but we can ignore 0-offset entries,
 	// and will uppercase the vendor/model pairs for case-insensitive
 	// searching.
-	let parsed: BTreeMap<VendorModel, i16> = AccurateRip::parse_drive_offsets(raw)
+	let parsed: BTreeMap<VendorModel, i16> = AccurateRip::parse_drive_offsets(&raw)
 		.expect("Unable to parse drive offsets.")
 		.into_iter()
 		.filter_map(|((v, m), o)|
@@ -263,17 +227,4 @@ fn parse_offsets(raw: &[u8]) -> BTreeMap<VendorModel, i16> {
 
 	// Done!
 	parsed
-}
-
-/// # Try Cache.
-///
-/// Return a previously-cached copy of the raw data (from `target`), unless it
-/// doesn't exist or was generated more than a day ago.
-fn try_cache(path: &Path) -> Option<Vec<u8>> {
-	std::fs::metadata(path)
-		.ok()
-		.filter(Metadata::is_file)
-		.and_then(|meta| meta.modified().ok())
-		.and_then(|time| time.elapsed().ok().filter(|secs| secs.as_secs() < 86400))
-		.and_then(|_| std::fs::read(path).ok())
 }

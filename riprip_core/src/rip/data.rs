@@ -10,6 +10,7 @@ use cdtoc::{
 use crate::{
 	BYTES_PER_SAMPLE,
 	CacheWriter,
+	macros::log,
 	ReadOffset,
 	RipOptions,
 	RipRipError,
@@ -278,6 +279,7 @@ impl RipState {
 		{
 			let mut buf = BufWriter::with_capacity(BUFFER_SIZE, writer.writer());
 			let idx = self.track.number();
+			log!(@debug "Saving state data for track {idx} to disk.");
 
 			// The first twelve bytes are reserved for some magic header bits
 			// and a CRC32 hash of the toc, track, and data.
@@ -324,6 +326,7 @@ impl RipState {
 		let mut writer = CacheWriter::new(&dst)?;
 		{
 			let mut buf = BufWriter::with_capacity(BUFFER_SIZE, writer.writer());
+			log!(@debug "Saving track {} to disk.", self.track.number());
 
 			// The header comes first; we just need to fill out the
 			// size-related blocks before pushing it.

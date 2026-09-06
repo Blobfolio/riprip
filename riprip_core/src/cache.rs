@@ -9,6 +9,7 @@ use cdtoc::{
 use crate::{
 	CACHE_BASE,
 	CACHE_SCRATCH,
+	macros::log,
 	RipRipError,
 };
 use fyi_msg::Msg;
@@ -62,22 +63,27 @@ impl<'a> CacheWriter<'a> {
 	pub(super) fn new(dst: &'a Path) -> Result<Self, RipRipError> {
 		// The destination doesn't have to exist, but can't be a directory.
 		if dst.is_dir() {
+			log!(@trace "Cache path is a directory.\n  {}", dst.display());
 			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		}
 
 		// It must have a parent directory.
-		let parent = dst.parent()
-			.ok_or_else(|| RipRipError::CachePath(dst.to_string_lossy().into_owned()))?;
+		let Some(parent) = dst.parent() else {
+			log!(@trace "Cache path has no parent.\n  {}", dst.display());
+			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
+		};
 
 		// If that doesn't exist, try to create it.
-		if ! parent.is_dir() {
-			std::fs::create_dir_all(parent)
-				.map_err(|_| RipRipError::CachePath(dst.to_string_lossy().into_owned()))?;
+		if ! parent.is_dir() && std::fs::create_dir_all(parent).is_err() {
+			log!(@trace "Unable to create missing cache directory.\n  {}", parent.display());
+			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		}
 
 		// Make a tempfile.
-		let tmp = tempfile::Builder::new().tempfile_in(parent)
-			.map_err(|_| RipRipError::CachePath(dst.to_string_lossy().into_owned()))?;
+		let Ok(tmp) = tempfile::Builder::new().tempfile_in(parent) else {
+			log!(@trace "Unable to create temporary file for {}.", dst.display());
+			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
+		};
 
 		// We should be good!
 		Ok(Self { dst, tmp })
@@ -96,12 +102,17 @@ impl<'a> CacheWriter<'a> {
 		use std::io::Write;
 
 		// Flush for good measure.
-		self.tmp.flush()
-			.map_err(|_| RipRipError::CachePath(self.dst.to_string_lossy().into_owned()))?;
+		if self.tmp.flush().is_err() {
+			log!(@trace "Failed to flush cache write.\n  {}", self.dst.display());
+			return Err(RipRipError::CachePath(self.dst.to_string_lossy().into_owned()));
+		}
 
-		self.tmp.persist(self.dst)
-			.map(|_| ())
-			.map_err(|_| RipRipError::CachePath(self.dst.to_string_lossy().into_owned()))
+		// Make it so!
+		if self.tmp.persist(self.dst).is_ok() { Ok(()) }
+		else {
+			log!(@trace "Unable to persist cache file.\n  {}", self.dst.display());
+			Err(RipRipError::CachePath(self.dst.to_string_lossy().into_owned()))
+		}
 	}
 }
 
@@ -175,7 +186,7 @@ pub(crate) fn track_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError
 /// This will return an error if the path cannot be determined or the current
 /// working directory does not exist.
 fn cache_root() -> Result<&'static Path, RipRipError> {
-	let out = CACHE_ROOT.get_or_init(|| {
+	let Some(out) = CACHE_ROOT.get_or_init(|| {
 		// The base must already exist.
 		let dir = std::env::current_dir().ok()?;
 		if ! dir.is_dir() { return None; }
@@ -184,22 +195,23 @@ fn cache_root() -> Result<&'static Path, RipRipError> {
 		let dir = dir.join(CACHE_BASE);
 
 		// Make it if necessary.
-		if ! dir.is_dir() {
-			std::fs::create_dir_all(&dir).ok()?;
-		}
+		if ! dir.is_dir() { std::fs::create_dir_all(&dir).ok()?; }
 
 		// Make sure it is really there.
 		std::fs::canonicalize(dir).ok()
-	})
-		.as_deref()
-		.ok_or(RipRipError::Cache)?;
+	}).as_deref() else {
+		log!(@trace "Unable to determine cache root.");
+		return Err(RipRipError::Cache);
+	};
 
 	if out.is_dir() { Ok(out) }
 	// It seems to have vanished… try to recreate it.
 	else {
 		Msg::warning(format!("The {CACHE_BASE} cache directory has vanished!")).eprint();
-		std::fs::create_dir_all(out).map_err(|_| RipRipError::Cache)?;
-		if out.is_dir() { Ok(out) }
-		else { Err(RipRipError::Cache) }
+		if std::fs::create_dir_all(out).is_err() || ! out.is_dir() {
+			log!(@trace "Unable to recreate missing cache directory.");
+			Err(RipRipError::Cache)
+		}
+		else { Ok(out) }
 	}
 }

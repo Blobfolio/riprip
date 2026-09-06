@@ -9,6 +9,7 @@ use crate::{
 	CddaDriver,
 	CddaDriverExt,
 	KillSwitch,
+	macros::log,
 	RipOptions,
 	RipRipError,
 	Sample,
@@ -47,6 +48,7 @@ impl RipBuffer {
 		backwards: bool,
 		killed: KillSwitch,
 	) {
+		log!(@debug "Busting the cache.");
 		cdio.cache_bust(self.data_slice_mut(), len, rng, leadout, backwards, killed);
 	}
 
@@ -78,7 +80,10 @@ impl RipBuffer {
 			// Make sure we got the same data both times.
 			if hash == crc32fast::hash(self.data_slice()) { Ok(good) }
 			// If not, treat it like a generic read error.
-			else { Err(RipRipError::CdRead) }
+			else {
+				log!(@trace "Subchannel and C2 reads of {lsn} returned different data.");
+				Err(RipRipError::CdRead)
+			}
 		}
 		// Normal read.
 		else { self.read_c2(cdio, lsn, opts) }
@@ -165,9 +170,7 @@ impl RipBuffer {
 
 	#[inline]
 	/// # Mark All C2 Bad.
-	fn set_bad(&mut self) {
-		for v in self.c2_slice_mut() { *v = 0b1111_1111; }
-	}
+	fn set_bad(&mut self) { self.c2_slice_mut().fill(0b1111_1111); }
 }
 
 

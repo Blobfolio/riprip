@@ -72,15 +72,15 @@ use oxford_join::JoinFmt;
 use riprip_core::{
 	Disc,
 	KillSwitch,
-	RipRipError,
+	macros::log,
 	RipOptions,
+	RipRipError,
 };
 use std::{
 	borrow::Cow,
 	fmt,
 	process::ExitCode,
 };
-use utc2k::FmtUtc2k;
 
 
 
@@ -158,66 +158,13 @@ fn main__() -> Result<(), RipRipError> {
 	rip_summary(&disc, &opts)?;
 
 	// Log header.
-	if opts.verbose() { log_header(&disc, &opts); }
+	log!(@info "Ripping with [{opts}].");
 
 	// Rip and rip and rip!
 	disc.rip(&opts, &progress, killed)?;
 
 	if killed.killed() { Err(RipRipError::Killed) }
 	else { Ok(()) }
-}
-
-/// # Log Header.
-///
-/// Print a few basic setup details for the log. Only applies when -v/--verbose
-/// is set, and we're ripping something.
-fn log_header(disc: &Disc, opts: &RipOptions) {
-	use std::io::Write;
-
-	let writer = std::io::stdout();
-	let mut handle = writer.lock();
-
-	// Program version.
-	let _res = writeln!(
-		&mut handle,
-		concat!("#####
-## Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"), "
-## {cli}
-##
-## Date:        {date}"),
-		cli=opts.cli(),
-		date=FmtUtc2k::now().to_rfc3339(),
-	);
-
-	// Drive.
-	if let Some(v) = disc.drive_vendor_model() {
-		let vendor = v.vendor();
-		let model = v.model();
-		if vendor.is_empty() {
-			let _res = writeln!(&mut handle, "## Drive:       {model}");
-		}
-		else {
-			let _res = writeln!(&mut handle, "## Drive:       [{vendor}] {model}");
-		}
-	}
-
-	// Everything else!
-	let _res = writeln!(
-		&mut handle,
-		"##
-{disc:?}
-## The quality issues noted for each pass are composed of the following fields,
-## separated by two spaces:
-##   * Track Number                   [2 digits]
-##   * Logical Sector Number          [6 digits]
-##   * Affected Samples (out of 588)  [3 digits]
-##   * Description
-##       * BAD:      values returned with C2 errors
-##       * CONFUSED: many contradictory \"good\" values
-#####",
-	);
-
-	let _res = handle.flush();
 }
 
 
@@ -354,6 +301,7 @@ fn rip_summary(disc: &Disc, opts: &RipOptions) -> Result<(), RipRipError> {
 		Ok(())
 	}
 	else {
+		log!(@warn "Rip aborted.");
 		eprintln!();
 		Err(RipRipError::Killed)
 	}

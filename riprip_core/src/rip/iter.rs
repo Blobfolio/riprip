@@ -60,9 +60,7 @@ impl<'a> OffsetRipIter<'a> {
 		let write = EitherChunksIter::new(slice, backwards);
 
 		// We're good if the lengths match.
-		if write.len() == read.len() {
-			Ok(Self { read, write })
-		}
+		if write.len() == read.len() { Ok(Self { read, write }) }
 		// Otherwise it's a bug.
 		else {
 			Err(RipRipError::Bug("OffsetRipIter lsn and slice have different lengths!"))

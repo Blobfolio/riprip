@@ -2,7 +2,10 @@
 # Rip Rip Hooray: Barcodes
 */
 
-use crate::RipRipError;
+use crate::{
+	macros::log,
+	RipRipError,
+};
 use std::fmt;
 use trimothy::TrimSliceMatches;
 
@@ -16,20 +19,30 @@ use trimothy::TrimSliceMatches;
 pub struct Barcode([u8; 13]);
 
 impl fmt::Display for Barcode {
-	#[expect(unsafe_code, reason = "Content is ASCII.")]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		// Safety: all values are ASCII digits.
-		let s = unsafe { std::str::from_utf8_unchecked(self.0.as_slice()) };
+		/// # Slice Writer.
+		///
+		/// This struct helps avoid the UTF8 and bounds-related overhead we'd
+		/// face from converting the data to string slices.
+		struct SliceFmt<'a>(&'a [u8]);
+
+		impl fmt::Display for SliceFmt<'_> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				use std::fmt::Write;
+				for c in self.0.iter().copied() { f.write_char(char::from(c))?; }
+				Ok(())
+			}
+		}
 
 		// Treat like UPC12 if the first digit is zero.
 		if self.0[0] == b'0' {
 			write!(
 				f,
 				"{}-{}-{}-{}",
-				&s[1..2],
-				&s[2..7],
-				&s[7..12],
-				&s[12..],
+				SliceFmt(&self.0[1..2]),
+				SliceFmt(&self.0[2..7]),
+				SliceFmt(&self.0[7..12]),
+				SliceFmt(&self.0[12..]),
 			)
 		}
 		// Otherwise like an EAN13.
@@ -37,9 +50,9 @@ impl fmt::Display for Barcode {
 			write!(
 				f,
 				"{}-{}-{}",
-				&s[..1],
-				&s[1..7],
-				&s[7..],
+				SliceFmt(&self.0[..1]),
+				SliceFmt(&self.0[1..7]),
+				SliceFmt(&self.0[7..]),
 			)
 		}
 	}
@@ -54,6 +67,7 @@ impl TryFrom<&[u8]> for Barcode {
 
 		// Make sure we've got 8-13 ASCII digits and nothing else.
 		if ! (8..=13).contains(&src.len()) || ! src.iter().all(u8::is_ascii_digit) {
+			log!(@trace "Invalid barcode {:?}.", src);
 			return Err(RipRipError::Barcode);
 		}
 
@@ -63,7 +77,10 @@ impl TryFrom<&[u8]> for Barcode {
 
 		// Return it if valid!
 		if is_ean13(&maybe) { Ok(Self(maybe)) }
-		else { Err(RipRipError::Barcode) }
+		else {
+			log!(@trace "Invalid barcode {:?}.", maybe);
+			Err(RipRipError::Barcode)
+		}
 	}
 }
 
