@@ -36,11 +36,12 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 
 # Build Release!
-@build:
+@build DRIVER="libcdio-static":
 	env SHOW_TOTALS=1 cargo auditable build \
 		--bin "{{ pkg_id }}" \
 		-p "{{ pkg_id }}" \
 		--release \
+		--no-default-features --features="{{DRIVER}}" \
 		--target-dir "{{ cargo_dir }}"
 
 
