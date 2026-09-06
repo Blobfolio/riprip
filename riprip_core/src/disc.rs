@@ -424,8 +424,6 @@ fn fmt_ctdb(ctdb: Option<u16>, color: bool) -> Cow<'static, str> {
 fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	use std::fmt::Write;
 
-	log!(@debug "Generating cuesheet.");
-
 	// Make sure all tracks on the disc have been ripped, and pair their file
 	// names with the corresponding Track object.
 	let mut all = Vec::with_capacity(ripped.len());
@@ -484,17 +482,9 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	let dst = parent.join(format!("{}.cue", cache_prefix(toc)));
 	{
 		use std::io::Write;
-		let Ok(mut writer) = CacheWriter::new(&dst) else {
-			log!(@error "Unable to open cuesheet for writing.");
-			return None;
-		};
-		if
-			writer.writer().write_all(cue.as_bytes()).is_err() ||
-			writer.finish().is_err()
-		{
-			log!(@error "Unable to save cuesheet.");
-			return None;
-		}
+		let mut writer = CacheWriter::new(&dst).ok()?;
+		writer.writer().write_all(cue.as_bytes()).ok()?;
+		writer.finish().ok()?;
 	}
 
 	// Return the path.
