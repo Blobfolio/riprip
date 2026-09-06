@@ -6,13 +6,12 @@ Somewhat useful documentation:
 */
 
 mod bot;
-mod cdtext;
 mod device;
-mod mmc;
 
 use crate::{Barcode, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError, CD_LEADIN};
 
-use mmc::{Drive, Transport};
+use super::cdtext;
+use super::mmc::{self, Drive, Transport};
 
 use nix::unistd::{setuid, Uid};
 use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};

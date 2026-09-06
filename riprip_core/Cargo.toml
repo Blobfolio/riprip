@@ -47,6 +47,10 @@ optional = true
 objc2-io-kit = { version = "0.3.2", optional = true }
 objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
 
+[dependencies.libc]
+version = "0.2.189"
+optional = true
+
 [dependencies.minreq]
 version = "3.0.*"
 default-features = false
@@ -93,4 +97,10 @@ libusb = [
     "encoding_rs",
     "objc2-io-kit",
     "objc2-core-foundation",
+]
+
+libsg = [
+    "libc",
+    "crc",
+    "encoding_rs",
 ]

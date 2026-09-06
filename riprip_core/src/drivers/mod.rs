@@ -11,20 +11,32 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-#[cfg(not(any(feature = "libcdio", feature = "libusb")))]
-compile_error!("No driver feature is enabled. Enable exactly one of `libcdio` or `libusb`.");
+#[cfg(not(any(feature = "libcdio", feature = "libusb", feature = "libsg")))]
+compile_error!(
+    "No driver feature is enabled. Enable exactly one of `libcdio`, `libusb`, or `libsg`."
+);
 
 #[cfg(all(feature = "libcdio", feature = "libusb"))]
 compile_error!("Multiple driver features are enabled. Enable only one of `libcdio` or `libusb`.");
 
 #[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`.");
+compile_error!(
+    "Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`."
+);
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
 
 #[cfg(feature = "libusb")]
 mod libusb;
+
+#[cfg(feature = "libsg")]
+mod libsg;
+
+#[cfg(any(feature = "libusb", feature = "libsg"))]
+mod cdtext;
+#[cfg(any(feature = "libusb", feature = "libsg"))]
+mod mmc;
 
 use crate::{
 	Barcode,
@@ -39,12 +51,12 @@ use crate::{
 };
 use dactyl::NoHash;
 use std::{
-	cell::RefCell,
-	cmp::Ordering,
-	collections::HashSet,
-	fmt,
-	path::Path,
-	range::legacy::Range,
+    cell::RefCell,
+    cmp::Ordering,
+    collections::HashSet,
+    fmt,
+    path::Path,
+    range::legacy::Range,
 	time::{
 		Duration,
 		Instant,
@@ -67,16 +79,22 @@ pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 /// driver.
 pub(crate) type CddaDriver = libusb::LibusbInstance;
 
+#[cfg(feature = "libsg")]
+/// # /dev/sg Driver.
+///
+/// This type alias is how the rest of the library references the chosen
+/// driver.
+pub(crate) type CddaDriver = libsg::LibsgInstance;
 
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
 thread_local! {
-	/// # Sector Shitlist.
-	///
-	/// Keep track of sectors that trigger hard read errors so we don't
-	/// accidentally try them in a cache-bust situation.
-	static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
+    /// # Sector Shitlist.
+    ///
+    /// Keep track of sectors that trigger hard read errors so we don't
+    /// accidentally try them in a cache-bust situation.
+    static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
 }
 
 
@@ -118,35 +136,35 @@ macro_rules! fields {
 }
 
 fields! {
-	Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER   "ARRANGER",
-	Barcode    cdtext_field_t_CDTEXT_FIELD_UPC_EAN    "BARCODE",
-	Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER   "COMPOSER",
-	Isrc       cdtext_field_t_CDTEXT_FIELD_ISRC       "ISRC",
-	Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE    "COMMENT",
-	Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER  "ARTIST",
-	Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER "SONGWRITER",
-	Title      cdtext_field_t_CDTEXT_FIELD_TITLE      "TITLE",
+    Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER   "ARRANGER",
+    Barcode    cdtext_field_t_CDTEXT_FIELD_UPC_EAN    "BARCODE",
+    Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER   "COMPOSER",
+    Isrc       cdtext_field_t_CDTEXT_FIELD_ISRC       "ISRC",
+    Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE    "COMMENT",
+    Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER  "ARTIST",
+    Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER "SONGWRITER",
+    Title      cdtext_field_t_CDTEXT_FIELD_TITLE      "TITLE",
 }
 
 impl AsRef<str> for CDTextKind {
-	#[inline]
+    #[inline]
 	fn as_ref(&self) -> &str { self.as_str() }
 }
 
 impl fmt::Display for CDTextKind {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		<str as fmt::Display>::fmt(self.as_str(), f)
-	}
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <str as fmt::Display>::fmt(self.as_str(), f)
+    }
 }
 
 impl Ord for CDTextKind {
-	#[inline]
+    #[inline]
 	fn cmp(&self, rhs: &Self) -> Ordering { self.as_str().cmp(rhs.as_str()) }
 }
 
 impl PartialOrd for CDTextKind {
-	#[inline]
+    #[inline]
 	fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> { Some(self.cmp(rhs)) }
 }
 
@@ -156,211 +174,211 @@ impl PartialOrd for CDTextKind {
 ///
 /// This trait is used to help deduplicate code between drivers.
 pub(crate) trait CddaDriverExt: Sized {
-	/// # New!
-	///
-	/// Initialize a new instance, optionally connecting to a specific device.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if initialization fails, or if the provided
-	/// device path is obviously wrong.
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
+    /// # New!
+    ///
+    /// Initialize a new instance, optionally connecting to a specific device.
+    ///
+    /// ## Errors
+    ///
+    /// This will return an error if initialization fails, or if the provided
+    /// device path is obviously wrong.
+    fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path>;
 
-	/// # First Track Number.
-	///
-	/// Return the first track number on the disc, almost always but not
-	/// necessarily `1`.
-	fn first_track_num(&self) -> Result<u8, RipRipError>;
+    /// # First Track Number.
+    ///
+    /// Return the first track number on the disc, almost always but not
+    /// necessarily `1`.
+    fn first_track_num(&self) -> Result<u8, RipRipError>;
 
-	/// # Leadout.
-	///
-	/// Return the LBA — including the leading `150` — of the disc leadout.
-	fn leadout_lba(&self) -> Result<u32, RipRipError>;
+    /// # Leadout.
+    ///
+    /// Return the LBA — including the leading `150` — of the disc leadout.
+    fn leadout_lba(&self) -> Result<u32, RipRipError>;
 
-	/// # Get the Number of Tracks.
-	///
-	/// Return the total number of tracks, or the last track number, however
-	/// you want to think of it.
-	fn num_tracks(&self) -> Result<u8, RipRipError>;
+    /// # Get the Number of Tracks.
+    ///
+    /// Return the total number of tracks, or the last track number, however
+    /// you want to think of it.
+    fn num_tracks(&self) -> Result<u8, RipRipError>;
 
-	/// # Track Format.
-	///
-	/// Returns `true` for audio, `false` for data, and an error for anything
-	/// else.
-	fn track_format(&self, idx: u8) -> Result<bool, RipRipError>;
+    /// # Track Format.
+    ///
+    /// Returns `true` for audio, `false` for data, and an error for anything
+    /// else.
+    fn track_format(&self, idx: u8) -> Result<bool, RipRipError>;
 
-	/// # Track LBA Start.
-	///
-	/// Return the starting LBA — including the leading `150` — for a given
-	/// track.
-	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError>;
+    /// # Track LBA Start.
+    ///
+    /// Return the starting LBA — including the leading `150` — for a given
+    /// track.
+    fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError>;
 
-	/// # CDText Value.
-	///
-	/// Return the value associated with the CDText field, if any. If the track
-	/// number is zero, data associated with the album will be returned.
-	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String>;
+    /// # CDText Value.
+    ///
+    /// Return the value associated with the CDText field, if any. If the track
+    /// number is zero, data associated with the album will be returned.
+    fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String>;
 
-	/// # Drive Vendor/Model.
-	///
-	/// Fetch the drive vendor and/or model, if possible.
-	fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
+    /// # Drive Vendor/Model.
+    ///
+    /// Fetch the drive vendor and/or model, if possible.
+    fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
 
-	/// # MCN From (Leadin) Subchannel.
-	///
-	/// Return the MCN as stored in the leadin subchannel data, if any.
-	fn mcn_subchannel(&self) -> Option<Barcode>;
+    /// # MCN From (Leadin) Subchannel.
+    ///
+    /// Return the MCN as stored in the leadin subchannel data, if any.
+    fn mcn_subchannel(&self) -> Option<Barcode>;
 
-	/// # Execute Read Command.
-	///
-	/// This private method executes the million-argument MMC read command with
-	/// values prepared and verified by the caller.
-	///
-	/// ## Errors.
-	///
-	/// This will return an error if the read fails, but provides no other
-	/// sanity checks.
-	fn read_cd(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-		c2: bool,
-		sub: u8,
-		block_size: u16,
-	) -> Result<(), RipRipError>;
+    /// # Execute Read Command.
+    ///
+    /// This private method executes the million-argument MMC read command with
+    /// values prepared and verified by the caller.
+    ///
+    /// ## Errors.
+    ///
+    /// This will return an error if the read fails, but provides no other
+    /// sanity checks.
+    fn read_cd(
+        &self,
+        buf: &mut [u8],
+        lsn: i32,
+        c2: bool,
+        sub: u8,
+        block_size: u16,
+    ) -> Result<(), RipRipError>;
 
-	/// # MCN.
-	///
-	/// Return the disc's associated UPC/EAN, if present, either from CDText
-	/// or the leadin subchannel data.
-	fn mcn(&self) -> Option<Barcode> {
-		self.mcn_cdtext().or_else(|| self.mcn_subchannel())
-	}
+    /// # MCN.
+    ///
+    /// Return the disc's associated UPC/EAN, if present, either from CDText
+    /// or the leadin subchannel data.
+    fn mcn(&self) -> Option<Barcode> {
+        self.mcn_cdtext().or_else(|| self.mcn_subchannel())
+    }
 
-	/// # MCN From CDText.
-	///
-	/// Return the MCN as stored in the CDText, if any.
-	fn mcn_cdtext(&self) -> Option<Barcode> {
-		self.cdtext(0, CDTextKind::Barcode)
-			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
-	}
+    /// # MCN From CDText.
+    ///
+    /// Return the MCN as stored in the CDText, if any.
+    fn mcn_cdtext(&self) -> Option<Barcode> {
+        self.cdtext(0, CDTextKind::Barcode)
+            .and_then(|v| Barcode::try_from(v.as_bytes()).ok())
+    }
 
-	/// # Cache Bust.
-	///
-	/// There is no simple, universal command to disable or flush a drive's
-	/// read buffer, so we have to do the next best thing: fill it with
-	/// useless crap!
-	///
-	/// There is _also_ no good way to know how much crap we need to fill,
-	/// because that would be too easy. Haha. Instead we'll just assume the
-	/// buffer is 4MiB, and read a teenie bit more than that. That should cover
-	/// most drives.
-	///
-	/// Thankfully, we're never reading the same sector back-to-back, so this
-	/// only has to be done once per track, not after each and every read.
-	///
-	/// For this to work, we have to be able to find regions outside the track
-	/// range. That should usually be possible, but won't _always_ be.
-	/// Sometimes we'll just have to live with cache.
-	///
-	/// Also of note: drives tend to slow down for read errors. This will
-	/// skip any sector which previously returned a read error to keep it from
-	/// being too terrible.
-	fn cache_bust(
-		&self,
+    /// # Cache Bust.
+    ///
+    /// There is no simple, universal command to disable or flush a drive's
+    /// read buffer, so we have to do the next best thing: fill it with
+    /// useless crap!
+    ///
+    /// There is _also_ no good way to know how much crap we need to fill,
+    /// because that would be too easy. Haha. Instead we'll just assume the
+    /// buffer is 4MiB, and read a teenie bit more than that. That should cover
+    /// most drives.
+    ///
+    /// Thankfully, we're never reading the same sector back-to-back, so this
+    /// only has to be done once per track, not after each and every read.
+    ///
+    /// For this to work, we have to be able to find regions outside the track
+    /// range. That should usually be possible, but won't _always_ be.
+    /// Sometimes we'll just have to live with cache.
+    ///
+    /// Also of note: drives tend to slow down for read errors. This will
+    /// skip any sector which previously returned a read error to keep it from
+    /// being too terrible.
+    fn cache_bust(
+        &self,
 		buf: &mut[u8],
-		mut todo: u32,
-		rng: &Range<i32>,
-		leadout: i32,
-		backwards: bool,
-		killed: KillSwitch,
-	) {
-		if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
-			let now = Instant::now();
+        mut todo: u32,
+        rng: &Range<i32>,
+        leadout: i32,
+        backwards: bool,
+        killed: KillSwitch,
+    ) {
+        if 0 != todo && buf.len() == usize::from(CD_DATA_SIZE) {
+            let now = Instant::now();
 
-			// If we're moving backwards, try after, then before.
-			if backwards {
-				cache_bust(self, buf, rng.end, leadout, &mut todo, now, killed);
-				cache_bust(self, buf, 0, rng.start - 1, &mut todo, now, killed);
-			}
-			// Otherwise before, then after.
-			else {
-				cache_bust(self, buf, 0, rng.start - 1, &mut todo, now, killed);
-				cache_bust(self, buf, rng.end, leadout, &mut todo, now, killed);
-			}
-		}
-	}
+            // If we're moving backwards, try after, then before.
+            if backwards {
+                cache_bust(self, buf, rng.end, leadout, &mut todo, now, killed);
+                cache_bust(self, buf, 0, rng.start - 1, &mut todo, now, killed);
+            }
+            // Otherwise before, then after.
+            else {
+                cache_bust(self, buf, 0, rng.start - 1, &mut todo, now, killed);
+                cache_bust(self, buf, rng.end, leadout, &mut todo, now, killed);
+            }
+        }
+    }
 
-	/// # Read Data + C2.
-	///
-	/// Read a single sector's worth of data and C2 error pointer information
-	/// into the buffer.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the read operation is unsupported or
-	/// otherwise fails.
-	fn read_cd_c2(
-		&self,
-		buf: &mut [u8; CD_DATA_C2_SIZE as usize],
-		lsn: i32,
-	) -> Result<(), RipRipError> {
-		// We can't read negative, so assume everything is good and null.
-		if lsn < 0 {
-			buf.fill(0);
-			return Ok(());
-		}
+    /// # Read Data + C2.
+    ///
+    /// Read a single sector's worth of data and C2 error pointer information
+    /// into the buffer.
+    ///
+    /// ## Errors
+    ///
+    /// This will return an error if the read operation is unsupported or
+    /// otherwise fails.
+    fn read_cd_c2(
+        &self,
+        buf: &mut [u8; CD_DATA_C2_SIZE as usize],
+        lsn: i32,
+    ) -> Result<(), RipRipError> {
+        // We can't read negative, so assume everything is good and null.
+        if lsn < 0 {
+            buf.fill(0);
+            return Ok(());
+        }
 
-		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
-	}
+        // Read it!
+        self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
+    }
 
-	/// # Read Data + Subchannel
-	///
-	/// Read a single sector's worth of data and formatted 16-byte subchannel
-	/// information into the buffer. The subchannel data will be parsed to
-	/// confirm the timecode matches up with the LSN, where possible, and
-	/// trigger a sync error if that fails.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the read operation is unsupported or
-	/// otherwise fails, or if the timecode does not match the LSN.
+    /// # Read Data + Subchannel
+    ///
+    /// Read a single sector's worth of data and formatted 16-byte subchannel
+    /// information into the buffer. The subchannel data will be parsed to
+    /// confirm the timecode matches up with the LSN, where possible, and
+    /// trigger a sync error if that fails.
+    ///
+    /// ## Errors
+    ///
+    /// This will return an error if the read operation is unsupported or
+    /// otherwise fails, or if the timecode does not match the LSN.
 	fn read_subchannel(
 		&self,
 		buf: &mut [u8],
 		lsn: i32,
 	) -> Result<(), RipRipError> {
-		// The buffer and block size are equivalent for our purposes.
-		if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
-			return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
-		}
+        // The buffer and block size are equivalent for our purposes.
+        if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
+            return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
+        }
 
-		// We can't read negative, so assume everything is good and null.
-		if lsn < 0 {
+        // We can't read negative, so assume everything is good and null.
+        if lsn < 0 {
 			for v in &mut *buf { *v = 0; }
-			return Ok(());
-		}
+            return Ok(());
+        }
 
-		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
+        // Read it!
+        self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
 
-		// We can only get timing information from ADR-1.
+        // We can only get timing information from ADR-1.
 		if
 			1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 &&
 			lsn != msf_to_lsn(
-				buf[usize::from(CD_DATA_SIZE) + 7],
-				buf[usize::from(CD_DATA_SIZE) + 8],
-				buf[usize::from(CD_DATA_SIZE) + 9],
-			)
-		{
-			return Err(RipRipError::SubchannelDesync);
-		}
+                    buf[usize::from(CD_DATA_SIZE) + 7],
+                    buf[usize::from(CD_DATA_SIZE) + 8],
+                    buf[usize::from(CD_DATA_SIZE) + 9],
+                )
+        {
+            return Err(RipRipError::SubchannelDesync);
+        }
 
-		// As good as we can do!
-		Ok(())
-	}
+        // As good as we can do!
+        Ok(())
+    }
 }
 
 
@@ -370,7 +388,7 @@ pub(crate) trait CddaDriverExt: Sized {
 ///
 /// Returns `true` if `lsn` is in the `SHITLIST`.
 fn bad_sector(lsn: i32) -> bool {
-	SHITLIST.with_borrow(|q| q.contains(&lsn))
+    SHITLIST.with_borrow(|q| q.contains(&lsn))
 }
 
 /// # Cache Bust.
@@ -378,26 +396,26 @@ fn bad_sector(lsn: i32) -> bool {
 /// This is a generic helper for the default `CddaDriverExt::cache_bust`
 /// implementation.
 fn cache_bust<D: CddaDriverExt>(
-	driver: &D,
+    driver: &D,
 	buf: &mut[u8],
-	mut from: i32,
-	to: i32,
-	todo: &mut u32,
-	now: Instant,
-	killed: KillSwitch,
+    mut from: i32,
+    to: i32,
+    todo: &mut u32,
+    now: Instant,
+    killed: KillSwitch,
 ) {
-	while from < to && 0 < *todo {
-		if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {
-			*todo = 0;
-			break;
-		}
+    while from < to && 0 < *todo {
+        if killed.killed() || CACHE_BUST_TIMEOUT < now.elapsed() {
+            *todo = 0;
+            break;
+        }
 
 		if ! bad_sector(from) && driver.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok() {
-			*todo -= 1;
-		}
+            *todo -= 1;
+        }
 
-		from += 1;
-	}
+        from += 1;
+    }
 }
 
 #[must_use]
@@ -416,5 +434,5 @@ const fn msf_to_lsn(m: u8, s: u8, f: u8) -> i32 {
 /// Add `lsn` to the `SHITLIST` (for the benefit of future cache-busting
 /// exercises).
 fn set_bad_sector(lsn: i32) {
-	SHITLIST.with(|q| q.borrow_mut().insert(lsn));
+    SHITLIST.with(|q| q.borrow_mut().insert(lsn));
 }

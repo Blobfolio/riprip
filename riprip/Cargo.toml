@@ -150,3 +150,6 @@ libcdio-static = [ "riprip_core/libcdio-static" ]
 
 # Use libusb driver.
 libusb = [ "riprip_core/libusb" ]
+
+# Use libsg driver.
+libsg = [ "riprip_core/libsg" ]
