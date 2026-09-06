@@ -44,11 +44,6 @@ version = "0.14.*"
 default-features = false
 features = [ "accuraterip" ]
 
-[build-dependencies.minreq]
-version = "3.0.*"
-default-features = false
-features = [ "https" ]
-
 [dev-dependencies]
 fastrand = "2"
 

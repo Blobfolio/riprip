@@ -46,7 +46,7 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 
 # Build Debian package!
-@build-deb: clean credits build
+@build-deb: clean credits fetch-drive-offsets build
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	mv "{{ cargo_dir }}" "{{ justfile_directory() }}/target"
@@ -123,6 +123,20 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 	exit 0
 
 
+# Fetch AccurateRip Drive Offsets.
+@fetch-drive-offsets:
+	[ -f "/tmp/drive-offsets.bin" ] || just _fetch-drive-offsets
+
+
+# (Actually) Fetch AccurateRip Drive Offsets.
+@_fetch-drive-offsets:
+	fyi info "Fetching AccurateRip drive offsets."
+	wget -nv -O "/tmp/drive-offsets.bin" "https://www.accuraterip.com/accuraterip/DriveOffsets.bin"
+	just _fix-chmod "/tmp/drive-offsets.bin"
+	just _fix-chown "/tmp/drive-offsets.bin"
+	cp -a "/tmp/drive-offsets.bin" "{{ pkg_dir2 }}/skel"
+
+
 # Unit tests!
 @test:
 	clear
@@ -175,10 +189,6 @@ version:
 
 	fyi success "Set version to $_ver2."
 
-
-# Init dependencies.
-@_init:
-	# Nothing just now.
 
 
 # Fix file/directory permissions.
