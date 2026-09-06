@@ -11,7 +11,6 @@
 macro_rules! log {
 	// Common logging (internal).
 	($level:ident $($log:tt)+) => (
-		#[cfg(not(any(test, miri)))]
 		$crate::LogLog::log(
 			$crate::LogLevel::$level,
 			::std::format_args!($($log)+),
@@ -27,7 +26,6 @@ macro_rules! log {
 
 	// Trace includes location details.
 	(@trace $($log:tt)+) => (
-		#[cfg(not(any(test, miri)))]
 		$crate::LogLog::log(
 			$crate::LogLevel::Trace,
 			::std::format_args!($($log)+),

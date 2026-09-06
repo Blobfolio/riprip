@@ -5,13 +5,11 @@ This module implements a really simple STDOUT logger for `log`.
 */
 
 use std::{
-	fmt::{
-		self,
-		Arguments,
-	},
+	fmt::Arguments,
 	sync::OnceLock,
 };
-use utc2k::FmtUtc2k;
+#[cfg(not(any(test, miri)))] use std::fmt;
+#[cfg(not(any(test, miri)))] use utc2k::FmtUtc2k;
 
 
 
@@ -27,7 +25,12 @@ static LOG_LEVEL: OnceLock<LogLevel> = OnceLock::new();
 pub struct LogLog;
 
 impl LogLog {
-	#[inline(never)]
+	#[cfg_attr(not(any(test, miri)), inline(never))]
+	#[cfg_attr(any(test, miri), inline(always))]
+	#[cfg_attr(
+		any(test, miri),
+		expect(unused_variables, reason = "Logging is no-op for test/miri."),
+	)]
 	/// # (Maybe) Log Something.
 	///
 	/// Log a message if the level is applicable, do nothing if not.
@@ -36,6 +39,7 @@ impl LogLog {
 		args: Arguments<'_>,
 		location: Option<(&'static str, u32)>,
 	) {
+		#[cfg(not(any(test, miri)))]
 		if let Some(v) = LOG_LEVEL.get().copied() && level <= v {
 			println!(
 				"{date} {level} {args}{location}",
@@ -77,6 +81,7 @@ macro_rules! level {
 		}
 
 		impl LogLevel {
+			#[cfg(not(any(test, miri)))]
 			#[must_use]
 			/// # As String.
 			const fn as_str(self) -> &'static str {
@@ -108,9 +113,11 @@ level! {
 
 
 
+#[cfg(not(any(test, miri)))]
 /// # Maybe Print Line Details.
 struct LogLocation(Option<(&'static str, u32)>);
 
+#[cfg(not(any(test, miri)))]
 impl fmt::Display for LogLocation {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		self.0.map_or(
