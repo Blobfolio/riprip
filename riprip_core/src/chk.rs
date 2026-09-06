@@ -18,7 +18,9 @@ use cdtoc::{
 	Toc,
 	Track,
 };
+use dactyl::traits::NiceInflection;
 use std::{
+	collections::BTreeMap,
 	num::Wrapping,
 	path::Path,
 	sync::{
@@ -144,22 +146,18 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 		chk.get(&crc1).copied().unwrap_or(0),
 		chk.get(&crc2).copied().unwrap_or(0),
 	);
-	if out.0 == 0 && out.1 == 0 {
-		log!(
-			@debug
-			"AccurateRip checksums {crc1:08x} and {crc2:08x} for track {} yielded no match.",
-			track.number(),
-		);
-	}
-	else {
-		log!(
-			@debug
-			"AccurateRip checksums {crc1:08x} and {crc2:08x} for track {} yielded {} and {} matches, respectively.",
-			track.number(),
-			out.0,
-			out.1,
-		);
-	}
+	log!(
+		@debug
+		"AccurateRip v1 checksum {crc1:08x} has {} (track {}).",
+		out.0.nice_inflect("match", "matches"),
+		track.number(),
+	);
+	log!(
+		@debug
+		"AccurateRip v2 checksum {crc2:08x} has {} (track {}).",
+		out.1.nice_inflect("match", "matches"),
+		track.number(),
+	);
 
 	// Return the matches, if any.
 	Some(out)
@@ -167,7 +165,6 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 
 
 
-#[expect(clippy::too_many_lines, reason = "Logging's what pushed us over. Haha.")]
 /// # Verify w/ CUETools.
 ///
 /// This will download and cache the checksums from CUETools's servers, then
@@ -295,9 +292,9 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		confidence += v;
 		log!(
 			@debug
-			"CUETools checksum {crc:08x} for track {} has {v} match{}.",
+			"CUETools checksum {crc:08x} has {} (track {}).",
+			v.nice_inflect("match", "matches"),
 			track.number(),
-			if v == 1 { "" } else { "es" },
 		);
 		if chk.is_empty() {
 			return Some(if confidence < 2 { 0 } else { confidence });
@@ -310,70 +307,20 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	let chk = Arc::new(Mutex::new(chk));
 	let confidence = AtomicU16::new(confidence);
 	std::thread::scope(|s| {
-		// Negative offsets shift into the previous track.
-		s.spawn(|| {
-			for shift in 1..=CTDB_WIGGLE_SAMPLES {
-				// We're stepping in samples, but working in bytes.
-				let shift = shift * usize::from(BYTES_PER_SAMPLE);
-				let mut crc = Crc::new();
-				crc.update(&start[CTDB_WIGGLE + ignore_first - shift..]);
-				crc.combine(&middle);
-				// The max shift won't include any end.
-				if shift < CTDB_WIGGLE {
-					crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last - shift]);
-				}
-
-				// Check it!
-				if let Ok(mut tmp) = chk.lock() {
-					let crc = crc.finalize();
-					if tmp.is_empty() { break; }
-					else if let Some(v) = tmp.remove(&crc) {
-						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
-						log!(
-							@debug
-							"CUETools checksum {crc:08x} (offset -{shift}) for track {} has {v} match{}.",
-							track.number(),
-							if v == 1 { "" } else { "es" },
-							shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
-						);
-						confidence.fetch_add(v, Relaxed);
-					}
-				}
-			}
-		});
-
-		// Positive offsets shift into the next track.
-		s.spawn(|| {
-			for shift in 1..=CTDB_WIGGLE_SAMPLES {
-				// We're stepping in samples, but working in bytes.
-				let shift = shift * usize::from(BYTES_PER_SAMPLE);
-
-				let mut crc = Crc::new();
-				// The max shift won't include any start.
-				if shift < CTDB_WIGGLE {
-					crc.update(&start[CTDB_WIGGLE + ignore_first + shift..]);
-				}
-				crc.combine(&middle);
-				crc.update(&end[..end.len() - CTDB_WIGGLE - ignore_last + shift]);
-
-				// Check it!
-				if let Ok(mut tmp) = chk.lock() {
-					let crc = crc.finalize();
-					if tmp.is_empty() { break; }
-					else if let Some(v) = tmp.remove(&crc) {
-						drop(tmp); // Be a good neighbor and drop the borrow ASAP.
-						log!(
-							@debug
-							"CUETools checksum {crc:08x} (offset {shift}) for track {} has {v} match{}.",
-							track.number(),
-							if v == 1 { "" } else { "es" },
-							shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
-						);
-						confidence.fetch_add(v, Relaxed);
-					}
-				}
-			}
-		});
+		s.spawn(|| chk_ctdb_neg(
+			track,
+			(ignore_first, ignore_last),
+			&start, &middle, &end,
+			&chk,
+			&confidence,
+		));
+		s.spawn(|| chk_ctdb_pos(
+			track,
+			(ignore_first, ignore_last),
+			&start, &middle, &end,
+			&chk,
+			&confidence,
+		));
 	});
 
 	// As mentioned at the start, we shouldn't be confident in confidences less
@@ -388,7 +335,94 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 
 
-/// # Download.
+/// # CTDB Offset Checksumming (Negative).
+///
+/// Look for additional checksum matches for a track by offsetting the data
+/// up to `CTDB_WIGGLE_SAMPLES`, negatively.
+fn chk_ctdb_neg(
+	track: Track,
+	ignore: (usize, usize),
+	start: &[u8],
+	middle: &crc32fast::Hasher,
+	end: &[u8],
+	chk: &Arc<Mutex<BTreeMap<u32, u16>>>,
+	confidence: &AtomicU16,
+) {
+	for shift in 1..=CTDB_WIGGLE_SAMPLES {
+		// We're stepping in samples, but working in bytes.
+		let shift = shift * usize::from(BYTES_PER_SAMPLE);
+		let mut crc = Crc::new();
+		crc.update(&start[CTDB_WIGGLE + ignore.0 - shift..]);
+		crc.combine(middle);
+		// The max shift won't include any end.
+		if shift < CTDB_WIGGLE {
+			crc.update(&end[..end.len() - CTDB_WIGGLE - ignore.1 - shift]);
+		}
+
+		// Check it!
+		if let Ok(mut tmp) = chk.lock() {
+			let crc = crc.finalize();
+			if tmp.is_empty() { break; }
+			else if let Some(v) = tmp.remove(&crc) {
+				drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+				log!(
+					@debug
+					"CUETools checksum {crc:08x} has {} (track {}, offset -{shift}).",
+					v.nice_inflect("match", "matches"),
+					track.number(),
+					shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
+				);
+				confidence.fetch_add(v, Relaxed);
+			}
+		}
+	}
+}
+
+/// # CTDB Offset Checksumming (Positive).
+///
+/// Look for additional checksum matches for a track by offsetting the data
+/// up to `CTDB_WIGGLE_SAMPLES`.
+fn chk_ctdb_pos(
+	track: Track,
+	ignore: (usize, usize),
+	start: &[u8],
+	middle: &crc32fast::Hasher,
+	end: &[u8],
+	chk: &Arc<Mutex<BTreeMap<u32, u16>>>,
+	confidence: &AtomicU16,
+) {
+	for shift in 1..=CTDB_WIGGLE_SAMPLES {
+		// We're stepping in samples, but working in bytes.
+		let shift = shift * usize::from(BYTES_PER_SAMPLE);
+
+		let mut crc = Crc::new();
+		// The max shift won't include any start.
+		if shift < CTDB_WIGGLE {
+			crc.update(&start[CTDB_WIGGLE + ignore.0 + shift..]);
+		}
+		crc.combine(middle);
+		crc.update(&end[..end.len() - CTDB_WIGGLE - ignore.1 + shift]);
+
+		// Check it!
+		if let Ok(mut tmp) = chk.lock() {
+			let crc = crc.finalize();
+			if tmp.is_empty() { break; }
+			else if let Some(v) = tmp.remove(&crc) {
+				drop(tmp); // Be a good neighbor and drop the borrow ASAP.
+				log!(
+					@debug
+					"CUETools checksum {crc:08x} has {} (track {}, offset +{shift}).",
+					v.nice_inflect("match", "matches"),
+					track.number(),
+					shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
+				);
+				confidence.fetch_add(v, Relaxed);
+			}
+		}
+	}
+}
+
+/// # Download Checksums.
 ///
 /// Download and return the data!
 fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
