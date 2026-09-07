@@ -100,9 +100,10 @@ UNUSUAL SETTINGS:
 
 MISCELLANEOUS:
     -h, --help        Print help information to STDOUT and exit.
-    -v, --verbose     Print detailed sector quality information to STDOUT, so
-                      it can e.g. be piped to a file for review, like:
-                      riprip -v > issues.log
+    -v, --verbose     Print a detailed log of the proceedings — including
+                      which specific samples and sectors are having trouble —
+                      to STDOUT so you can redirect it to a location of your
+                      choosing, e.g. `riprip -v > out.log`.
     -V, --version     Print version information to STDOUT and exit.
         --no-rip      Print the basic drive and disc information to STDERR and
                       exit (without ripping anything).

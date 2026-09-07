@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.6.1"
+version = "0.7.0"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -75,7 +75,8 @@ description = "Confirm sector positioning with subchannel data (when available) 
 [[package.metadata.bashman.switches]]
 short = "-v"
 long = "--verbose"
-description = "Print detailed sector quality information to STDOUT, so it can e.g. be piped to a file for review, like: riprip -v > issues.log"
+description = "Print a detailed log of the proceedings — including which specific samples and sectors are having trouble — to STDOUT so you can redirect it to a location of your choosing, e.g. `riprip -v > out.log`."
+duplicate = true
 
 [[package.metadata.bashman.switches]]
 short = "-V"
@@ -129,7 +130,6 @@ duplicate = true
 argyle = "0.15.*"
 dactyl = "0.13.*"
 oxford_join = "0.7.*"
-utc2k = "0.20.*"
 
 [dependencies.fyi_msg]
 version = "2.7.*"

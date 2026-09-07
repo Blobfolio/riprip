@@ -35,6 +35,7 @@ use crate::{
 	DriveVendorModel,
 	FRAMES_PER_SECOND,
 	KillSwitch,
+	macros::log,
 	RipRipError,
 };
 use dactyl::NoHash;
@@ -308,6 +309,7 @@ pub(crate) trait CddaDriverExt: Sized {
 	) -> Result<(), RipRipError> {
 		// We can't read negative, so assume everything is good and null.
 		if lsn < 0 {
+			log!(@trace "Invalid LSN {lsn}; filling buffer with zeroes.");
 			buf.fill(0);
 			return Ok(());
 		}
@@ -334,6 +336,7 @@ pub(crate) trait CddaDriverExt: Sized {
 	) -> Result<(), RipRipError> {
 		// The buffer and block size are equivalent for our purposes.
 		if buf.len() != usize::from(CD_DATA_SUBCHANNEL_SIZE) {
+			std::hint::cold_path();
 			return Err(RipRipError::Bug("Invalid read buffer size (subchannel)."));
 		}
 
@@ -416,5 +419,7 @@ const fn msf_to_lsn(m: u8, s: u8, f: u8) -> i32 {
 /// Add `lsn` to the `SHITLIST` (for the benefit of future cache-busting
 /// exercises).
 fn set_bad_sector(lsn: i32) {
-	SHITLIST.with(|q| q.borrow_mut().insert(lsn));
+	SHITLIST.with(|q| if q.borrow_mut().insert(lsn) {
+		log!(@trace "Added LSN {lsn} to cache-bust exclusion range.");
+	});
 }

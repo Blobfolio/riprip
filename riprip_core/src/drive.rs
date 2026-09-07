@@ -3,10 +3,14 @@
 */
 
 use crate::{
+	macros::log,
 	RipRipError,
 	SAMPLES_PER_SECTOR,
 };
-use dactyl::traits::BytesToSigned;
+use dactyl::{
+	NiceU16,
+	traits::BytesToSigned,
+};
 use std::{
 	fmt,
 	range::legacy::RangeInclusive,
@@ -55,11 +59,14 @@ impl fmt::Display for DriveVendorModel {
 		use std::fmt::Write;
 		use trimothy::TrimNormalChars;
 
+		/// # No Control.
+		const fn no_control(c: char) -> char {
+			if c.is_control() { ' ' }
+			else { c }
+		}
+
 		if let Ok(raw) = std::str::from_utf8(&self.0) {
-			for c in raw.chars()
-				.map(|c| if c.is_control() { ' ' } else { c })
-				.trim_and_normalize()
-			{
+			for c in raw.chars().map(no_control).trim_and_normalize() {
 				f.write_char(c)?;
 			}
 		}
@@ -79,11 +86,21 @@ impl DriveVendorModel {
 	/// This will return an error if the lengths are out of range, or the
 	/// model number is missing.
 	pub(crate) fn new(mut vendor: &str, mut model: &str) -> Result<Self, RipRipError> {
-		vendor = vendor.trim();
-		model = model.trim();
+		/// # Trim Callback.
+		///
+		/// This is used to trim both ASCII whitespace and control characters,
+		/// as the raw data isn't afraid to null-pad its entries.
+		const fn trim_vm(c: char) -> bool { c.is_ascii_whitespace() || c.is_ascii_control() }
 
-		if DRIVE_VENDOR_LEN < vendor.len() || ! vendor.is_ascii() { Err(RipRipError::DriveVendor) }
+		vendor = vendor.trim_matches(trim_vm);
+		model = model.trim_matches(trim_vm);
+
+		if DRIVE_VENDOR_LEN < vendor.len() || ! vendor.is_ascii() {
+			log!(@trace "Invalid drive vendor {vendor:?}.");
+			Err(RipRipError::DriveVendor)
+		}
 		else if ! (1..=DRIVE_MODEL_LEN).contains(&model.len()) || ! model.is_ascii() {
+			log!(@trace "Invalid drive model {model:?}.");
 			Err(RipRipError::DriveModel)
 		}
 		else {
@@ -127,7 +144,15 @@ impl DriveVendorModel {
 	/// If the vendor/model pair have a known cache size, the value is returned
 	/// as a `u16`.
 	pub fn detect_cache(&self) -> Option<u16> {
-		let idx = DRIVE_CACHES.binary_search_by_key(self, |(k, _)| *k).ok()?;
+		let Ok(idx) = DRIVE_CACHES.binary_search_by_key(self, |(k, _)| *k) else {
+			log!(@debug "Cache size for drive is unknown.");
+			return None;
+		};
+		log!(
+			@debug
+			"Assuming {}KiB cache size based on drive.",
+			NiceU16::from(DRIVE_CACHES[idx].1),
+		);
 		Some(DRIVE_CACHES[idx].1)
 	}
 
@@ -136,7 +161,15 @@ impl DriveVendorModel {
 	///
 	/// If the vendor/model pair are known, return the drive offset.
 	pub fn detect_offset(&self) -> Option<ReadOffset> {
-		let idx = DRIVE_OFFSETS.binary_search_by_key(self, |(k, _)| *k).ok()?;
+		let Ok(idx) = DRIVE_OFFSETS.binary_search_by_key(self, |(k, _)| *k) else {
+			log!(@debug "Read offset for drive is unknown.");
+			return None;
+		};
+		log!(
+			@debug
+			"Assuming read offset of {} samples based on drive.",
+			DRIVE_OFFSETS[idx].1.samples(),
+		);
 		Some(DRIVE_OFFSETS[idx].1)
 	}
 }

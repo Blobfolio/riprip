@@ -16,6 +16,7 @@ use crate::{
 	CDTextKind,
 	DriveVendorModel,
 	KillSwitch,
+	macros::log,
 	RipOptions,
 	Ripper,
 	RipRipError,
@@ -35,10 +36,7 @@ use std::{
 	collections::HashMap,
 	ffi::OsStr,
 	fmt,
-	io::{
-		StderrLock,
-		StdoutLock,
-	},
+	io::StderrLock,
 	path::{
 		Path,
 		PathBuf,
@@ -62,107 +60,6 @@ pub struct Disc {
 
 	/// # Track ISRCs.
 	isrcs: HashMap<u8, String, NoHash>,
-}
-
-impl fmt::Debug for Disc {
-	/// # Summarize the Disc.
-	///
-	/// This prints various disc identifiers and table of contents-type
-	/// information in a nice little table, minus ANSI, plus "## " line
-	/// prefixes to match the log format.
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		/// # Divider.
-		const DIVIDER: &str = "## ----------------------------------------\n";
-
-		// A few key/value pairs.
-		let mut kv: Vec<(&str, String)> = vec![
-			("CDTOC:", self.toc.to_string()),
-			("AccurateRip:", self.toc.accuraterip_id().to_string()),
-			("CDDB:", cache_prefix(&self.toc).to_owned()),
-			("CUETools:", self.toc.ctdb_id().to_string()),
-			("MusicBrainz:", self.toc.musicbrainz_id().to_string()),
-		];
-		if let Some(barcode) = self.barcode.as_ref() {
-			kv.push(("Barcode:", barcode.to_string()));
-		}
-
-		let col_max: usize = kv.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-		for (k, v) in kv {
-			writeln!(f, "## {k:col_max$} {v}")?;
-		}
-		f.write_str("##\n")?;
-		f.write_str(DIVIDER)?;
-
-		// Start the table of contents.
-		writeln!(
-			f,
-			"## NO   FIRST    LAST  LENGTH          {}",
-			if self.isrcs.is_empty() { "" } else { "ISRC" },
-		)?;
-		f.write_str(DIVIDER)?;
-
-		let mut total = 0;
-
-		// HTOA.
-		if let Some(t) = self.toc.htoa() {
-			let rng = t.sector_range_normalized();
-			let len = rng.end - rng.start;
-			writeln!(
-				f,
-				"## 00  {:>6}  {:>6}  {:>6}          HTOA",
-				rng.start,
-				rng.end - 1,
-				len,
-			)?;
-		}
-		// Leading data track.
-		else if matches!(self.toc.kind(), TocKind::DataFirst) {
-			total += 1;
-			writeln!(
-				f,
-				"## {:02}  {:>6}                    DATA TRACK",
-				total,
-				self.toc.data_sector_normalized().unwrap_or_default(),
-			)?;
-		}
-
-		// The audio tracks.
-		for t in self.toc.audio_tracks() {
-			total += 1;
-			let num = t.number();
-			let rng = t.sector_range_normalized();
-			let len = rng.end - rng.start;
-			let isrc = self.isrc(num).unwrap_or_default();
-			writeln!(
-				f,
-				"## {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
-				rng.start,
-				rng.end - 1,
-			)?;
-		}
-
-		// Trailing data track.
-		if matches!(self.toc.kind(), TocKind::CDExtra) {
-			total += 1;
-			writeln!(
-				f,
-				"## {:02}  {:>6}                    DATA TRACK",
-				total,
-				self.toc.data_sector_normalized().unwrap_or_default(),
-			)?;
-		}
-
-		// The leadout.
-		writeln!(
-			f,
-			"## {}  {:>6}                      LEAD-OUT",
-			CD_LEADOUT_LABEL,
-			self.toc.leadout_normalized(),
-		)?;
-
-		f.write_str(DIVIDER)?;
-		f.write_str("##")
-	}
 }
 
 impl fmt::Display for Disc {
@@ -202,7 +99,7 @@ impl fmt::Display for Disc {
 		write!(
 			f,
 			dim!("\nNO   FIRST    LAST  LENGTH          {}\n"),
-			if self.isrcs.is_empty() { "" } else { "ISRC" },
+			if self.has_isrcs() { "ISRC" } else { "" },
 		)?;
 		f.write_str(DIVIDER)?;
 
@@ -341,6 +238,10 @@ impl Disc {
 	}
 
 	#[must_use]
+	/// # Has ISRC Data?
+	pub fn has_isrcs(&self) -> bool { ! self.isrcs.is_empty() }
+
+	#[must_use]
 	/// # ISRC.
 	pub fn isrc(&self, idx: u8) -> Option<&str> {
 		self.isrcs.get(&idx).map(String::as_str)
@@ -377,9 +278,6 @@ impl Disc {
 		// sheet to go along with them.
 		if let Some(saved) = rip.finish() {
 			let mut handle = std::io::stderr().lock();
-			let mut handle2 =
-				if opts.verbose() { Some(std::io::stdout().lock()) }
-				else { None };
 			let mut total = 0;
 			let mut good = 0;
 
@@ -390,16 +288,12 @@ impl Disc {
 
 			// A header of sorts.
 			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
-			if let Some(buf) = &mut handle2 {
-				let _res = writeln!(buf, "##\n## The fruits of your labor:");
-			}
+			log!(@info "Finished rip.{}", LoggableFruits(&saved));
 
 			// If we did all tracks, make a cue sheet and print its path.
 			if let Some(file) = save_cuesheet(&self.toc, &saved) {
 				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
-				if let Some(buf) = &mut handle2 {
-					let _res = writeln!(buf, "##   {}", file.display());
-				}
+				log!(@info "Saved cuesheet.\n  {}", file.display());
 			}
 
 			// Print the verification status for all track(s).
@@ -421,23 +315,6 @@ impl Disc {
 					} else { Cow::Borrowed(ansi!((reset, light_red) "         x")) },
 					col1=col1,
 				);
-
-				if let Some(buf) = &mut handle2 {
-					let _res = writeln!(
-						buf,
-						"##   {:<col1$}{}{}",
-						file.display(),
-						if conf {
-							if idx == 0 { Cow::Borrowed("            *") }
-							else { fmt_ar(ar, false) }
-						} else { Cow::Borrowed("            x") },
-						if conf {
-							if idx == 0 { Cow::Borrowed("         *") }
-							else { fmt_ctdb(ctdb, false) }
-						} else { Cow::Borrowed("         x") },
-						col1=col1,
-					);
-				}
 			}
 
 			// Add confirmation column headers.
@@ -457,26 +334,13 @@ impl Disc {
 				good=good,
 				total=total
 			);
-			if let Some(buf) = &mut handle2 {
-				let _res = writeln!(
-					buf,
-					"##   {line: >width$}  AccurateRip  CUETools  ({good}/{total})",
-					line="",
-					width=col1,
-					good=good,
-					total=total
-				);
-			}
 
 			// Add HTOA footnote, if applicable.
-			if htoa_likely { write_htoa_likely(&mut handle, &mut handle2); }
-			else if htoa_any { write_htoa_any(&mut handle, &mut handle2); }
+			if htoa_likely { write_htoa_likely(&mut handle); }
+			else if htoa_any { write_htoa_any(&mut handle); }
 
 			// Add an extra line break for separation, flush, and quit.
 			let _res = writeln!(&mut handle).and_then(|()| handle.flush());
-			if let Some(buf) = &mut handle2 {
-				let _res = writeln!(buf, "##").and_then(|()| buf.flush());
-			}
 		}
 
 		Ok(())
@@ -564,22 +428,38 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 	// names with the corresponding Track object.
 	let mut all = Vec::with_capacity(ripped.len());
 	for track in toc.audio_tracks() {
-		let (dst, _, _) = ripped.get(&track.number())?;
-		let dst = dst.file_name().and_then(OsStr::to_str)?;
+		let Some((dst, _, _)) = ripped.get(&track.number()) else {
+			log!(@debug "Missing track {}; skipping cuesheet.", track.number());
+			return None;
+		};
+		let Some(dst) = dst.file_name().and_then(OsStr::to_str) else {
+			log!(
+				@trace
+				"Unable to obtain output file name for track {}; skipping cuesheet.",
+				track.number(),
+			);
+			return None;
+		};
 		all.push((track, dst));
 	}
 
 	// The output folder.
-	let parent = ripped.get(&1).and_then(|(dst, _, _)| dst.parent())?;
+	let Some(parent) = ripped.get(&1).and_then(|(dst, _, _)| dst.parent()) else {
+		log!(@trace "Failed to find parent directory of first track; skipping cuesheet.");
+		return None;
+	};
 
 	let mut cue = String::new();
 	for (track, src) in all {
 		// If there's an HTOA, it needs to be grouped with the first track.
 		if track.position().is_first() && toc.htoa().is_some() {
 			// This should have been ripped with everything else.
-			let src0 = ripped.get(&0)
+			let Some(src0) = ripped.get(&0)
 				.and_then(|(dst, _, _)| dst.file_name())
-				.and_then(OsStr::to_str)?;
+				.and_then(OsStr::to_str) else {
+				log!(@trace "Unable to obtain output file name for HTOA; skipping cuesheet.");
+				return None;
+			};
 
 			// Add the lines to our cue!
 			writeln!(&mut cue, "FILE \"{src0}\" WAVE").ok()?;
@@ -615,7 +495,7 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 ///
 /// This writes the footnote explaining that the HTOA can't be verified but
 /// ranks likely, which is as good as can be.
-fn write_htoa_likely(stderr: &mut StderrLock<'static>, stdout: &mut Option<StdoutLock<'static>>) {
+fn write_htoa_likely(stderr: &mut StderrLock<'static>) {
 	use std::io::Write;
 
 	// Always write to STDERR.
@@ -630,25 +510,13 @@ fn write_htoa_likely(stderr: &mut StderrLock<'static>, stdout: &mut Option<Stdou
 			ansi!((reset, dim) ", which is the next best thing!"),
 		),
 	);
-
-	// Only write to STDOUT if there's a lock.
-	if let Some(buf) = stdout {
-		let _res = writeln!(
-			buf,
-			concat!(
-				"##\n",
-				"## * HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
-				"##   but this rip rates likely, which is the next best thing!",
-			),
-		);
-	}
 }
 
 /// # Write HTOA (Any).
 ///
 /// This writes the footnote explaining that HTOA can't be verified and the
 /// ripped version sucks and should be improved.
-fn write_htoa_any(stderr: &mut StderrLock<'static>, stdout: &mut Option<StdoutLock<'static>>) {
+fn write_htoa_any(stderr: &mut StderrLock<'static>) {
 	use std::io::Write;
 
 	// Always write to STDERR.
@@ -663,16 +531,51 @@ fn write_htoa_any(stderr: &mut StderrLock<'static>, stdout: &mut Option<StdoutLo
 			ansi!((reset, dim) " to be safe."),
 		),
 	);
+}
 
-	// Only write to STDOUT if there's a lock.
-	if let Some(buf) = stdout {
-		let _res = writeln!(
-			buf,
-			concat!(
-				"##\n",
-				"## * HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
-				"##   so you should re-rip it until it rates likely to be safe.",
-			),
-		);
+
+
+/// # Loggable AccurateRip.
+struct LoggableAccurateRip(Option<(u8, u8)>);
+
+impl fmt::Display for LoggableAccurateRip {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if let Some((v1, v2)) = self.0 && (v1 != 0 || v2 != 0) {
+			write!(f, "\n    AccurateRip {}+{}", v1.min(99), v2.min(99))
+		}
+		else { Ok(()) }
+	}
+}
+
+/// # Loggable CTDB.
+struct LoggableCTDB(Option<u16>);
+
+impl fmt::Display for LoggableCTDB {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if let Some(v) = self.0 && v != 0 {
+			write!(f, "\n    CUETools {}", v.min(999))
+		}
+		else { Ok(()) }
+	}
+}
+
+/// # Loggable Fruits.
+struct LoggableFruits<'a>(&'a SavedRips);
+
+impl fmt::Display for LoggableFruits<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		for (idx, (file, ar, ctdb)) in self.0 {
+			if *idx == 0 { write!(f, "\n  {} (HTOA)", file.display())?; }
+			else {
+				write!(
+					f,
+					"\n  {}{}{}",
+					file.display(),
+					LoggableAccurateRip(*ar),
+					LoggableCTDB(*ctdb)
+				)?;
+			}
+		}
+		Ok(())
 	}
 }

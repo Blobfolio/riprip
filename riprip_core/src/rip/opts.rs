@@ -13,9 +13,6 @@ use std::{
 use super::track_idx_to_bits;
 
 #[cfg(feature = "bin")]
-use oxford_join::JoinFmt;
-
-#[cfg(feature = "bin")]
 use std::fmt;
 
 
@@ -116,6 +113,68 @@ impl Default for RipOptions {
 			flags: FLAG_DEFAULT,
 			tracks: 0,
 		}
+	}
+}
+
+#[cfg(feature = "bin")]
+impl fmt::Display for RipOptions {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		use oxford_join::JoinFmt;
+
+		#[derive(Copy, Clone)]
+		/// # Track Number(s).
+		enum OptTrack {
+			/// # One Track.
+			One(u8),
+
+			/// # Track Range.
+			Rng(u8, u8),
+		}
+
+		impl fmt::Display for OptTrack {
+			#[inline]
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				match *self {
+					Self::One(n) => write!(f, "{n}"),
+					Self::Rng(a, b) => write!(f, "{a}-{b}"),
+				}
+			}
+		}
+
+		// All the easy stuff.
+		if self.backwards() { f.write_str("--backwards ")?; }
+		if let Some(cache) = self.cache {
+			write!(f, "-c{cache} ")?;
+		}
+		write!(f, "--confidence={} ", self.confidence())?;
+		if self.flip_flop() { f.write_str("--flip-flop ")?; }
+		if ! self.resume() { f.write_str("--no-resume ")?; }
+
+		let offset = self.offset().samples();
+		if offset != 0 { write!(f, "-o{offset} ")?; }
+
+		write!(f, "-p{} ", self.passes())?;
+
+		let rr = self.rereads();
+		write!(f, "-r{},{} ", rr.0, rr.1)?;
+
+		if self.reset() { f.write_str("--reset-counts ")?; }
+		if self.strict() { f.write_str("--strict-c2 ")?; }
+		if self.sync() { f.write_str("--sync ")?; }
+
+		// The tracks should be condensed.
+		write!(
+			f,
+			"-t{}",
+			JoinFmt::new(
+				self.tracks_rng().map(|rng| {
+					let (a, b) = rng.into_inner();
+					if a == b { OptTrack::One(a) }
+					else { OptTrack::Rng(a, b) }
+				}),
+				",",
+			)
+		)
 	}
 }
 
@@ -453,79 +512,6 @@ impl RipOptions {
 	}
 }
 
-#[cfg(feature = "bin")]
-/// # Misc.
-impl RipOptions {
-	#[must_use]
-	/// # CLI String.
-	///
-	/// Convert the options back into a list of arguments in CLI format. This
-	/// code isn't super pretty, but it's pretty straightforward.
-	pub fn cli(&self) -> String {
-		use std::fmt::Write;
-
-		#[derive(Copy, Clone)]
-		/// # Track Number(s).
-		enum OptTrack {
-			/// # One Track.
-			One(u8),
-
-			/// # Track Range.
-			Rng(u8, u8),
-		}
-
-		impl fmt::Display for OptTrack {
-			#[inline]
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				match *self {
-					Self::One(n) => write!(f, "{n}"),
-					Self::Rng(a, b) => write!(f, "{a}-{b}"),
-				}
-			}
-		}
-
-		// Let's get it going!
-		let mut opts = String::with_capacity(256);
-
-		// All the easy stuff.
-		if self.backwards() { opts.push_str("--backwards "); }
-		if let Some(cache) = self.cache {
-			write!(&mut opts, "-c{cache} ").unwrap();
-		}
-		write!(&mut opts, "--confidence={} ", self.confidence()).unwrap();
-		if self.flip_flop() { opts.push_str("--flip-flop "); }
-		if ! self.resume() { opts.push_str("--no-resume "); }
-
-		let offset = self.offset().samples();
-		if offset != 0 { write!(&mut opts, "-o{offset} ").unwrap(); }
-
-		write!(&mut opts, "-p{} ", self.passes()).unwrap();
-
-		let rr = self.rereads();
-		write!(&mut opts, "-r{},{} ", rr.0, rr.1).unwrap();
-
-		if self.reset() { opts.push_str("--reset-counts "); }
-		if self.strict() { opts.push_str("--strict-c2 "); }
-		if self.sync() { opts.push_str("--sync "); }
-
-		// The tracks should be condensed.
-		write!(
-			&mut opts,
-			"-t{}",
-			JoinFmt::new(
-				self.tracks_rng().map(|rng| {
-					let (a, b) = rng.into_inner();
-					if a == b { OptTrack::One(a) }
-					else { OptTrack::Rng(a, b) }
-				}),
-				",",
-			)
-		).unwrap();
-
-		// Done!
-		opts
-	}
-}
 
 
 #[derive(Debug, Clone)]

@@ -5,8 +5,8 @@
 pub(super) mod buf;
 pub(super) mod data;
 mod iter;
-mod log;
 pub(super) mod opts;
+mod riplog;
 mod quality;
 pub(super) mod sample;
 
@@ -21,6 +21,7 @@ use crate::{
 	chk_ctdb,
 	Disc,
 	KillSwitch,
+	macros::log,
 	RipBuffer,
 	RipOptions,
 	RipRipError,
@@ -46,7 +47,7 @@ use fyi_msg::{
 	Progless,
 };
 use iter::OffsetRipIter;
-use log::RipLog;
+use riplog::RipLog;
 use quality::TrackQuality;
 use std::{
 	borrow::Cow,
@@ -157,6 +158,7 @@ impl<'a> Ripper<'a> {
 		// We should definitely have a first track, but if for some reason we
 		// don't there's nothing more to do!
 		let Some(first_track) = self.tracks.values().map(|t| t.track).next() else {
+			std::hint::cold_path();
 			return Ok(());
 		};
 
@@ -212,7 +214,7 @@ impl<'a> Ripper<'a> {
 		// Loop each pass!
 		for pass in 1..=self.opts.passes() {
 			// Fire up the log if we're logging.
-			if self.opts.verbose() { share.log.bump_pass(); }
+			share.log.bump_pass();
 
 			// Bump the pass in our shared data. We can skip the initial cache
 			// bust if this entry is brand new, and we aren't no-resuming or
@@ -248,13 +250,16 @@ impl<'a> Ripper<'a> {
 				}
 			}
 
-			// Flip the read order for next time?
-			if self.opts.flip_flop() {
-				self.opts = self.opts.with_backwards(! self.opts.backwards());
-			}
-			// After the first pass, always resume, never reset.
-			if pass == 1 {
-				self.opts = self.opts.with_resume(true);
+			if pass < self.opts.passes() {
+				// Flip the read order for next time?
+				if self.opts.flip_flop() {
+					log!(@trace "Flipping read order for next pass.");
+					self.opts = self.opts.with_backwards(! self.opts.backwards());
+				}
+				// After the first pass, always resume, never reset.
+				if pass == 1 {
+					self.opts = self.opts.with_resume(true);
+				}
 			}
 		}
 
@@ -275,6 +280,7 @@ impl<'a> Ripper<'a> {
 		// We should definitely have a first track, but if for some reason we
 		// don't there's nothing more to do!
 		let Some(first_track) = self.tracks.values().map(|t| t.track).next() else {
+			std::hint::cold_path();
 			return Err(RipRipError::FirstTrackNum);
 		};
 
@@ -609,7 +615,6 @@ impl RipEntry {
 						self.track.number(),
 						"Busting the cache…",
 					);
-					share.log.add_cache_bust();
 					share.buf.cache_bust(
 						share.cdio,
 						cache_len,
@@ -636,11 +641,11 @@ impl RipEntry {
 					}
 				},
 				// Silently skip generic read errors.
-				Err(RipRipError::CdRead) => if opts.verbose() {
-					share.log.add_error(read_lsn, RipRipError::CdRead);
+				Err(RipRipError::CdRead) => {
+					log!(@error "{read_lsn:06} {}", RipRipError::CdRead);
 				},
-				Err(RipRipError::SubchannelDesync) => if opts.verbose() {
-					share.log.add_error(read_lsn, RipRipError::SubchannelDesync);
+				Err(RipRipError::SubchannelDesync) => {
+					log!(@error "{read_lsn:06} {}", RipRipError::SubchannelDesync);
 				},
 				// Abort for all other kinds of errors.
 				Err(e) => return Err(e),
@@ -654,11 +659,8 @@ impl RipEntry {
 					if v.is_bad() { total_bad += 1; }
 					else if v.is_confused() { total_wishy += 1; }
 				}
-				if total_bad != 0 {
-					share.log.add_bad(self.track, read_lsn, total_bad);
-				}
-				if total_wishy != 0 {
-					share.log.add_confused(self.track, read_lsn, total_wishy);
+				if total_bad != 0 || total_wishy != 0 {
+					share.log.bump_problems(self.track, read_lsn, total_bad, total_wishy);
 				}
 			}
 
@@ -749,6 +751,7 @@ impl RipEntry {
 	fn preverify(&mut self, state: &RipState, opts: &RipOptions)
 	-> Result<bool, RipRipError> {
 		if ! state.is_new() {
+			log!(@debug "Checking rip state for track {}.", self.track.number());
 			(self.ar, self.ctdb) = verify_track(self.track, state);
 			if opts.confidence() <= max_confidence(self.ar, self.ctdb) {
 				let tmp = TrackQuality::new_confirmed(self.quality.1.total());
