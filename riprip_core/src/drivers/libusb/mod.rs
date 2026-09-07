@@ -10,7 +10,9 @@ mod cdtext;
 mod device;
 mod mmc;
 
-use crate::{Barcode, CD_LEADIN, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError};
+use crate::{
+	Barcode, CD_LEADIN, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
+};
 
 use mmc::{Drive, Transport};
 
@@ -149,13 +151,16 @@ impl<C: UsbContext> LibusbInstance<C> {
 	where
 		P: AsRef<Path>,
 	{
+		log!(@debug "Initializing `libusb` driver.");
+
 		let devices = context
 			.devices()
 			.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
 		let device_handle = if let Some(path) = dev {
 			if let Some((vid, pid)) = device::get_desc(&path)? {
-				// eprintln!("{vid:04x}:{pid:04x}");
+				log!(@debug "Using USB device {vid:04x}:{pid:04x}.");
+
 				find_and_open_device(devices, vid, pid)?
 			} else {
 				let path_str = path.as_ref().to_string_lossy().to_string();
