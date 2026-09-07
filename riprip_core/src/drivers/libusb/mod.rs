@@ -158,13 +158,16 @@ impl<C: UsbContext> LibusbInstance<C> {
 			.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
 
 		let device_handle = if let Some(path) = dev {
+			let device_path = path.as_ref().to_string_lossy();
+
+			log!(@debug "Device path {device_path}.");
+
 			if let Some((vid, pid)) = device::get_desc(&path)? {
 				log!(@debug "Using USB device {vid:04x}:{pid:04x}.");
 
 				find_and_open_device(devices, vid, pid)?
 			} else {
-				let path_str = path.as_ref().to_string_lossy().to_string();
-				return Err(RipRipError::DeviceOpen(Some(path_str)));
+				return Err(RipRipError::DeviceOpen(Some(device_path.into_owned())));
 			}
 		} else {
 			find_and_open_cd_drive(devices)?
