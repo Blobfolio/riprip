@@ -90,7 +90,8 @@ pub(super) trait Drive: Transport {
 
 		let mut buf = [0u8; ALLOC_LEN as usize];
 		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
-			return Err(RipRipError::Mcn);
+			log!(@trace "Subchannel contains no MCN data.");
+			return Ok(None);
 		}
 
 		let data_format = buf[3];
@@ -104,6 +105,8 @@ pub(super) trait Drive: Transport {
 				return Barcode::try_from(raw_ascii).map(Some);
 			}
 		}
+		
+		log!(@trace "Subchannel contains no MCN data.");
 		Ok(None)
 	}
 

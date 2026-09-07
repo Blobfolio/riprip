@@ -363,16 +363,6 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 		None
 	}
 
-	fn mcn(&self) -> Option<Barcode> {
-		if let Some(barcode_str) = self.cdtext(0, CDTextKind::Barcode) {
-			if let Ok(barcode) = Barcode::try_from(barcode_str.as_bytes()) {
-				return Some(barcode);
-			}
-		}
-
-		None
-	}
-
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		self.mcn_subchannel__().ok().flatten()
 	}
