@@ -58,9 +58,14 @@ mod spc {
 	pub(super) const INQUIRY: u8 = 0x12;
 	pub(super) const MODE_SELECT_10: u8 = 0x55;
 	pub(super) const MODE_SENSE_10: u8 = 0x5A;
+
+	pub(super) const INQUIRY_HEADER_LEN: u8 = 8;
+	pub(super) const INQUIRY_VENDOR_ID_LEN: u8 = 8;
+	pub(super) const INQUIRY_PRODUCT_ID_LEN: u8 = 16;
+	pub(super) const INQUIRY_REVISION_LEVEL_LEN: u8 = 4;
 }
 
-use crate::{Barcode, DriveVendorModel, RipRipError};
+use crate::{Barcode, DriveVendorModel, RipRipError, macros::log};
 
 pub(super) trait Transport {
 	/// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
@@ -277,34 +282,45 @@ pub(super) trait Drive: Transport {
 		Ok((control_adr, lba))
 	}
 
-	fn drive_vendor_model__(&self) -> Option<DriveVendorModel> {
-		// Allocation Length: Standard INQUIRY data size is 36 bytes.
-		const ALLOC_LEN: u8 = 36;
+	fn drive_vendor_model__(&self) -> Result<DriveVendorModel, RipRipError> {
+		use spc::*;
+
+		const ALLOC_LEN: u8 = INQUIRY_HEADER_LEN
+			+ INQUIRY_VENDOR_ID_LEN
+			+ INQUIRY_PRODUCT_ID_LEN
+			+ INQUIRY_REVISION_LEVEL_LEN;
 
 		let mut cdb = [0u8; 6];
 		cdb[0] = spc::INQUIRY;
 		cdb[4] = ALLOC_LEN;
 
 		let mut buf = [0u8; ALLOC_LEN as usize];
-		self.submit(&cdb, &mut buf).ok()?;
+		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+			return Err(RipRipError::DriveModel);
+		}
 
 		// Standard SCSI Inquiry layout maps fields at fixed offsets:
 		// Bytes 8..16  -> Vendor Identification (8 bytes)
+		const VENDOR_ID_RANGE: std::ops::Range<usize> =
+			INQUIRY_HEADER_LEN as usize..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN) as usize;
+
 		// Bytes 16..32 -> Product Identification / Model (16 bytes)
-		let vendor_raw = &buf[8..16];
-		let model_raw = &buf[16..32];
+		const PRODUCT_ID_RANGE: std::ops::Range<usize> =
+			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN as usize;
 
-		// Convert the raw bytes into UTF-8 strings, stripping away any
-		// trailing whitespace padding added by the drive firmware.
-		let vendor_str = std::str::from_utf8(vendor_raw).ok()?.trim();
-		let model_str = std::str::from_utf8(model_raw).ok()?.trim();
+		let vendor_id = &buf[VENDOR_ID_RANGE];
+		let model_id = &buf[PRODUCT_ID_RANGE];
+		let revision_level = &buf[PRODUCT_ID_RANGE.end..];
 
-		// Model is required, Vendor might be empty strings.
-		if model_str.is_empty() {
-			return None;
+		if let Ok(revision_level_str) = std::str::from_utf8(revision_level) {
+			log!(@debug "Drive revision: {revision_level_str}.");
 		}
 
-		DriveVendorModel::new(vendor_str, model_str).ok()
+		// Convert the raw bytes into UTF-8 strings.
+		let vendor_id = std::str::from_utf8(vendor_id).map_err(|_| RipRipError::DriveVendor)?;
+		let model_id = std::str::from_utf8(model_id).map_err(|_| RipRipError::DriveModel)?;
+
+		DriveVendorModel::new(vendor_id, model_id)
 	}
 
 	fn read_cd__(&self, buf: &mut [u8], lsn: i32, c2: bool, sub: u8) -> Result<usize, RipRipError> {

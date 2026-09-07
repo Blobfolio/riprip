@@ -375,7 +375,7 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 	}
 
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-		self.drive_vendor_model__()
+		self.drive_vendor_model__().ok()
 	}
 
 	fn read_cd(
