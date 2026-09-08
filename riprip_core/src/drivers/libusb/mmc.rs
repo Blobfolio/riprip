@@ -219,18 +219,18 @@ pub(super) trait Drive: Transport {
 			buf.clear();
 			buf.resize(alloc_len as usize, 0);
 
-			self.submit(&cdb, buf).map_err(|_| RipRipError::DiscMode)
+			self.submit(&cdb, buf).map_err(|_| RipRipError::CdText)
 		};
 
 		// Asks only for enough bytes to discover how large the CD-Text is.
 		let len = read_toc(TOC_HEADER_LEN, &mut buf)?;
 		if len < TOC_HEADER_LEN as usize {
-			return Err(RipRipError::DiscMode);
+			return Err(RipRipError::CdText);
 		}
 
 		let cdtext_len = u16::from_be_bytes([buf[0], buf[1]])
 			.checked_add(2) // Length excludes the 2-byte length field itself.
-			.ok_or(RipRipError::DiscMode)?;
+			.ok_or(RipRipError::CdText)?;
 
 		if cdtext_len == TOC_HEADER_LEN {
 			return Ok(None); // No CD-Text exists on this disc.
