@@ -175,13 +175,13 @@ pub(super) enum Field: u8 {
 );
 
 impl Field {
-	const ISRC: Field = Field::UpcEan;
+	const ISRC: Self = Self::UpcEan;
 
-	fn is_data(&self) -> bool {
-		matches!(self, Field::TocInfo | Field::TocInfo2 | Field::SizeInfo)
+	const fn is_data(self) -> bool {
+		matches!(self, Self::TocInfo | Self::TocInfo2 | Self::SizeInfo)
 	}
 
-	fn is_text(&self) -> bool {
+	const fn is_text(self) -> bool {
 		!self.is_data()
 	}
 }
@@ -214,12 +214,12 @@ enum Encoding: u8 {
 );
 
 impl Encoding {
-	fn decode(&self, bytes: &[u8]) -> String {
+	fn decode(self, bytes: &[u8]) -> String {
 		match self {
 			Self::Iso8859_1 | Self::Ascii => {
 				// Try to parse directly as UTF-8/ASCII first without looping.
 				match std::str::from_utf8(bytes) {
-					Ok(valid_str) => valid_str.to_string(),
+					Ok(valid_str) => valid_str.to_owned(),
 					Err(_) => bytes.iter().map(|&b| b as char).collect(),
 				}
 			}
@@ -278,7 +278,7 @@ impl LanguageLayer {
 		let title = self.catalog.get(&(Field::Title, 0))?;
 		title
 			.strip_prefix(self.catalog.get(&(Field::Performer, 0))?)
-			.map(|s| s.trim_start())
+			.map(str::trim_start)
 			.or(Some(title))
 	}
 
@@ -290,7 +290,7 @@ impl LanguageLayer {
 				let mut chars = raw_string.char_indices();
 				chars.next()?;
 
-				let split_idx = chars.next().map(|(idx, _)| idx).unwrap_or(raw_string.len());
+				let split_idx = chars.next().map_or(raw_string.len(), |(idx, _)| idx);
 
 				Some(&raw_string[split_idx..])
 			})
@@ -328,13 +328,13 @@ pub(super) struct Metadata {
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 struct SizeInfo {
-	pub char_code: u8,
-	pub first_track: u8,
-	pub last_track: u8,
-	pub copyright: u8,         // 3: CD-Text is copyrighted, 0: no copyright on CD-Text
-	pub pack_counts: [u8; 16], // 16 pack types (0x80 through 0x8F)
-	pub last_seq: [u8; 8],     // Last sequence number for blocks 0..7
-	pub lang_code: [u8; 8],    // Language code for blocks 0..7
+	char_code: u8,
+	first_track: u8,
+	last_track: u8,
+	copyright: u8,         // 3: CD-Text is copyrighted, 0: no copyright on CD-Text
+	pack_counts: [u8; 16], // 16 pack types (0x80 through 0x8F)
+	last_seq: [u8; 8],     // Last sequence number for blocks 0..7
+	lang_code: [u8; 8],    // Language code for blocks 0..7
 }
 
 impl TryFrom<&[u8]> for SizeInfo {
@@ -345,13 +345,13 @@ impl TryFrom<&[u8]> for SizeInfo {
 			return Err(Error::InvalidPayloadLength);
 		}
 
-		let mut pack_counts = [0u8; 16];
+		let mut pack_counts = [0_u8; 16];
 		pack_counts.copy_from_slice(&buf[4..20]);
 
-		let mut last_seq = [0u8; 8];
+		let mut last_seq = [0_u8; 8];
 		last_seq.copy_from_slice(&buf[20..28]);
 
-		let mut lang_code = [0u8; 8];
+		let mut lang_code = [0_u8; 8];
 		lang_code.copy_from_slice(&buf[28..36]);
 
 		Ok(Self {
@@ -486,7 +486,7 @@ impl Metadata {
 					let buffer = self.language_blocks[block_id as usize]
 						.buffer
 						.entry(key)
-						.or_insert(Default::default());
+						.or_default();
 					buffer.extend_from_slice(payload);
 				}
 				Ok(())
