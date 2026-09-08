@@ -6,13 +6,48 @@ use std::collections::HashMap;
 
 use crate::CDTextKind;
 
+/// Defines an enum with a specified representation and a `TryFrom` implementation.
+macro_rules! repr_enum {
+	(
+		$(#[$meta:meta])*
+		$vis:vis enum $name:ident : $repr:ty {
+			$(
+				$(#[$variant_meta:meta])*
+				$variant:ident = $value:expr
+			),* $(,)?
+		}
+	) => {
+		#[repr($repr)]
+		$(#[$meta])*
+		$vis enum $name {
+			$(
+				$(#[$variant_meta])*
+				$variant = $value,
+			)*
+		}
+
+		impl ::core::convert::TryFrom<$repr> for $name {
+			type Error = $repr;
+
+			fn try_from(value: $repr) -> ::core::result::Result<Self, Self::Error> {
+				match value {
+					$(
+						$value => ::core::result::Result::Ok(Self::$variant),
+					)*
+					unmapped => ::core::result::Result::Err(unmapped),
+				}
+			}
+		}
+	};
+}
+
+repr_enum!(
 /// Enumeration of possible CD-Text languages.
 ///
 /// The language code is encoded as specified in ANNEX 1 to part 5 of EBU
 /// Tech 32 58 -E (1991).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub(super) enum Language {
+pub(super) enum Language: u8 {
 	#[default]
 	Unknown = 0x00,
 	Albanian = 0x01,
@@ -119,22 +154,11 @@ pub(super) enum Language {
 	Arabic = 0x7E,
 	Amharic = 0x7F,
 }
+);
 
-impl TryFrom<u8> for Language {
-	type Error = u8;
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	fn try_from(value: u8) -> Result<Self, Self::Error> {
-		match value {
-			0x00..=0x2B | 0x45..=0x54 | 0x56..=0x7F => unsafe { Ok(std::mem::transmute(value)) },
-			unmapped => Err(unmapped),
-		}
-	}
-}
-
+repr_enum!(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub(super) enum Field {
+pub(super) enum Field: u8 {
 	Title = 0x80,
 	Performer = 0x81,
 	Songwriter = 0x82,
@@ -148,24 +172,11 @@ pub(super) enum Field {
 	UpcEan = 0x8E,
 	SizeInfo = 0x8F,
 }
+);
 
 impl Field {
-	pub(super) const ISRC: Field = Field::UpcEan;
-}
+	const ISRC: Field = Field::UpcEan;
 
-impl TryFrom<u8> for Field {
-	type Error = u8;
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	fn try_from(value: u8) -> Result<Self, Self::Error> {
-		match value {
-			0x80..=0x89 | 0x8E..=0x8F => unsafe { Ok(std::mem::transmute(value)) },
-			unmapped => Err(unmapped),
-		}
-	}
-}
-
-impl Field {
 	fn is_data(&self) -> bool {
 		matches!(self, Field::TocInfo | Field::TocInfo2 | Field::SizeInfo)
 	}
@@ -190,9 +201,9 @@ impl From<CDTextKind> for Field {
 	}
 }
 
+repr_enum!(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-enum Encoding {
+enum Encoding: u8 {
 	/// ISO-8859-1 (8 bit), Latin-1
 	Iso8859_1 = 0x00,
 	/// ASCII (7 bit)
@@ -200,19 +211,7 @@ enum Encoding {
 	/// Shift-JIS (double byte)
 	ShiftJis = 0x80,
 }
-
-impl TryFrom<u8> for Encoding {
-	type Error = u8;
-
-	fn try_from(value: u8) -> Result<Self, Self::Error> {
-		match value {
-			0x00 => Ok(Self::Iso8859_1),
-			0x01 => Ok(Self::Ascii),
-			0x80 => Ok(Self::ShiftJis),
-			unmapped => Err(unmapped),
-		}
-	}
-}
+);
 
 impl Encoding {
 	fn decode(&self, bytes: &[u8]) -> String {
@@ -229,9 +228,10 @@ impl Encoding {
 	}
 }
 
+repr_enum!(
+#[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-enum GenreCode {
+pub(super) enum GenreCode: u8 {
 	#[default]
 	Unused = 0,
 	Undefined = 1,
@@ -263,18 +263,7 @@ enum GenreCode {
 	SpokenWord = 27,
 	WorldMusic = 28,
 }
-
-impl TryFrom<u8> for GenreCode {
-	type Error = u8;
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	fn try_from(value: u8) -> Result<Self, Self::Error> {
-		match value {
-			0..=28 => unsafe { Ok(std::mem::transmute(value)) },
-			unmapped => Err(unmapped),
-		}
-	}
-}
+);
 
 #[derive(Debug, Default)]
 pub(super) struct LanguageLayer {
@@ -284,6 +273,7 @@ pub(super) struct LanguageLayer {
 	pub catalog: HashMap<(Field, u8), String>,
 }
 
+#[allow(dead_code)]
 impl LanguageLayer {
 	/// Returns the album title with the leading artist name and any extra spacing stripped out.
 	pub(super) fn album_title(&self) -> Option<&str> {
@@ -308,8 +298,8 @@ impl LanguageLayer {
 			})
 	}
 
-	#[cfg(test)]
-	fn genre_code(&self) -> Option<GenreCode> {
+	/// Returns the genre code for the album.
+	pub(super) fn album_genre_code(&self) -> Option<GenreCode> {
 		let genre_str = self.catalog.get(&(Field::Genre, 0))?;
 		let bytes = genre_str.as_bytes();
 
@@ -607,7 +597,10 @@ mod test {
 				writeln!(&mut out, "\tGENRE: {}", genre).unwrap();
 			}
 			dump_field(&mut out, "DISC_ID", layer, Field::DiscId, 0);
-			if let Some(genre_code) = layer.genre_code().map(|c| format!("{} ({:?})", c as u8, c)) {
+			if let Some(genre_code) = layer
+				.album_genre_code()
+				.map(|c| format!("{} ({:?})", c as u8, c))
+			{
 				writeln!(&mut out, "\tGENRE_CODE: {}", genre_code).unwrap();
 			}
 
