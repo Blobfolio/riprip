@@ -293,7 +293,6 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
 impl<T: UsbContext> Drive for LibusbInstance<T> {}
 
 impl CddaDriverExt for LibusbInstance<GlobalContext> {
-	/// # New!
 	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where
 		P: AsRef<Path>,
@@ -340,7 +339,6 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 		Ok(!is_data)
 	}
 
-	/// # Track LBA Start.
 	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
 		if idx == 0 {
 			return Err(RipRipError::TrackNumber(0));
@@ -363,12 +361,12 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 		None
 	}
 
-	fn mcn_subchannel(&self) -> Option<Barcode> {
-		self.mcn_subchannel__().ok().flatten()
-	}
-
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		self.drive_vendor_model__().ok()
+	}
+
+	fn mcn_subchannel(&self) -> Option<Barcode> {
+		self.mcn_subchannel__().ok().flatten()
 	}
 
 	fn read_cd(
