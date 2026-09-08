@@ -229,7 +229,6 @@ impl Encoding {
 }
 
 repr_enum!(
-#[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum GenreCode: u8 {
 	#[default]
@@ -273,7 +272,6 @@ pub(super) struct LanguageLayer {
 	pub catalog: HashMap<(Field, u8), String>,
 }
 
-#[allow(dead_code)]
 impl LanguageLayer {
 	/// Returns the album title with the leading artist name and any extra spacing stripped out.
 	pub(super) fn album_title(&self) -> Option<&str> {

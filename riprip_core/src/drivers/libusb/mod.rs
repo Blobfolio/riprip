@@ -213,7 +213,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 			let pack_data = &buf[TOC_HEADER_LEN as usize..]; // Skip the header.
 
 			let metadata = cdtext::Metadata::from_bytes(pack_data).map_err(|e| {
-				log!(@error ": {:?}", e);
+				log!(@error "{:?}", e);
 				RipRipError::CdText
 			})?;
 

@@ -26,6 +26,7 @@ mod libcdio;
 #[cfg(feature = "libusb")]
 mod libusb;
 
+#[allow(dead_code)]
 mod cdtext;
 
 use crate::{
