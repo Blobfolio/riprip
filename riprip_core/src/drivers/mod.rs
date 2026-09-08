@@ -25,6 +25,7 @@ mod libcdio;
 
 #[cfg(feature = "libusb")]
 mod libusb;
+mod cdtext;
 
 use crate::{
 	Barcode,

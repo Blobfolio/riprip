@@ -6,7 +6,6 @@ Somewhat useful documentation:
 */
 
 mod bot;
-mod cdtext;
 mod device;
 mod mmc;
 
@@ -14,6 +13,7 @@ use crate::{
 	Barcode, CD_LEADIN, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
 };
 
+use super::cdtext;
 use mmc::{Drive, Transport};
 
 use nix::unistd::{Uid, setuid};

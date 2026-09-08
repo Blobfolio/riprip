@@ -624,7 +624,7 @@ mod test {
 
 	macro_rules! samples_dir {
 		() => {
-			"../../../skel/cdtext/"
+			"../../skel/cdtext/"
 		};
 	}
 
