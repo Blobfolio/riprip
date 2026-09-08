@@ -218,10 +218,10 @@ impl Encoding {
 		match self {
 			Self::Iso8859_1 | Self::Ascii => {
 				// Try to parse directly as UTF-8/ASCII first without looping.
-				match std::str::from_utf8(bytes) {
-					Ok(valid_str) => valid_str.to_owned(),
-					Err(_) => bytes.iter().map(|&b| b as char).collect(),
-				}
+				std::str::from_utf8(bytes).map_or_else(
+					|_| bytes.iter().map(|&b| b as char).collect(),
+					std::borrow::ToOwned::to_owned,
+				)
 			}
 			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
 		}
@@ -428,14 +428,13 @@ impl Metadata {
 				let header = &pack[0..PACK_HEADER_LEN];
 				let payload = &pack[PACK_HEADER_LEN..PACK_CRC_OFFSET];
 
-				let (id1, id2, id3, id4) = (header[0], header[1], header[2], header[3]);
+				let (id1, id2, _, id4) = (header[0], header[1], header[2], header[3]);
 
 				let is_extension = (id2 & 0x80) != 0; // Extension Flag (0 = normal, 1 = extension)
 				if is_extension {
 					return Err(Error::UnsupportedExtension);
 				}
 				let mut track_number = id2 & 0x7F;
-				let _sequence_number = id3;
 				let block_id = (id4 >> 4) & 0x07; // Bits 4-6 define the language block ID.
 
 				self.language_blocks
@@ -449,7 +448,6 @@ impl Metadata {
 				};
 
 				if field.is_text() {
-					let _char_pos = id4 & 0x0f;
 					let is_double_byte = (id4 & 0x80) != 0;
 					if is_double_byte {
 						return Err(Error::UnsupportedDoubleByte);
@@ -509,7 +507,7 @@ impl Metadata {
 			context.parse_pack(pack)?;
 		}
 
-		let mut metadata = Self::default();
+		let mut layers = vec![];
 		for (i, block) in context.language_blocks.into_iter().enumerate() {
 			let slice = block
 				.buffer
@@ -526,27 +524,29 @@ impl Metadata {
 			let language = Language::try_from(lang_code).map_err(|_| Error::InvalidEncoding)?;
 			let encoding = Encoding::try_from(char_code).map_err(|_| Error::InvalidEncoding)?;
 
-			let mut layer = LanguageLayer::default();
-			layer.first_track = size_info.first_track;
-			layer.last_track = size_info.last_track;
-			layer.language = language;
+			let mut catalog = HashMap::default();
 			for ((field, track), buf) in block.buffer {
 				match field {
 					_ if field.is_text() => {
-						layer.catalog.insert((field, track), encoding.decode(&buf));
+						catalog.insert((field, track), encoding.decode(&buf));
 					}
 					Field::DiscId | Field::UpcEan => {
 						if let Ok(s) = String::from_utf8(buf) {
-							layer.catalog.insert((field, track), s);
+							catalog.insert((field, track), s);
 						}
 					}
 					_ => (),
 				}
 			}
-			metadata.layers.push(layer);
+			layers.push(LanguageLayer {
+				first_track: size_info.first_track,
+				last_track: size_info.last_track,
+				language,
+				catalog,
+			});
 		}
 
-		Ok(metadata)
+		Ok(Self { layers })
 	}
 }
 
