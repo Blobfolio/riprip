@@ -99,6 +99,7 @@ impl CommandStatusWrapper {
 		self.status
 	}
 
+	#[allow(dead_code)]
 	pub(super) fn data_residue(&self) -> u32 {
 		self.data_residue
 	}
