@@ -18,7 +18,6 @@ pub(super) const LEAD_OUT: u8 = 0xAA;
 
 // READ_SUB_CHANNEL Data Formats
 const SUB_FORMAT_MCN: u8 = 0x02;
-const SUB_FORMAT_ISRC: u8 = 0x03;
 
 const SUB_CHANNEL_HEADER_LEN: u16 = 4;
 const SUB_CHANNEL_MCN_DATA_LEN: u16 = 22;
@@ -29,10 +28,6 @@ const FORMAT_MSF: u8 = 0x02;
 
 // READ_TOC Format Codes
 const TOC_FORMAT_TOC: u8 = 0x00;
-const TOC_FORMAT_SESSION: u8 = 0x01;
-const TOC_FORMAT_FULL: u8 = 0x02;
-const TOC_FORMAT_PMA: u8 = 0x03;
-const TOC_FORMAT_ATIP: u8 = 0x04;
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
 const TOC_HEADER_LEN: u16 = 4;
@@ -43,21 +38,13 @@ pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Da
 // GET_CONFIGURATION Features
 const FEATURE_CD_AUDIO_C2: u16 = 0x001E;
 
-const PROFILE_CD_ROM: u16 = 0x0008; // Read-only pressed CD.
-const PROFILE_CD_R: u16 = 0x0009; // Write-once CD-Recordable.
-const PROFILE_CD_RW: u16 = 0x000A; // Rewritable CD.
-
 // READ_CD Sector Types
 const SECTOR_TYPE_CDDA: u8 = 0x04;
 
 /// `spc` (SCSI Primary Commands) covers baseline commands that every SCSI device must understand,
 /// regardless of what it is (like INQUIRY or TEST_UNIT_READY).
 mod spc {
-	pub(super) const TEST_UNIT_READY: u8 = 0x00;
-	pub(super) const REQUEST_SENSE: u8 = 0x03;
 	pub(super) const INQUIRY: u8 = 0x12;
-	pub(super) const MODE_SELECT_10: u8 = 0x55;
-	pub(super) const MODE_SENSE_10: u8 = 0x5A;
 
 	pub(super) const INQUIRY_HEADER_LEN: u8 = 8;
 	pub(super) const INQUIRY_VENDOR_ID_LEN: u8 = 8;
