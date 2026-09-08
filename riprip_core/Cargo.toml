@@ -16,6 +16,8 @@ dactyl = "0.13.*"
 tempfile = "3.8.0"
 trimothy = "0.9.*"
 utc2k = "0.21.*"
+crc = "3.4.0"
+encoding_rs = "0.8.35"
 
 [dependencies.fyi_msg]
 version = "2.7.*"
@@ -33,14 +35,6 @@ optional = true
 [dependencies.nix]
 version = "0.31.3"
 features = ["user"]
-optional = true
-
-[dependencies.crc]
-version = "3.4.0"
-optional = true
-
-[dependencies.encoding_rs]
-version = "0.8.35"
 optional = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -84,8 +78,6 @@ libcdio-static = [ "libcdio", "libcdio-sys/vendored" ]
 libusb = [
     "rusb",
     "nix",
-    "crc",
-    "encoding_rs",
     "objc2-io-kit",
     "objc2-core-foundation",
 ]
