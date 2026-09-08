@@ -212,6 +212,8 @@ impl<C: UsbContext> LibusbInstance<C> {
 		if let Some(buf) = out.read_cdtext()? {
 			let opt = cdtext::Metadata::from_bytes(&buf).map_err(|_| RipRipError::CdText)?;
 			if let Some(metadata) = opt {
+				log!(@debug "CD-Text:\n{:#?}", metadata);
+
 				out.metadata.replace(metadata);
 			}
 		}
