@@ -509,7 +509,11 @@ impl Metadata {
 		let mut context = Context::default();
 		let (chunks, remainder) = pack_data.as_chunks::<PACK_LEN>();
 		if !remainder.is_empty() {
-			return Err(Error::IncompleteParse);
+			if remainder == [0] {
+				// A single trailing \0 byte is a tolerated convention.
+			} else {
+				return Err(Error::IncompleteParse);
+			}
 		}
 		for pack in chunks {
 			if !pack.is_valid() {
