@@ -30,7 +30,7 @@ const FORMAT_MSF: u8 = 0x02;
 const TOC_FORMAT_TOC: u8 = 0x00;
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
-const TOC_HEADER_LEN: u16 = 4;
+pub(super) const TOC_HEADER_LEN: u16 = 4;
 const TOC_TRACK_DESCRIPTOR_LEN: u16 = 8;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.

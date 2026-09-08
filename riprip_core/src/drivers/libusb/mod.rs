@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::cdtext;
-use mmc::{Drive, Transport};
+use mmc::{Drive, TOC_HEADER_LEN, Transport};
 
 use nix::unistd::{Uid, setuid};
 use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};
@@ -210,15 +210,19 @@ impl<C: UsbContext> LibusbInstance<C> {
 		out.check_c2__()?;
 
 		if let Some(buf) = out.read_cdtext()? {
-			let opt = cdtext::Metadata::from_bytes(&buf).map_err(|_| RipRipError::CdText)?;
-			if let Some(metadata) = opt {
-				if let Some(title) = metadata.layers.first().and_then(|ll| ll.album_title()) {
-					log!(@info "{title}");
-				}
-				log!(@debug "CD-Text:\n{:#?}", metadata);
+			let pack_data = &buf[TOC_HEADER_LEN as usize..]; // Skip the header.
 
-				out.metadata.replace(metadata);
+			let metadata = cdtext::Metadata::from_bytes(pack_data).map_err(|e| {
+				log!(@error ": {:?}", e);
+				RipRipError::CdText
+			})?;
+
+			if let Some(title) = metadata.layers.first().and_then(|ll| ll.album_title()) {
+				log!(@info "{title}");
 			}
+			log!(@debug "CD-Text:\n{:#?}", metadata);
+
+			out.metadata.replace(metadata);
 		}
 
 		Ok(out)

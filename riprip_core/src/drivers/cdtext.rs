@@ -375,18 +375,7 @@ impl SizeInfo {
 }
 
 impl Metadata {
-	pub(super) fn from_bytes(buf: &[u8]) -> Result<Option<Self>, Error> {
-		if buf.len() < 4 {
-			return Ok(None);
-		}
-
-		// Skip the header.
-		let pack_data = &buf[4..];
-
-		Self::parse_packs(pack_data)
-	}
-
-	fn parse_packs(pack_data: &[u8]) -> Result<Option<Self>, Error> {
+	pub(super) fn from_bytes(pack_data: &[u8]) -> Result<Self, Error> {
 		const PACK_LEN: usize = 18;
 		const PACK_HEADER_LEN: usize = 4;
 		const PACK_PAYLOAD_LEN: usize = 12;
@@ -559,7 +548,7 @@ impl Metadata {
 			metadata.layers.push(layer);
 		}
 
-		Ok(Some(metadata))
+		Ok(metadata)
 	}
 }
 
@@ -662,7 +651,7 @@ mod test {
 	#[test]
 	fn t_libcdio_samples() {
 		for (left, right) in SAMPLES {
-			let metadata = Metadata::parse_packs(left).unwrap().unwrap();
+			let metadata = Metadata::from_bytes(left).unwrap();
 			let dump = dump(&metadata).to_owned();
 			assert_eq!(dump, right)
 		}
