@@ -1,8 +1,9 @@
 /*!
 # Rip Rip Hooray: `libcdio` Wrappers
 
-Somewhat useful documentation:
+Resources:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
+<https://github.com/xbmc/libcdio/blob/master/example/cdtext.c>
 */
 
 use crate::{

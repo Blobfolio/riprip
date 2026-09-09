@@ -76,6 +76,7 @@ pub use drive::{
 	DriveVendorModel,
 	ReadOffset,
 };
+pub use drivers::cdtext;
 pub use drivers::CDTextKind;
 pub use error::RipRipError;
 pub use loglog::{
@@ -109,6 +110,19 @@ use std::{
 	collections::BTreeMap,
 	path::PathBuf,
 };
+
+
+
+/// # Helper: Count.
+///
+/// Thanks Little Book of Rust Macros!
+macro_rules! count {
+	() => ( 0 );
+	($odd:tt) => ( 1 );
+	($odd:tt $( $a:tt $b:tt )+) => ( ($crate::count!($($a)+) * 2) + 1 );
+	($( $a:tt $b:tt )+) =>         (  $crate::count!($($a)+) * 2      );
+}
+use count;
 
 
 

@@ -1,9 +1,7 @@
-
-Language 0 'English':
-CD-TEXT for Disc:
+[English]
+DISC:
 	TITLE: Test Disc
 	PERFORMER: Test Artist
-CD-TEXT for Track  1:
+TRACK 01:
 	TITLE: Track 1
 	PERFORMER: Test Artist
-
