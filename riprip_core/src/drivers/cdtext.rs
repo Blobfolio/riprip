@@ -1155,17 +1155,33 @@ mod test {
 			};
 		}
 
+		compare!("7e09530a");
+		compare!("8a0a110b");
+		compare!("1606c313");
+		compare!("57116227");
+		compare!("68095d08");
 		compare!("0d10c613");
+		compare!("410a6005");
+		compare!("4a129207");
+		compare!("5e085908");
 		compare!("640a6409");
 		compare!("6708210a");
+		compare!("77083e09");
 		compare!("7d050b0a");
+		compare!("810a120a");
+		compare!("8b09540b");
+		compare!("8f11c60b");
+		compare!("950b650d");
 		compare!("a308db0c");
+		compare!("a70f560e");
 		compare!("cdtext");
 		compare!("cdtext-krosis");
 		compare!("cdtext-libburnia");
 		compare!("d60f430e");
 		compare!("double");
+		compare!("f00c0e12");
 		compare!("f310b110");
+		compare!("fd0ebc13");
 		compare!("simple");
 	}
 }
