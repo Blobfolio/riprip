@@ -267,7 +267,7 @@ macro_rules! field {
 	(
 		$( #[doc = $doc:expr] )*
 		$enum:ident
-		$( $k:ident $str:literal $pack:ident $libcdio:ident, )+
+		$( $k:ident $str:literal, )+
 	) => (
 		#[repr(u8)]
 		#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
@@ -297,23 +297,6 @@ macro_rules! field {
 					$( Self::$k => $str, )+
 				}
 			}
-
-			#[must_use]
-			/// # Pack Type.
-			const fn pack_kind(self) -> PackKind {
-				match self {
-					$( Self::$k => PackKind::$pack, )+
-				}
-			}
-
-			#[cfg(feature = "libcdio")]
-			#[must_use]
-			/// # To `libcdio` ID.
-			pub(crate) const fn libcdio_id(self) -> u32 {
-				match self {
-					$( Self::$k => ::libcdio_sys::$libcdio, )+
-				}
-			}
 		}
 	);
 }
@@ -324,15 +307,15 @@ field! {
 	/// This enum holds the (logical) CDText fields applicable to the disc as
 	/// a whole.
 	DiscField
-	Title      "TITLE"      Title      cdtext_field_t_CDTEXT_FIELD_TITLE,
-	Performer  "PERFORMER"  Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER,
-	Songwriter "SONGWRITER" Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER,
-	Composer   "COMPOSER"   Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER,
-	Message    "MESSAGE"    Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE,
-	Arranger   "ARRANGER"   Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER,
-	Barcode    "BARCODE"    UpcEanIsrc cdtext_field_t_CDTEXT_FIELD_UPC_EAN,
-	DiscId     "DISC ID"    DiscId     cdtext_field_t_CDTEXT_FIELD_DISCID,
-	Genre      "GENRE"      Genre      cdtext_field_t_CDTEXT_FIELD_GENRE,
+	Title      "TITLE",
+	Performer  "PERFORMER",
+	Songwriter "SONGWRITER",
+	Composer   "COMPOSER",
+	Message    "MESSAGE",
+	Arranger   "ARRANGER",
+	Barcode    "BARCODE",
+	DiscId     "DISC ID",
+	Genre      "GENRE",
 }
 field! {
 	/// # Track Fields.
@@ -340,13 +323,13 @@ field! {
 	/// This enum holds the (logical) CDText fields applicable to individual
 	/// tracks on the disc.
 	TrackField
-	Title      "TITLE"      Title      cdtext_field_t_CDTEXT_FIELD_TITLE,
-	Performer  "PERFORMER"  Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER,
-	Songwriter "SONGWRITER" Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER,
-	Composer   "COMPOSER"   Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER,
-	Message    "MESSAGE"    Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE,
-	Arranger   "ARRANGER"   Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER,
-	Isrc       "ISRC"       UpcEanIsrc cdtext_field_t_CDTEXT_FIELD_ISRC,
+	Title      "TITLE",
+	Performer  "PERFORMER",
+	Songwriter "SONGWRITER",
+	Composer   "COMPOSER",
+	Message    "MESSAGE",
+	Arranger   "ARRANGER",
+	Isrc       "ISRC",
 }
 
 
@@ -472,10 +455,6 @@ impl CDTextInner {
 			.next()
 			.and_then(GenreCode::from_u8)
 	}
-
-	#[must_use]
-	/// # Language.
-	const fn language(&self) -> Language { self.language }
 }
 
 
@@ -617,7 +596,7 @@ macro_rules! err {
 		/// # CDText Decoding Errors.
 		///
 		/// This enum serves as a cheap error type for CD-Text decoding.
-		pub(crate) enum Error {
+		enum Error {
 			$(
 				#[doc = concat!("# ", $v)]
 				$k,
@@ -636,14 +615,10 @@ macro_rules! err {
 }
 
 err! {
-	InvalidPack           "Invalid CD-Text pack type.",
-	InvalidEncoding       "Invalid CD-Text encoding.",
 	MissingSizeInfo       "Missing CD-Text size info.",
 	InvalidPayloadLength  "Invalid CD-Text payload length.",
-	InvalidPackCount      "Invalid CD-Text pack count.",
 	UnsupportedExtension  "Unsupported CD-Text extension.",
 	UnsupportedDoubleByte "Unsupported double-byte encoding.",
-	IncompleteParse       "CD-Text data is incomplete.",
 }
 
 
@@ -963,18 +938,6 @@ macro_rules! pack {
 					$( $v => Some(Self::$k), )+
 					_ => None,
 				}
-			}
-
-			#[must_use]
-			/// # From Disc Field.
-			const fn from_disc_field(field: DiscField) -> Self {
-				field.pack_kind()
-			}
-
-			#[must_use]
-			/// # From Track Field.
-			const fn from_track_field(field: TrackField) -> Self {
-				field.pack_kind()
 			}
 
 			#[must_use]
