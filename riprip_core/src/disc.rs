@@ -13,6 +13,7 @@ use crate::{
 	CD_LEADOUT_LABEL,
 	CddaDriver,
 	CddaDriverExt,
+	cdtext::CDText,
 	cdtext::TrackField,
 	DriveVendorModel,
 	KillSwitch,
@@ -229,6 +230,10 @@ impl Disc {
 	#[must_use]
 	/// # Barcode.
 	pub const fn barcode(&self) -> Option<Barcode> { self.barcode }
+
+	#[must_use]
+	/// # CD-Text.
+	pub fn cdtext(&self) -> Option<&CDText> { self.cdio.cdtext() }
 
 	#[must_use]
 	#[inline]

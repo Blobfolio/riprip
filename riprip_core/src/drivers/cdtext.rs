@@ -118,7 +118,7 @@ impl CDText {
 		}
 
 		// Build up the inner data.
-		let mut inner = vec![];
+		let mut inner = Vec::with_capacity(context.language_blocks.len());
 		for (i, block) in context.language_blocks.into_iter().enumerate() {
 			// Parse the size info.
 			let size_info = block.buffer
@@ -189,7 +189,11 @@ impl CDText {
 		}
 
 		// Done!
-		Some(Self(inner))
+		if inner.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else { Some(Self(inner)) }
 	}
 }
 
@@ -365,30 +369,59 @@ struct CDTextInner {
 }
 
 impl fmt::Display for CDTextInner {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		// Language.
-		writeln!(f, "[{}]", self.language)?;
+		// Alternate formatting is used for the logger.
+		if f.alternate() {
+			// Language.
+			write!(f, "\n  [{}]", self.language)?;
 
-		// Disc fields first.
-		f.write_str("DISC:\n")?;
-		for field in DiscField::ALL {
-			let v = self.disc(field).map_or("", str::trim);
-			if ! v.is_empty() {
-				writeln!(f, "\t{field}: {v}")?;
+			// Disc fields first.
+			f.write_str("\n  DISC:")?;
+			for field in DiscField::ALL {
+				let v = self.disc(field).map_or("", str::trim);
+				if ! v.is_empty() {
+					write!(f, "\n    {field}: {v}")?;
+				}
+			}
+			if let Some(v) = self.genre_code() {
+				write!(f, "\n    GENRE CODE: {} ({v})", v as u8)?;
+			}
+
+			// Track fields.
+			for track in self.first_track..=self.last_track {
+				write!(f, "\n  TRACK {track:02}:")?;
+				for field in TrackField::ALL {
+					let v = self.track(field, track).map_or("", str::trim);
+					if ! v.is_empty() {
+						write!(f, "\n    {field}: {v}")?;
+					}
+				}
 			}
 		}
-		if let Some(v) = self.genre_code() {
-			writeln!(f, "\tGENRE CODE: {} ({v})", v as u8)?;
-		}
+		else {
+			// Language.
+			writeln!(f, "[{}]", self.language)?;
 
-		// Track fields.
-		for track in self.first_track..=self.last_track {
-			writeln!(f, "TRACK {track:02}:")?;
-			for field in TrackField::ALL {
-				let v = self.track(field, track).map_or("", str::trim);
+			// Disc fields first.
+			f.write_str("DISC:\n")?;
+			for field in DiscField::ALL {
+				let v = self.disc(field).map_or("", str::trim);
 				if ! v.is_empty() {
 					writeln!(f, "\t{field}: {v}")?;
+				}
+			}
+			if let Some(v) = self.genre_code() {
+				writeln!(f, "\tGENRE CODE: {} ({v})", v as u8)?;
+			}
+
+			// Track fields.
+			for track in self.first_track..=self.last_track {
+				writeln!(f, "TRACK {track:02}:")?;
+				for field in TrackField::ALL {
+					let v = self.track(field, track).map_or("", str::trim);
+					if ! v.is_empty() {
+						writeln!(f, "\t{field}: {v}")?;
+					}
 				}
 			}
 		}

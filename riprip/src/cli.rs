@@ -137,6 +137,9 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 		if let Some(v) = drivevendormodel { log!(@info "{v}"); }
 		log!(@info "{}", LoggableDisc(&disc));
 		log!(@info "{}", LoggableTracks(&disc));
+		if let Some(cdtext) = disc.cdtext() {
+			log!(@debug "Found CD-Text.{cdtext:#}");
+		}
 	}
 
 	// Set up some drive-dependent things.
@@ -264,10 +267,10 @@ fn parse_rip_option_tracks(disc: &Disc, mut opts: RipOptions, tracks: &str)
 
 
 
-/// # Loggable Disc Details.
+/// # Loggable CD-Text.
 ///
-/// This struct is used to format disc-related output for the `-v`/`--verbose`
-/// log.
+/// This struct is used to format the CD-Text data in a format suitable for the
+/// logger.
 struct LoggableDisc<'a>(&'a Disc);
 
 impl fmt::Display for LoggableDisc<'_> {

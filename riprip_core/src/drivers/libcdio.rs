@@ -395,7 +395,6 @@ impl LibcdioInstance {
 				)
 			};
 			if let Some(cdtext) = CDText::from_bytes(packs) {
-				log!(@debug "Parsed CDText data.");
 				self.cdtext.replace(cdtext);
 			}
 		}
