@@ -10,7 +10,10 @@ use crate::{
 	Barcode,
 	CD_LEADIN,
 	CddaDriverExt,
-	CDTextKind,
+	cdtext::{
+		DiscField,
+		TrackField,
+	},
 	DriveVendorModel,
 	macros::log,
 	RipRipError,
@@ -198,19 +201,28 @@ impl CddaDriverExt for LibcdioInstance {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # CDText Value.
+	/// # CDText Value (Disc).
 	///
-	/// Return the value associated with the CDText field, if any. If the track
-	/// number is zero, data associated with the album will be returned.
-	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
+	/// Return the value associated with the CDText field, if any.
+	fn cdtext_disc(&self, kind: DiscField) -> Option<String> {
 		let ptr = self.cdtext?;
 		// Safety: this is an FFI call…
 		let raw = unsafe {
-			libcdio_sys::cdtext_get_const(
-				ptr.cast(),
-				kind as u32,
-				idx,
-			)
+			libcdio_sys::cdtext_get_const(ptr.cast(), kind.libcdio_id(), 0)
+		};
+
+		c_char_to_string(raw)
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
+	/// # CDText Value (Track).
+	///
+	/// Return the value associated with the CDText field, if any.
+	fn cdtext_track(&self, idx: u8, kind: TrackField) -> Option<String> {
+		let ptr = self.cdtext?;
+		// Safety: this is an FFI call…
+		let raw = unsafe {
+			libcdio_sys::cdtext_get_const(ptr.cast(), kind.libcdio_id(), idx)
 		};
 
 		c_char_to_string(raw)

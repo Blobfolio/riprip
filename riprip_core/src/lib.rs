@@ -77,7 +77,6 @@ pub use drive::{
 	ReadOffset,
 };
 pub use drivers::cdtext;
-pub use drivers::CDTextKind;
 pub use error::RipRipError;
 pub use loglog::{
 	LogLog,

@@ -13,7 +13,7 @@ use crate::{
 	CD_LEADOUT_LABEL,
 	CddaDriver,
 	CddaDriverExt,
-	CDTextKind,
+	cdtext::TrackField,
 	DriveVendorModel,
 	KillSwitch,
 	macros::log,
@@ -215,7 +215,7 @@ impl Disc {
 		let mut isrcs = HashMap::with_hasher(NoHash::default());
 		for t in toc.audio_tracks() {
 			let idx = t.number();
-			if let Some(isrc) = cdio.cdtext(idx, CDTextKind::Isrc) {
+			if let Some(isrc) = cdio.cdtext_track(idx, TrackField::Isrc) {
 				isrcs.insert(idx, isrc);
 			}
 		}
