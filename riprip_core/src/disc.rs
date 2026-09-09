@@ -216,7 +216,7 @@ impl Disc {
 		for t in toc.audio_tracks() {
 			let idx = t.number();
 			if let Some(isrc) = cdio.cdtext_track(idx, TrackField::Isrc) {
-				isrcs.insert(idx, isrc);
+				isrcs.insert(idx, isrc.to_owned());
 			}
 		}
 

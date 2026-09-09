@@ -39,6 +39,7 @@ use crate::{
 	RipRipError,
 };
 use cdtext::{
+	CDText,
 	DiscField,
 	TrackField,
 };
@@ -122,15 +123,10 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// track.
 	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError>;
 
-	/// # CD-Text Value (Disc).
+	/// # CD-Text.
 	///
-	/// Return the value associated with the CD-Text field, if any.
-	fn cdtext_disc(&self, kind: DiscField) -> Option<String>;
-
-	/// # CD-Text Value (Track).
-	///
-	/// Return the value associated with the CD-Text field, if any.
-	fn cdtext_track(&self, idx: u8, kind: TrackField) -> Option<String>;
+	/// Return _all_ CD-Text data, if any.
+	fn cdtext(&self) -> Option<&CDText>;
 
 	/// # Drive Vendor/Model.
 	///
@@ -159,6 +155,20 @@ pub(crate) trait CddaDriverExt: Sized {
 		sub: u8,
 		block_size: u16,
 	) -> Result<(), RipRipError>;
+
+	/// # CD-Text Value (Disc).
+	///
+	/// Return the value associated with the CD-Text field, if any.
+	fn cdtext_disc(&self, kind: DiscField) -> Option<&str> {
+		self.cdtext().and_then(|v| v.disc(kind).next())
+	}
+
+	/// # CD-Text Value (Track).
+	///
+	/// Return the value associated with the CD-Text field, if any.
+	fn cdtext_track(&self, idx: u8, kind: TrackField) -> Option<&str> {
+		self.cdtext().and_then(|v| v.track(kind, idx).next())
+	}
 
 	/// # MCN.
 	///

@@ -68,6 +68,27 @@ impl fmt::Display for CDText {
 
 impl CDText {
 	#[must_use]
+	/// # Search Disc Value(s).
+	///
+	/// Returns an iterator of matching values across all provided
+	/// languages.
+	pub(crate) fn disc(&self, field: DiscField) -> CDTextDiscFieldIter<'_> {
+		CDTextDiscFieldIter { field, set: &self.0 }
+	}
+
+	#[must_use]
+	/// # Search Track Value(s).
+	///
+	/// Returns an iterator of matching values across all provided
+	/// languages.
+	pub(crate) fn track(&self, field: TrackField, track: u8)
+	-> CDTextTrackFieldIter<'_> {
+		CDTextTrackFieldIter { field, track, set: &self.0 }
+	}
+}
+
+impl CDText {
+	#[must_use]
 	/// # Decode Raw Pack Data.
 	pub(crate) fn from_bytes(pack_data: &[u8]) -> Option<Self> {
 		let mut context = Context::default();
@@ -171,6 +192,73 @@ impl CDText {
 		Some(Self(inner))
 	}
 }
+
+
+
+#[derive(Debug)]
+/// # CD-Text `DiscField` Value Iterator.
+///
+/// This iterator yields all instances of `DiscField` across the various
+/// languages.
+pub(crate) struct CDTextDiscFieldIter<'a> {
+	/// # Field of Interest.
+	field: DiscField,
+
+	/// # Language Data Sets.
+	set: &'a [CDTextInner],
+}
+
+impl<'a> Iterator for CDTextDiscFieldIter<'a> {
+	type Item = &'a str;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		while let [ next, rest @ .. ] = &self.set {
+			self.set = rest;
+			if let Some(out) = next.disc(self.field) {
+				return Some(out);
+			}
+		}
+
+		None
+	}
+}
+
+impl std::iter::FusedIterator for CDTextDiscFieldIter<'_> {}
+
+
+
+#[derive(Debug)]
+/// # CD-Text `TrackField` Value Iterator.
+///
+/// This iterator yields all instances of `DiscField` across the various
+/// languages.
+pub(crate) struct CDTextTrackFieldIter<'a> {
+	/// # Field of Interest.
+	field: TrackField,
+
+	/// # Track Number.
+	track: u8,
+
+	/// # Language Data Sets.
+	set: &'a [CDTextInner],
+}
+
+impl<'a> Iterator for CDTextTrackFieldIter<'a> {
+	type Item = &'a str;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		while let [ next, rest @ .. ] = &self.set {
+			self.set = rest;
+			if let Some(out) = next.track(self.field, self.track) {
+				return Some(out);
+			}
+		}
+
+		None
+	}
+}
+
+impl std::iter::FusedIterator for CDTextTrackFieldIter<'_> {}
 
 
 
