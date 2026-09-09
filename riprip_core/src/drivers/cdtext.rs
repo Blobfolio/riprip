@@ -1135,43 +1135,37 @@ fn chk_pack(src: &Pack) -> bool {
 mod test {
 	use super::*;
 
-	macro_rules! samples_dir {
-		() => ( "../../skel/cdtext/" );
-	}
-
-	// Both the `.cdt` binary payloads and their corresponding `.right` text fixtures
-	// originate from the upstream libcdio GitHub repository reference samples.
-	// Note: The text targets have been sanitized to align with our dump format by
-	// converting indentation spaces to standard tabs (`\t`) and adding a trailing newline.
-	const SAMPLES: [(&[u8], &str); 5] = [
-		(
-			include_bytes!(concat!(samples_dir!(), "cdtext.cdt")),
-			include_str!(concat!(samples_dir!(), "cdtext.right")),
-		),
-		(
-			include_bytes!(concat!(samples_dir!(), "cdtext-libburnia.cdt")),
-			include_str!(concat!(samples_dir!(), "cdtext-libburnia.right")),
-		),
-		(
-			include_bytes!(concat!(samples_dir!(), "cdtext-krosis.cdt")),
-			include_str!(concat!(samples_dir!(), "cdtext-krosis.right")),
-		),
-		(
-			include_bytes!(concat!(samples_dir!(), "simple.cdt")),
-			include_str!(concat!(samples_dir!(), "simple.right")),
-		),
-		(
-			include_bytes!(concat!(samples_dir!(), "double.cdt")),
-			include_str!(concat!(samples_dir!(), "double.right")),
-		),
-	];
-
 	#[test]
 	fn t_libcdio_samples() {
-		for (left, right) in SAMPLES {
-			let metadata = CDText::from_bytes(left)
-				.expect("Unable to parse metadata.");
-			assert_eq!(metadata.to_string(), right)
+		macro_rules! compare {
+			( $stub:literal ) => {
+				let Some(parsed) = CDText::from_bytes(include_bytes!(
+					concat!("../../skel/cdtext/", $stub, ".cdt")
+				)) else {
+					panic!("Failed to parse {}.cdt.", $stub);
+				};
+				let lhs = parsed.to_string();
+				let rhs = include_str!(concat!("../../skel/cdtext/", $stub, ".right"));
+				assert_eq!(
+					lhs,
+					rhs,
+					"Mismatch for {}:\n\n-----\n{lhs}\n-----\n{rhs}\n",
+					$stub,
+				);
+			};
 		}
+
+		compare!("0d10c613");
+		compare!("640a6409");
+		compare!("6708210a");
+		compare!("7d050b0a");
+		compare!("a308db0c");
+		compare!("cdtext");
+		compare!("cdtext-krosis");
+		compare!("cdtext-libburnia");
+		compare!("d60f430e");
+		compare!("double");
+		compare!("f310b110");
+		compare!("simple");
 	}
 }
