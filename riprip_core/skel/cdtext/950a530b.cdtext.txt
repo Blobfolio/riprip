@@ -1,5 +1,6 @@
 [English]
 DISC:
+	TITLE: The Doors
 	PERFORMER: The Doors
 	BARCODE: 0-81227-97626-2
 TRACK 01:

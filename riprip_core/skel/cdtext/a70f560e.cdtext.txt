@@ -1,5 +1,6 @@
 [English]
 DISC:
+	TITLE: Audioslave
 	PERFORMER: Audioslave
 	DISC ID: EK86968
 TRACK 01:

@@ -442,11 +442,6 @@ impl CDTextInner {
 	fn disc(&self, field: DiscField) -> Option<&str> {
 		let raw = self.disc__(field)?;
 		match field {
-			// Album title might be prefixed with performer.
-			DiscField::Title => self.disc__(DiscField::Performer)
-				.and_then(|v| raw.strip_prefix(v))
-				.map(str::trim_start)
-				.or(Some(raw)),
 			// Genre serves double duty.
 			DiscField::Genre =>
 				// The first byte is reserved for the genre code; the rest, if

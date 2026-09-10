@@ -1,5 +1,6 @@
 [Unspecified]
 DISC:
+	TITLE: Vivian Girls
 	PERFORMER: Vivian Girls
 TRACK 01:
 	TITLE: All the Time
