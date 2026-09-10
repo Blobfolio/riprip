@@ -1150,7 +1150,7 @@ mod test {
 	fn t_libcdio_samples() {
 		macro_rules! compare {
 			( $stub:literal ) => {
-				let Some(parsed) = CDText::from_bytes(include_bytes!(
+				let Ok(parsed) = CDText::from_bytes(include_bytes!(
 					concat!("../../skel/cdtext/", $stub, ".cdt")
 				)) else {
 					panic!("Failed to parse {}.cdt.", $stub);
