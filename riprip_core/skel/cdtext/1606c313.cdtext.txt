@@ -3,7 +3,6 @@ DISC:
 	TITLE: Grown Up, Fucked Up
 	PERFORMER: Reatards
 	GENRE: Not defined
-	GENRE CODE: 1 (Unspecified)
 TRACK 01:
 	TITLE: Blew My Mind
 	PERFORMER: Reatards

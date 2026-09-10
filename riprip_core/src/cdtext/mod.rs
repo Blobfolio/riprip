@@ -1,10 +1,16 @@
 /*!
-# Rip Rip Hooray: CD-Text Parser
+# Rip Rip Hooray: CD-Text.
+
+This module contains structures for parsing and storing CD-Text data.
 
 Resources:
 <https://libcdio.github.io/cd-text-format.html>
 <https://github.com/xbmc/libcdio/blob/master/example/cdtext.c>
 */
+
+mod field;
+mod genre;
+mod language;
 
 use crate::{
 	Barcode,
@@ -14,6 +20,12 @@ use dactyl::{
 	NoHash,
 	traits::NiceInflection,
 };
+pub use field::{
+	DiscField,
+	TrackField,
+};
+use genre::GenreCode;
+use language::Language;
 use std::{
 	collections::HashMap,
 	fmt,
@@ -106,7 +118,7 @@ impl CDText {
 			log!(
 				@trace
 				"CD-Text parsing ended with {}.",
-				remainder.len().nice_inflect("byte", "bytes"),
+				remainder.len().nice_inflect("extra byte", "extra bytes"),
 			);
 			return Err(CDTextError::IncompleteData);
 		}
@@ -157,31 +169,47 @@ impl CDText {
 				return Err(CDTextError::UnsupportedEncoding);
 			};
 			let mut catalog = HashMap::default();
+			let mut genre_code = GenreCode::Unused;
 			for ((field, track), buf) in block.buffer {
 				// Disc data?
 				if track == 0 {
 					if let Some(field) = field.disc_field() {
-						let v =
+						let v = match field {
 							// Don't accept invalid barcodes.
-							if matches!(field, DiscField::Barcode) {
+							DiscField::Barcode => {
 								let Ok(v) = Barcode::try_from(buf.as_slice()) else {
 									continue;
 								};
 								v.to_string()
 							}
-							else { encoding.decode(&buf) };
-						catalog.insert(
-							u16::from_le_bytes([field as u8, 0]),
-							v,
-						);
+							// Separate genre code and content.
+							DiscField::Genre => {
+								let v = encoding.decode(&buf);
+								let (v1, v2) = GenreCode::split_raw(v.as_bytes());
+								genre_code = v1;
+								if v2.is_empty() { continue; }
+								v2.to_owned()
+							},
+							// Decode anything else.
+							_ => { encoding.decode(&buf) },
+						};
+						if ! v.is_empty() {
+							catalog.insert(
+								u16::from_le_bytes([field as u8, 0]),
+								v,
+							);
+						}
 					}
 				}
 				// Track data?
 				else if let Some(field) = field.track_field() {
-					catalog.insert(
-						u16::from_le_bytes([field as u8, track]),
-						encoding.decode(&buf),
-					);
+					let v = encoding.decode(&buf);
+					if ! v.is_empty() {
+						catalog.insert(
+							u16::from_le_bytes([field as u8, track]),
+							v,
+						);
+					}
 				}
 			}
 
@@ -190,6 +218,7 @@ impl CDText {
 				first_track: size_info.first_track,
 				last_track: size_info.last_track,
 				language,
+				genre_code,
 				catalog,
 			});
 		}
@@ -272,74 +301,41 @@ impl std::iter::FusedIterator for CDTextTrackFieldIter<'_> {}
 
 
 
-/// # Helper: Logical Fields.
-macro_rules! field {
-	(
-		$( #[doc = $doc:expr] )*
-		$enum:ident
-		$( $k:ident $str:literal, )+
-	) => (
-		#[repr(u8)]
-		#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-		$( #[doc = $doc] )*
-		pub enum $enum {
+/// # Helper: Error.
+macro_rules! err {
+	( $( $k:ident $v:literal, )+ ) => (
+		#[derive(Debug, Clone, Copy)]
+		/// # CD-Text Decoding Errors.
+		///
+		/// This enum serves as a cheap error type for CD-Text decoding.
+		pub(crate) enum CDTextError {
 			$(
-				#[doc = concat!("# ", $str, ".")]
+				#[doc = concat!("# ", $v)]
 				$k,
 			)+
 		}
 
-		impl fmt::Display for $enum {
+		impl fmt::Display for CDTextError {
 			#[inline]
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				f.write_str(self.as_str())
-			}
-		}
-
-		impl $enum {
-			/// # All Items.
-			const ALL: [Self; crate::count!($( $k )+)] = [ $( Self::$k, )+ ];
-
-			#[must_use]
-			/// # As String Slice.
-			const fn as_str(self) -> &'static str {
-				match self {
-					$( Self::$k => $str, )+
-				}
+				f.write_str(match *self {
+					$( Self::$k => $v, )+
+				})
 			}
 		}
 	);
 }
 
-field! {
-	/// # Disc Fields.
-	///
-	/// This enum holds the (logical) CD-Text fields applicable to the disc as
-	/// a whole.
-	DiscField
-	Title      "TITLE",
-	Performer  "PERFORMER",
-	Songwriter "SONGWRITER",
-	Composer   "COMPOSER",
-	Message    "MESSAGE",
-	Arranger   "ARRANGER",
-	Barcode    "BARCODE",
-	DiscId     "DISC ID",
-	Genre      "GENRE",
-}
-field! {
-	/// # Track Fields.
-	///
-	/// This enum holds the (logical) CD-Text fields applicable to individual
-	/// tracks on the disc.
-	TrackField
-	Title      "TITLE",
-	Performer  "PERFORMER",
-	Songwriter "SONGWRITER",
-	Composer   "COMPOSER",
-	Message    "MESSAGE",
-	Arranger   "ARRANGER",
-	Isrc       "ISRC",
+err! {
+	ChecksumMismatch      "Unable to verify CD-Text data.",
+	Empty                 "CD-Text exists, but is empty.",
+	IncompleteData        "Raw CD-Text data is incomplete.",
+	InvalidLanguage       "CD-Text contains invalid language code.",
+	InvalidPayloadLength  "Invalid CD-Text payload length.",
+	MissingSizeInfo       "Missing CD-Text size info.",
+	UnsupportedDoubleByte "Unsupported CD-Text double-byte encoding.",
+	UnsupportedEncoding   "Unsupported CD-Text encoding type.",
+	UnsupportedExtension  "Unsupported CD-Text extension.",
 }
 
 
@@ -369,6 +365,9 @@ struct CDTextInner {
 
 	/// # Language.
 	language: Language,
+
+	/// # Genre Code.
+	genre_code: GenreCode,
 
 	/// # Data.
 	catalog: HashMap<u16, String, NoHash>,
@@ -440,26 +439,6 @@ impl CDTextInner {
 	#[must_use]
 	/// # Disc Value.
 	fn disc(&self, field: DiscField) -> Option<&str> {
-		let raw = self.disc__(field)?;
-		match field {
-			// Genre serves double duty.
-			DiscField::Genre =>
-				// The first byte is reserved for the genre code; the rest, if
-				// any, is the freeform response.
-				if 2 <= raw.len() && raw.bytes().next().is_some_and(|v| v.is_ascii()) {
-					let v = raw[1..].trim();
-					if v.is_empty() { None }
-					else { Some(v) }
-				}
-				else { None },
-			// Everything else is what it is.
-			_ => Some(raw),
-		}
-	}
-
-	#[must_use]
-	/// # Raw Disc Value.
-	fn disc__(&self, field: DiscField) -> Option<&str> {
 		let v = self.catalog.get(&u16::from_le_bytes([field as u8, 0]))?.trim();
 		if v.is_empty() { None }
 		else { Some(v) }
@@ -481,13 +460,9 @@ impl CDTextInner {
 
 	#[must_use]
 	/// # Genre Code.
-	fn genre_code(&self) -> Option<GenreCode> {
-		let genre = self.disc__(DiscField::Genre)?;
-
-		// The first byte is the code.
-		genre.bytes()
-			.next()
-			.and_then(GenreCode::from_u8)
+	const fn genre_code(&self) -> Option<GenreCode> {
+		if self.genre_code.is_some() { Some(self.genre_code) }
+		else { None }
 	}
 }
 
@@ -619,315 +594,6 @@ impl Encoding {
 			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
 		}
 	}
-}
-
-
-
-/// # Helper: Error.
-macro_rules! err {
-	( $( $k:ident $v:literal, )+ ) => (
-		#[derive(Debug, Clone, Copy)]
-		/// # CD-Text Decoding Errors.
-		///
-		/// This enum serves as a cheap error type for CD-Text decoding.
-		pub(crate) enum CDTextError {
-			$(
-				#[doc = concat!("# ", $v)]
-				$k,
-			)+
-		}
-
-		impl fmt::Display for CDTextError {
-			#[inline]
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				f.write_str(match *self {
-					$( Self::$k => $v, )+
-				})
-			}
-		}
-	);
-}
-
-err! {
-	ChecksumMismatch      "Unable to verify CD-Text data.",
-	Empty                 "CD-Text exists, but is empty.",
-	IncompleteData        "Raw CD-Text data is incomplete.",
-	InvalidLanguage       "CD-Text contains invalid language code.",
-	InvalidPayloadLength  "Invalid CD-Text payload length.",
-	MissingSizeInfo       "Missing CD-Text size info.",
-	UnsupportedDoubleByte "Unsupported CD-Text double-byte encoding.",
-	UnsupportedEncoding   "Unsupported CD-Text encoding type.",
-	UnsupportedExtension  "Unsupported CD-Text extension.",
-}
-
-
-
-/// # Helper: Genre Code.
-macro_rules! genre_code {
-	( $( $k:ident $v:literal $str:literal, )+ ) => (
-		#[repr(u8)]
-		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-		/// # CD-Text Genre Code.
-		///
-		/// Music that doesn't fit neatly into one of these predefined
-		/// categories can optionally specify its genre as freeform text.
-		enum GenreCode {
-			$(
-				#[doc = concat!("# ", $str, ".")]
-				$k = $v,
-			)+
-		}
-
-		/// # Sanity Checks.
-		const _: () = {
-			let mut all: &[GenreCode] = &[$( GenreCode::$k, )+];
-			assert!(all[0] as u8 == 0, "BUG: First GenreCode variant must be zero!");
-
-			// Languages are sequential and contiguous.
-			while let [ next, rest @ .. ] = all {
-				assert!(
-					rest.is_empty() || (*next as u8) + 1 == (rest[0] as u8),
-					"BUG: GenreCodes are not incremental!",
-				);
-				all = rest;
-			}
-		};
-
-		impl fmt::Display for GenreCode {
-			#[inline]
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				f.write_str(self.as_str())
-			}
-		}
-
-		impl GenreCode {
-			#[must_use]
-			/// # From `u8`.
-			const fn from_u8(raw: u8) -> Option<Self> {
-				match raw {
-					$( $v => Some(Self::$k), )+
-					_ => None,
-				}
-			}
-
-			#[must_use]
-			/// # As String Slice.
-			const fn as_str(self) -> &'static str {
-				match self {
-					$( Self::$k => $str, )+
-				}
-			}
-		}
-	);
-}
-
-genre_code! {
-	Unused                0x00 "",
-	Unspecified           0x01 "Unspecified",
-	AdultContemporary     0x02 "Adult Contemporary",
-	AlternativeRock       0x03 "Alternative Rock",
-	Childrens             0x04 "Children's Music",
-	Classical             0x05 "Classical",
-	ChristianContemporary 0x06 "Christian Contemporary",
-	Country               0x07 "Country",
-	Dance                 0x08 "Dance",
-	EasyListening         0x09 "Easy Listening",
-	Erotic                0x0A "Erotic",
-	Folk                  0x0B "Folk",
-	Gospel                0x0C "Gospel",
-	HipHop                0x0D "Hip-Hop",
-	Jazz                  0x0E "Jazz",
-	Latin                 0x0F "Latin",
-	Musical               0x10 "Musical",
-	NewAge                0x11 "New Age",
-	Opera                 0x12 "Opera",
-	Operetta              0x13 "Operetta",
-	Pop                   0x14 "Pop",
-	Rap                   0x15 "Rap",
-	Reggae                0x16 "Reggae",
-	Rock                  0x17 "Rock",
-	RhythmAndBlues        0x18 "R&B",
-	SoundEffects          0x19 "Sound Effects",
-	// Note: the end of the list is inconsistent across libcdio; if possible,
-	// try to find a CD matching any of these last three to confirm.
-	Soundtrack            0x1A "Soundtrack",
-	SpokenWord            0x1B "Spoken Word",
-	World                 0x1C "World Music",
-}
-
-
-
-/// # Helper: Language.
-macro_rules! lang {
-	( $( $k:ident $v:literal, )+ ) => (
-		#[repr(u8)]
-		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-		/// # CD-Text Languages.
-		///
-		/// The language codes are specified in ANNEX 1..5 of EBU Tech 32 58 -E
-		/// (1991).
-		enum Language {
-			$(
-				#[doc = concat!("# ", stringify!($k), ".")]
-				$k = $v,
-			)+
-		}
-
-		/// # Sanity Checks.
-		const _: () = {
-			let mut all: &[Language] = &[$( Language::$k, )+];
-			assert!(all[0] as u8 == 0, "BUG: First Language variant must be zero!");
-
-			while let [ next, rest @ .. ] = all {
-				// Languages count up from zero, but there are gaps.
-				assert!(
-					rest.is_empty() || (*next as u8) < (rest[0] as u8),
-					"BUG: Languages are not sequential!",
-				);
-				// All codes should fit in the lower half of `u8`.
-				assert!((*next as u8) < 128, "BUG: Language variants exceed `u7`.");
-				all = rest;
-			}
-		};
-
-		impl fmt::Display for Language {
-			#[inline]
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				f.write_str(self.as_str())
-			}
-		}
-
-		impl Language {
-			#[must_use]
-			/// # From `u8`.
-			const fn from_u8(raw: u8) -> Option<Self> {
-				match raw {
-					$( $v => Some(Self::$k), )+
-					_ => None,
-				}
-			}
-
-			#[must_use]
-			/// # As String Slice.
-			const fn as_str(self) -> &'static str {
-				match self {
-					$( Self::$k => stringify!($k), )+
-				}
-			}
-		}
-	);
-}
-
-lang! {
-	Unspecified   0x00,
-	Albanian      0x01,
-	Breton        0x02,
-	Catalan       0x03,
-	Croatian      0x04,
-	Welsh         0x05,
-	Czech         0x06,
-	Danish        0x07,
-	German        0x08,
-	English       0x09,
-	Spanish       0x0A,
-	Esperanto     0x0B,
-	Estonian      0x0C,
-	Basque        0x0D,
-	Faroese       0x0E,
-	French        0x0F,
-	Frisian       0x10,
-	Irish         0x11,
-	Gaelic        0x12,
-	Galician      0x13,
-	Icelandic     0x14,
-	Italian       0x15,
-	Lappish       0x16,
-	Latin         0x17,
-	Latvian       0x18,
-	Luxembourgian 0x19,
-	Lithuanian    0x1A,
-	Hungarian     0x1B,
-	Maltese       0x1C,
-	Dutch         0x1D,
-	Norwegian     0x1E,
-	Occitan       0x1F,
-	Polish        0x20,
-	Portuguese    0x21,
-	Romanian      0x22,
-	Romansh       0x23,
-	Serbian       0x24,
-	Slovak        0x25,
-	Slovenian     0x26,
-	Finnish       0x27,
-	Swedish       0x28,
-	Turkish       0x29,
-	Flemish       0x2A,
-	Wallon        0x2B,
-	// 0x2C..=0x44 are unassigned.
-	Zulu          0x45,
-	Vietnamese    0x46,
-	Uzbek         0x47,
-	Urdu          0x48,
-	Ukrainian     0x49,
-	Thai          0x4A,
-	Telugu        0x4B,
-	Tatar         0x4C,
-	Tamil         0x4D,
-	Tadzhik       0x4E,
-	Swahili       0x4F,
-	Sranantongo   0x50,
-	Somali        0x51,
-	Sinhalese     0x52,
-	Shona         0x53,
-	SerboCroat    0x54,
-	// 0x55 is unassigned.
-	Russian       0x56,
-	Quechua       0x57,
-	Pushtu        0x58,
-	Punjabi       0x59,
-	Persian       0x5A,
-	Papamiento    0x5B,
-	Oriya         0x5C,
-	Nepali        0x5D,
-	Ndebele       0x5E,
-	Marathi       0x5F,
-	Moldavian     0x60,
-	Malaysian     0x61,
-	Malagasay     0x62,
-	Macedonian    0x63,
-	Laotian       0x64,
-	Korean        0x65,
-	Khmer         0x66,
-	Kazakh        0x67,
-	Kannada       0x68,
-	Japanese      0x69,
-	Indonesian    0x6A,
-	Hindi         0x6B,
-	Hebrew        0x6C,
-	Hausa         0x6D,
-	Gurani        0x6E,
-	Gujurati      0x6F,
-	Greek         0x70,
-	Georgian      0x71,
-	Fulani        0x72,
-	Dari          0x73,
-	Churash       0x74,
-	Chinese       0x75,
-	Burmese       0x76,
-	Bulgarian     0x77,
-	Bengali       0x78,
-	Bielorussian  0x79,
-	Bambora       0x7A,
-	Azerbaijani   0x7B,
-	Assamese      0x7C,
-	Armenian      0x7D,
-	Arabic        0x7E,
-	Amharic       0x7F,
-}
-
-impl Default for Language {
-	#[inline]
-	fn default() -> Self { Self::Unspecified }
 }
 
 

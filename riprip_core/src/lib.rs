@@ -56,9 +56,12 @@
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("Rip Rip requires a 64-bit CPU architecture.");
 
+
+
 mod abort;
 mod barcode;
 mod cache;
+pub mod cdtext;
 mod chk;
 mod disc;
 mod drive;
@@ -68,6 +71,8 @@ mod loglog;
 pub mod macros;
 mod rip;
 
+
+
 pub use abort::KillSwitch;
 pub use barcode::Barcode;
 pub use cdtoc;
@@ -76,7 +81,6 @@ pub use drive::{
 	DriveVendorModel,
 	ReadOffset,
 };
-pub use drivers::cdtext;
 pub use error::RipRipError;
 pub use loglog::{
 	LogLog,

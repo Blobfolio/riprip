@@ -23,8 +23,6 @@ compile_error!("Apple does not fully support `libcdio`.");
 #[cfg(feature = "libcdio")]
 mod libcdio;
 
-pub mod cdtext;
-
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,
