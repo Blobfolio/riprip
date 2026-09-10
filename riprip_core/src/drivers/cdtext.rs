@@ -1151,7 +1151,7 @@ mod test {
 	};
 
 	#[test]
-	fn t_libcdio_samples() {
+	fn t_cdtext() {
 		let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("skel/cdtext");
 		if ! dir.is_dir() {
 			panic!("Invalid cdtext test directory.");
