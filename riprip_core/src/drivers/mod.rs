@@ -37,11 +37,6 @@ use crate::{
 	macros::log,
 	RipRipError,
 };
-use cdtext::{
-	CDText,
-	DiscField,
-	TrackField,
-};
 use dactyl::NoHash;
 use std::{
 	cell::RefCell,
@@ -122,10 +117,10 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// track.
 	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError>;
 
-	/// # CD-Text.
+	/// # CD-Text (Raw).
 	///
-	/// Return _all_ CD-Text data, if any.
-	fn cdtext(&self) -> Option<&CDText>;
+	/// Read and return the raw CD-Text data, if any.
+	fn cdtext(&self) -> Option<Vec<u8>>;
 
 	/// # Drive Vendor/Model.
 	///
@@ -154,36 +149,6 @@ pub(crate) trait CddaDriverExt: Sized {
 		sub: u8,
 		block_size: u16,
 	) -> Result<(), RipRipError>;
-
-	/// # CD-Text Value (Disc).
-	///
-	/// Return the value associated with the CD-Text field, if any.
-	fn cdtext_disc(&self, kind: DiscField) -> Option<&str> {
-		self.cdtext().and_then(|v| v.disc(kind).next())
-	}
-
-	/// # CD-Text Value (Track).
-	///
-	/// Return the value associated with the CD-Text field, if any.
-	fn cdtext_track(&self, idx: u8, kind: TrackField) -> Option<&str> {
-		self.cdtext().and_then(|v| v.track(kind, idx).next())
-	}
-
-	/// # MCN.
-	///
-	/// Return the disc's associated UPC/EAN, if present, either from CDText
-	/// or the leadin subchannel data.
-	fn mcn(&self) -> Option<Barcode> {
-		self.mcn_cdtext().or_else(|| self.mcn_subchannel())
-	}
-
-	/// # MCN From CDText.
-	///
-	/// Return the MCN as stored in the CDText, if any.
-	fn mcn_cdtext(&self) -> Option<Barcode> {
-		self.cdtext_disc(DiscField::Barcode)
-			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
-	}
 
 	/// # Cache Bust.
 	///

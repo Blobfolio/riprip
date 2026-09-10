@@ -151,6 +151,9 @@ fn main__() -> Result<(), RipRipError> {
 	let killed = KillSwitch::from(Progless::sigint_keepalive());
 	let progress = Progless::default();
 
+	// Make sure CD-Text has been saved to disk if we have it.
+	disc.save_cdtext(&progress);
+
 	// Just checking the status?
 	if status { return disc.status(&opts, &progress, killed); }
 

@@ -10,7 +10,6 @@ use crate::{
 	Barcode,
 	CD_LEADIN,
 	CddaDriverExt,
-	cdtext::CDText,
 	DriveVendorModel,
 	macros::log,
 	RipRipError,
@@ -58,9 +57,6 @@ pub(crate) struct LibcdioInstance {
 
 	/// # CDIO Instance (Pointer).
 	ptr: *mut libcdio_sys::CdIo_t,
-
-	/// # CD-Text.
-	cdtext: Option<CDText>,
 }
 
 impl Drop for LibcdioInstance {
@@ -116,16 +112,11 @@ impl CddaDriverExt for LibcdioInstance {
 		}
 		// Otherwise maybe!
 		else {
-			let mut out = Self {
-				dev,
-				ptr,
-				cdtext: None,
-			};
+			let out = Self { dev, ptr };
 
 			// Make sure the disc is present and valid before leaving, and
-			// initialize the CDText to have it ready for later queries.
+			// initialize the CD-Text to have it ready for later queries.
 			out.check_disc_mode__()?;
-			out.init_cdtext__();
 
 			// Done!
 			Ok(out)
@@ -194,10 +185,50 @@ impl CddaDriverExt for LibcdioInstance {
 		}
 	}
 
-	/// # CD-Text.
+	#[expect(unsafe_code, reason = "For FFI.")]
+	/// # CD-Text (Raw).
 	///
-	/// Return _all_ CD-Text data, if any.
-	fn cdtext(&self) -> Option<&CDText> { self.cdtext.as_ref() }
+	/// Read and return the raw CD-Text data, if any.
+	fn cdtext(&self) -> Option<Vec<u8>> {
+		// Perform a raw read of the CD-Text data, if any.
+		// Safety: `libcdio` promises that if there is no data or the read
+		// failed, the pointer will be null.
+		let ptr = unsafe { libcdio_sys::cdio_get_cdtext_raw(self.as_mut_ptr()) };
+		if ptr.is_null() {
+			log!(@trace "Disc contains no CD-Text data.");
+			return None;
+		}
+
+		// Otherwise we need to fetch the length of the allocated array, which
+		// is stored in the first two bytes (big endian).
+		let p: *const u8 = ptr.cast_const();
+		// Safety: the minimum length is therefore two.
+		let raw_len = unsafe {
+			usize::from((u16::from(*p) << 8) | u16::from(*p.add(1)))
+		};
+
+		// The `raw_len` doesn't include itself, but the first two bytes
+		// following it are padding, so we need to subtract another two for
+		// the relevant total.
+		let out =
+			if let Some(len) = raw_len.checked_sub(2) && 2 < len {
+				// Safety: see above.
+				unsafe {
+					std::slice::from_raw_parts(
+						p.add(4), // Skip 2 bytes length, 2 bytes padding.
+						len,
+					)
+				}.to_vec()
+			}
+			else { Vec::new() };
+
+		// Safety: this is an FFI call…
+		unsafe { libcdio_sys::cdio_free(ptr.cast()); }
+
+		// Done!
+		if out.is_empty() { None }
+		else { Some(out) }
+	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Drive Vendor/Model.
@@ -255,7 +286,7 @@ impl CddaDriverExt for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
-	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
+	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		// Safety: this is an FFI call…
 		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
@@ -354,53 +385,6 @@ impl LibcdioInstance {
 			Ok(())
 		}
 		else { Err(RipRipError::DiscMode) }
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Initialize CDText.
-	///
-	/// This initializes (but does not parse) the CDText information contained
-	/// on the disc, if any.
-	///
-	/// The data on the other end of this pointer gets cleaned up when the
-	/// parent instance is destroyed, so it makes sense keeping the two
-	/// together.
-	fn init_cdtext__(&mut self) {
-		// Perform a raw read of the CD-Text data, if any.
-		// Safety: `libcdio` promises that if there is no data or the read
-		// failed, the pointer will be null.
-		let ptr = unsafe { libcdio_sys::cdio_get_cdtext_raw(self.as_mut_ptr()) };
-		if ptr.is_null() {
-			log!(@trace "Disc contains no CDText data.");
-			return;
-		}
-
-		// Otherwise we need to fetch the length of the allocated array, which
-		// is stored in the first two bytes (big endian).
-		let p: *const u8 = ptr.cast_const();
-		// Safety: the minimum length is therefore two.
-		let raw_len = unsafe {
-			usize::from((u16::from(*p) << 8) | u16::from(*p.add(1)))
-		};
-
-		// The `raw_len` doesn't include itself, but the first two bytes
-		// following it are padding, so we need to subtract another two for
-		// the relevant total.
-		if let Some(len) = raw_len.checked_sub(2) && 2 < len {
-			// Safety: see above.
-			let packs = unsafe {
-				std::slice::from_raw_parts(
-					p.add(4), // Skip 2 bytes length, 2 bytes padding.
-					len,
-				)
-			};
-			if let Some(cdtext) = CDText::from_bytes(packs) {
-				self.cdtext.replace(cdtext);
-			}
-		}
-
-		// Safety: this is an FFI call…
-		unsafe { libcdio_sys::cdio_free(ptr.cast()); }
 	}
 }
 

@@ -8,13 +8,17 @@ use cdtoc::{
 };
 use crate::{
 	Barcode,
+	cache_path,
 	cache_prefix,
 	CacheWriter,
 	CD_LEADOUT_LABEL,
 	CddaDriver,
 	CddaDriverExt,
-	cdtext::CDText,
-	cdtext::TrackField,
+	cdtext::{
+		CDText,
+		DiscField,
+		TrackField,
+	},
 	DriveVendorModel,
 	KillSwitch,
 	macros::log,
@@ -30,6 +34,8 @@ use fyi_msg::{
 		csi,
 		dim,
 	},
+	AnsiColor,
+	Msg,
 	Progless,
 };
 use std::{
@@ -38,6 +44,7 @@ use std::{
 	ffi::OsStr,
 	fmt,
 	io::StderrLock,
+	num::NonZeroU32,
 	path::{
 		Path,
 		PathBuf,
@@ -55,6 +62,9 @@ pub struct Disc {
 
 	/// # Disc Table of Contents.
 	toc: Toc,
+
+	/// # CD-Text.
+	cdtext: Option<(Vec<u8>, Option<CDText>)>,
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
@@ -178,7 +188,8 @@ impl Disc {
 	///
 	/// This will return an error if there's a problem communicating with the
 	/// drive, the disc is unsupported, etc.
-	pub fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
+	pub fn new<P>(dev: Option<P>, cdtext: bool)
+	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
 		let cdda = CddaDriver::new(dev)?;
 
@@ -209,20 +220,41 @@ impl Disc {
 		let leadout = cdda.leadout_lba()?;
 		let toc = Toc::from_parts(audio, data, leadout)?;
 
-		// Pull the barcode (if any).
-		let barcode = cdda.mcn();
+		// We have most of it.
+		let mut out = Self {
+			cdda,
+			toc,
+			cdtext: None,
+			barcode: None,
+			isrcs: HashMap::with_hasher(NoHash::default()),
+		};
 
-		// Pull the track ISRCs (if any).
-		let mut isrcs = HashMap::with_hasher(NoHash::default());
-		for t in toc.audio_tracks() {
-			let idx = t.number();
-			if let Some(isrc) = cdda.cdtext_track(idx, TrackField::Isrc) {
-				isrcs.insert(idx, isrc.to_owned());
+		// Unless the user opted out of CD-Text parsing, let's handle that
+		// now.
+		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
+			if let Some(cdtext) = CDText::from_bytes(&raw_cdtext) {
+				// Set the barcode.
+				out.barcode = cdtext.disc(DiscField::Barcode)
+					.find_map(|v| Barcode::try_from(v.as_bytes()).ok())
+					.or_else(|| out.cdda.mcn_subchannel());
+
+				// Pull the track ISRCs (if any).
+				for t in out.toc.audio_tracks() {
+					let idx = t.number();
+					if let Some(isrc) = cdtext.track(TrackField::Isrc, idx).next() {
+						out.isrcs.insert(idx, isrc.to_owned());
+					}
+				}
+
+				out.cdtext.replace((raw_cdtext, Some(cdtext)));
 			}
+			// If the read worked but decoding failed, let's save the raw
+			// version by itself.
+			else { out.cdtext.replace((raw_cdtext, None)); }
 		}
 
 		// Finally done!
-		Ok(Self { cdda, toc, barcode, isrcs })
+		Ok(out)
 	}
 }
 
@@ -233,7 +265,12 @@ impl Disc {
 
 	#[must_use]
 	/// # CD-Text.
-	pub fn cdtext(&self) -> Option<&CDText> { self.cdda.cdtext() }
+	pub const fn cdtext(&self) -> Option<&CDText> {
+		if let Some((_, Some(v))) = self.cdtext.as_ref() {
+			Some(v)
+		}
+		else { None }
+	}
 
 	#[must_use]
 	#[inline]
@@ -349,6 +386,61 @@ impl Disc {
 		}
 
 		Ok(())
+	}
+
+	/// # Save CD-Text Data.
+	///
+	/// Try to save the raw and decoded CD-Text data to disk.
+	pub fn save_cdtext(&self, progress: &Progless) {
+		let Some((bin, txt)) = &self.cdtext else { return; };
+		let prefix = cache_prefix(&self.toc);
+
+		progress.reset(NonZeroU32::MIN);
+		progress.set_title(Some(Msg::new(("CD-Text", AnsiColor::Misc199), "Syncing state data.")));
+
+		// Save the raw binary data first, unless it already exists.
+		if
+			let Ok(dst_bin) = cache_path(format!("{prefix}.cdtext.bin")) &&
+			(
+				! dst_bin.is_file() ||
+				std::fs::read(&dst_bin).ok().is_none_or(|v| v != *bin)
+			) &&
+			let Err(e) = CacheWriter::oneshot(&dst_bin, bin)
+		{
+			std::hint::cold_path();
+			let _res = progress.push_msg(Msg::warning(e.to_string()));
+			progress.finish();
+			return;
+		}
+
+		// If we have a decoded copy, save that too.
+		if let Some(txt) = txt {
+			let txt = txt.to_string();
+			if
+				let Ok(dst_txt) = cache_path(format!("{prefix}.cdtext.txt")) &&
+				(
+					! dst_txt.is_file() ||
+					std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
+				) &&
+				let Err(e) = CacheWriter::oneshot(&dst_txt, txt.as_bytes())
+			{
+				std::hint::cold_path();
+				let _res = progress.push_msg(Msg::warning(e.to_string()));
+			}
+		}
+		// If we have one but not the other, ask the user to open a bug report.
+		else {
+			let _res = progress.push_msg(Msg::warning(format!(
+				concat!(
+				"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
+				"         the ", dim!("{prefix}.cdtext.bin"), " so we can fix that!\n",
+				ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
+				),
+				prefix=prefix,
+			)));
+		}
+
+		progress.finish();
 	}
 
 	/// # Status.
