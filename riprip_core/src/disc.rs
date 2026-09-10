@@ -16,6 +16,7 @@ use crate::{
 	CddaDriverExt,
 	cdtext::{
 		CDText,
+		CDTextError,
 		DiscField,
 		TrackField,
 	},
@@ -64,7 +65,7 @@ pub struct Disc {
 	toc: Toc,
 
 	/// # CD-Text.
-	cdtext: Option<(Vec<u8>, Option<CDText>)>,
+	cdtext: Option<(Vec<u8>, Result<CDText, CDTextError>)>,
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
@@ -232,25 +233,27 @@ impl Disc {
 		// Unless the user opted out of CD-Text parsing, let's handle that
 		// now.
 		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
-			if let Some(cdtext) = CDText::from_bytes(&raw_cdtext) {
-				// Set the barcode.
-				out.barcode = cdtext.disc(DiscField::Barcode)
-					.find_map(|v| Barcode::try_from(v.as_bytes()).ok())
-					.or_else(|| out.cdda.mcn_subchannel());
+			match CDText::from_bytes(&raw_cdtext) {
+				Ok(cdtext) => {
+					// Set the barcode.
+					out.barcode = cdtext.disc(DiscField::Barcode)
+						.find_map(|v| Barcode::try_from(v.as_bytes()).ok())
+						.or_else(|| out.cdda.mcn_subchannel());
 
-				// Pull the track ISRCs (if any).
-				for t in out.toc.audio_tracks() {
-					let idx = t.number();
-					if let Some(isrc) = cdtext.track(TrackField::Isrc, idx).next() {
-						out.isrcs.insert(idx, isrc.to_owned());
+					// Pull the track ISRCs (if any).
+					for t in out.toc.audio_tracks() {
+						let idx = t.number();
+						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx).next() {
+							out.isrcs.insert(idx, isrc.to_owned());
+						}
 					}
-				}
 
-				out.cdtext.replace((raw_cdtext, Some(cdtext)));
+					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
+				},
+				Err(e) => {
+					out.cdtext.replace((raw_cdtext, Err(e)));
+				},
 			}
-			// If the read worked but decoding failed, let's save the raw
-			// version by itself.
-			else { out.cdtext.replace((raw_cdtext, None)); }
 		}
 
 		// Finally done!
@@ -266,9 +269,7 @@ impl Disc {
 	#[must_use]
 	/// # CD-Text.
 	pub const fn cdtext(&self) -> Option<&CDText> {
-		if let Some((_, Some(v))) = self.cdtext.as_ref() {
-			Some(v)
-		}
+		if let Some((_, Ok(v))) = self.cdtext.as_ref() { Some(v) }
 		else { None }
 	}
 
@@ -414,30 +415,32 @@ impl Disc {
 		}
 
 		// If we have a decoded copy, save that too.
-		if let Some(txt) = txt {
-			let txt = txt.to_string();
-			if
-				let Ok(dst_txt) = cache_path(format!("{prefix}.cdtext.txt")) &&
-				(
-					! dst_txt.is_file() ||
-					std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
-				) &&
-				let Err(e) = CacheWriter::oneshot(&dst_txt, txt.as_bytes())
-			{
-				std::hint::cold_path();
-				let _res = progress.push_msg(Msg::warning(e.to_string()));
-			}
-		}
-		// If we have one but not the other, ask the user to open a bug report.
-		else {
-			let _res = progress.push_msg(Msg::warning(format!(
-				concat!(
-				"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
-				"         the ", dim!("{prefix}.cdtext.bin"), " so we can fix that!\n",
-				ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
-				),
-				prefix=prefix,
-			)));
+		match txt {
+			Ok(txt) => {
+				let txt = txt.to_string();
+				if
+					let Ok(dst_txt) = cache_path(format!("{prefix}.cdtext.txt")) &&
+					(
+						! dst_txt.is_file() ||
+						std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
+					) &&
+					let Err(e) = CacheWriter::oneshot(&dst_txt, txt.as_bytes())
+				{
+					std::hint::cold_path();
+					let _res = progress.push_msg(Msg::warning(e.to_string()));
+				}
+			},
+			Err(CDTextError::UnsupportedDoubleByte | CDTextError::UnsupportedExtension) => {
+				let _res = progress.push_msg(Msg::warning(format!(
+					concat!(
+					"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
+					"         the ", dim!("{prefix}.cdtext.bin"), " so we can fix that!\n",
+					ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
+					),
+					prefix=prefix,
+				)));
+			},
+			_ => {},
 		}
 
 		progress.finish();

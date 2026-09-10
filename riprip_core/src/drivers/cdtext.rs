@@ -49,7 +49,7 @@ const _: () = {
 #[derive(Debug, Default)]
 /// # CD-Text!
 ///
-/// This struct holds CDText in all available languages.
+/// This struct holds CD-Text in all available languages.
 pub struct CDText(Vec<CDTextInner>);
 
 impl fmt::Display for CDText {
@@ -88,9 +88,15 @@ impl CDText {
 }
 
 impl CDText {
-	#[must_use]
 	/// # Decode Raw Pack Data.
-	pub(crate) fn from_bytes(pack_data: &[u8]) -> Option<Self> {
+	///
+	/// Decode and return a structured representation of the CD-Text.
+	///
+	/// ## Errors
+	///
+	/// This method will return an error if the CD-Text is malformed,
+	/// contains unsupported features, or is empty.
+	pub(crate) fn from_bytes(pack_data: &[u8]) -> Result<Self, CDTextError> {
 		let mut context = Context::default();
 		let (chunks, remainder) = pack_data.as_chunks::<PACK_LEN>();
 
@@ -102,18 +108,18 @@ impl CDText {
 				"CD-Text parsing ended with {}.",
 				remainder.len().nice_inflect("byte", "bytes"),
 			);
-			return None;
+			return Err(CDTextError::IncompleteData);
 		}
 
 		// Parse the chunks.
 		for pack in chunks {
 			if ! chk_pack(pack) {
 				log!(@trace "Invalid CD-Text pack {pack:?}.");
-				return None;
+				return Err(CDTextError::ChecksumMismatch);
 			}
 			if let Err(e) = context.parse_pack(pack) {
 				log!(@trace "{e}");
-				return None;
+				return Err(e);
 			}
 		}
 
@@ -124,31 +130,31 @@ impl CDText {
 			let size_info = block.buffer
 				.get(&(PackKind::SizeInfo, 0))
 				.map(Vec::as_slice)
-				.ok_or(Error::MissingSizeInfo)
+				.ok_or(CDTextError::MissingSizeInfo)
 				.and_then(SizeInfo::try_from);
 			let size_info = match size_info {
 				Ok(v) => v,
 				Err(e) => {
 					log!(@trace "{e}");
-					return None;
+					return Err(e);
 				},
 			};
 
 			// Check the counts match.
 			if block.pack_count != size_info.total_expected_packs() {
 				log!(@trace "Invalid CD-Text pack count.");
-				return None;
+				return Err(CDTextError::IncompleteData);
 			}
 
 			let lang_code = size_info.lang_code[i];
 			let char_code = size_info.char_code;
 			let Some(language) = Language::from_u8(lang_code) else {
 				log!(@trace "Invalid CD-Text language code: {lang_code}.");
-				return None;
+				return Err(CDTextError::InvalidLanguage);
 			};
 			let Some(encoding) = Encoding::from_u8(char_code) else {
 				log!(@trace "Invalid CD-Text encoding code: {char_code}.");
-				return None;
+				return Err(CDTextError::InvalidEncoding);
 			};
 			let mut catalog = HashMap::default();
 			for ((field, track), buf) in block.buffer {
@@ -191,9 +197,9 @@ impl CDText {
 		// Done!
 		if inner.is_empty() {
 			std::hint::cold_path();
-			None
+			Err(CDTextError::Empty)
 		}
-		else { Some(Self(inner)) }
+		else { Ok(Self(inner)) }
 	}
 }
 
@@ -308,7 +314,7 @@ macro_rules! field {
 field! {
 	/// # Disc Fields.
 	///
-	/// This enum holds the (logical) CDText fields applicable to the disc as
+	/// This enum holds the (logical) CD-Text fields applicable to the disc as
 	/// a whole.
 	DiscField
 	Title      "TITLE",
@@ -324,7 +330,7 @@ field! {
 field! {
 	/// # Track Fields.
 	///
-	/// This enum holds the (logical) CDText fields applicable to individual
+	/// This enum holds the (logical) CD-Text fields applicable to individual
 	/// tracks on the disc.
 	TrackField
 	Title      "TITLE",
@@ -353,7 +359,7 @@ struct Block {
 #[derive(Debug, Default)]
 /// # CD-Text (Inner).
 ///
-/// This struct holds disc and track CDText in a single language.
+/// This struct holds disc and track CD-Text in a single language.
 struct CDTextInner {
 	/// # First Track.
 	first_track: u8,
@@ -504,7 +510,7 @@ struct Context {
 
 impl Context {
 	/// # Parse Pack.
-	fn parse_pack(&mut self, pack: &Pack) -> Result<(), Error> {
+	fn parse_pack(&mut self, pack: &Pack) -> Result<(), CDTextError> {
 		let header = &pack[0..PACK_HEADER_LEN];
 		let payload = &pack[PACK_HEADER_LEN..PACK_CRC_OFFSET];
 
@@ -512,7 +518,7 @@ impl Context {
 
 		let is_extension = (id2 & 0x80) != 0; // Extension Flag (0 = normal, 1 = extension)
 		if is_extension {
-			return Err(Error::UnsupportedExtension);
+			return Err(CDTextError::UnsupportedExtension);
 		}
 		let mut track_number = id2 & 0x7F;
 		let block_id = (id4 >> 4) & 0x07; // Bits 4-6 define the language block ID.
@@ -538,7 +544,7 @@ impl Context {
 		else {
 			let is_double_byte = (id4 & 0x80) != 0;
 			if is_double_byte {
-				return Err(Error::UnsupportedDoubleByte);
+				return Err(CDTextError::UnsupportedDoubleByte);
 			}
 			for b in payload {
 				if *b == 0x00 {
@@ -626,17 +632,17 @@ impl Encoding {
 macro_rules! err {
 	( $( $k:ident $v:literal, )+ ) => (
 		#[derive(Debug, Clone, Copy)]
-		/// # CDText Decoding Errors.
+		/// # CD-Text Decoding Errors.
 		///
 		/// This enum serves as a cheap error type for CD-Text decoding.
-		enum Error {
+		pub(crate) enum CDTextError {
 			$(
 				#[doc = concat!("# ", $v)]
 				$k,
 			)+
 		}
 
-		impl fmt::Display for Error {
+		impl fmt::Display for CDTextError {
 			#[inline]
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				f.write_str(match *self {
@@ -648,10 +654,15 @@ macro_rules! err {
 }
 
 err! {
-	MissingSizeInfo       "Missing CD-Text size info.",
+	ChecksumMismatch      "Unable to verify CD-Text data.",
+	Empty                 "CD-Text exists, but is empty.",
+	IncompleteData        "Raw CD-Text data is incomplete.",
+	InvalidEncoding       "CD-Text contains invalid encoding marker.",
+	InvalidLanguage       "CD-Text contains invalid language code.",
 	InvalidPayloadLength  "Invalid CD-Text payload length.",
-	UnsupportedExtension  "Unsupported CD-Text extension.",
+	MissingSizeInfo       "Missing CD-Text size info.",
 	UnsupportedDoubleByte "Unsupported double-byte encoding.",
+	UnsupportedExtension  "Unsupported CD-Text extension.",
 }
 
 
@@ -661,7 +672,7 @@ macro_rules! genre_code {
 	( $( $k:ident $v:literal $str:literal, )+ ) => (
 		#[repr(u8)]
 		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-		/// # CDText Genre Code.
+		/// # CD-Text Genre Code.
 		///
 		/// Music that doesn't fit neatly into one of these predefined
 		/// categories can optionally specify its genre as freeform text.
@@ -756,7 +767,7 @@ macro_rules! lang {
 	( $( $k:ident $v:literal, )+ ) => (
 		#[repr(u8)]
 		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-		/// # CDText Languages.
+		/// # CD-Text Languages.
 		///
 		/// The language codes are specified in ANNEX 1..5 of EBU Tech 32 58 -E
 		/// (1991).
@@ -1064,11 +1075,11 @@ struct SizeInfo {
 }
 
 impl TryFrom<&[u8]> for SizeInfo {
-	type Error = Error;
+	type Error = CDTextError;
 
 	fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
 		if buf.len() != 36 {
-			return Err(Error::InvalidPayloadLength);
+			return Err(CDTextError::InvalidPayloadLength);
 		}
 
 		let mut pack_counts = [0_u8; 16];
