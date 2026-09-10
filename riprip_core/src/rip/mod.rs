@@ -616,7 +616,7 @@ impl RipEntry {
 						"Busting the cache…",
 					);
 					share.buf.cache_bust(
-						share.cdio,
+						share.cdda,
 						cache_len,
 						&rip_rng,
 						share.leadout,
@@ -631,7 +631,7 @@ impl RipEntry {
 			// Read and patch!
 			any_read = true;
 			share.pass_reads += 1;
-			match share.buf.read_sector(share.cdio, read_lsn, opts) {
+			match share.buf.read_sector(share.cdda, read_lsn, opts) {
 				// Good is good!
 				Ok(all_good) => if ! share.killed.killed() {
 					// Patch the data, unless the user just aborted, as that
@@ -809,7 +809,7 @@ struct RipShare<'a> {
 	last_read_track: u8,
 
 	/// # CDIO Instance.
-	cdio: &'a CddaDriver,
+	cdda: &'a CddaDriver,
 
 	/// # Progress Instance.
 	progress: &'a Progless,
@@ -830,7 +830,7 @@ impl<'a> RipShare<'a> {
 			pass_reads: 0,
 			force_bust: false,
 			last_read_track: u8::MAX,
-			cdio: disc.cdio(),
+			cdda: disc.cdda(),
 			progress,
 			killed,
 		}
