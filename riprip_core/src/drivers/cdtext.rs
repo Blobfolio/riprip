@@ -153,8 +153,8 @@ impl CDText {
 				return Err(CDTextError::InvalidLanguage);
 			};
 			let Some(encoding) = Encoding::from_u8(char_code) else {
-				log!(@trace "Invalid CD-Text encoding code: {char_code}.");
-				return Err(CDTextError::InvalidEncoding);
+				log!(@trace "Invalid/unsupported CD-Text encoding code: {char_code}.");
+				return Err(CDTextError::UnsupportedEncoding);
 			};
 			let mut catalog = HashMap::default();
 			for ((field, track), buf) in block.buffer {
@@ -652,11 +652,11 @@ err! {
 	ChecksumMismatch      "Unable to verify CD-Text data.",
 	Empty                 "CD-Text exists, but is empty.",
 	IncompleteData        "Raw CD-Text data is incomplete.",
-	InvalidEncoding       "CD-Text contains invalid encoding marker.",
 	InvalidLanguage       "CD-Text contains invalid language code.",
 	InvalidPayloadLength  "Invalid CD-Text payload length.",
 	MissingSizeInfo       "Missing CD-Text size info.",
-	UnsupportedDoubleByte "Unsupported double-byte encoding.",
+	UnsupportedDoubleByte "Unsupported CD-Text double-byte encoding.",
+	UnsupportedEncoding   "Unsupported CD-Text encoding type.",
 	UnsupportedExtension  "Unsupported CD-Text extension.",
 }
 

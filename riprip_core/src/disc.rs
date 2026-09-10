@@ -35,7 +35,6 @@ use fyi_msg::{
 		csi,
 		dim,
 	},
-	AnsiColor,
 	Msg,
 	Progless,
 };
@@ -45,7 +44,6 @@ use std::{
 	ffi::OsStr,
 	fmt,
 	io::StderrLock,
-	num::NonZeroU32,
 	path::{
 		Path,
 		PathBuf,
@@ -396,9 +394,6 @@ impl Disc {
 		let Some((bin, txt)) = &self.cdtext else { return; };
 		let prefix = cache_prefix(&self.toc);
 
-		progress.reset(NonZeroU32::MIN);
-		progress.set_title(Some(Msg::new(("CD-Text", AnsiColor::Misc199), "Syncing state data.")));
-
 		// Save the raw binary data first, unless it already exists.
 		if
 			let Ok(dst_bin) = cache_path(format!("{prefix}.cdtext.bin")) &&
@@ -406,15 +401,15 @@ impl Disc {
 				! dst_bin.is_file() ||
 				std::fs::read(&dst_bin).ok().is_none_or(|v| v != *bin)
 			) &&
-			let Err(e) = CacheWriter::oneshot(&dst_bin, bin)
+			CacheWriter::oneshot(&dst_bin, bin).is_err()
 		{
+			// This shouldn't fail, but if it does, we won't be able to save
+			// the other version either.
 			std::hint::cold_path();
-			let _res = progress.push_msg(Msg::warning(e.to_string()));
-			progress.finish();
 			return;
 		}
 
-		// If we have a decoded copy, save that too.
+		// Same for the decoded version.
 		match txt {
 			Ok(txt) => {
 				let txt = txt.to_string();
@@ -424,13 +419,15 @@ impl Disc {
 						! dst_txt.is_file() ||
 						std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
 					) &&
-					let Err(e) = CacheWriter::oneshot(&dst_txt, txt.as_bytes())
+					CacheWriter::oneshot(&dst_txt, txt.as_bytes()).is_err()
 				{
 					std::hint::cold_path();
-					let _res = progress.push_msg(Msg::warning(e.to_string()));
 				}
 			},
-			Err(CDTextError::UnsupportedDoubleByte | CDTextError::UnsupportedExtension) => {
+
+			// If decoding had failed due to a feature-related issue, ask the
+			// user to open a bug report.
+			Err(CDTextError::UnsupportedDoubleByte | CDTextError::UnsupportedEncoding | CDTextError::UnsupportedExtension) => {
 				let _res = progress.push_msg(Msg::warning(format!(
 					concat!(
 					"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
@@ -440,10 +437,10 @@ impl Disc {
 					prefix=prefix,
 				)));
 			},
+
+			// If decoding had failed for some other reason, do nothing.
 			_ => {},
 		}
-
-		progress.finish();
 	}
 
 	/// # Status.
