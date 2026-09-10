@@ -1,0 +1,23 @@
+[English]
+DISC:
+	TITLE: Blonde On Blonde
+	PERFORMER: Bob Dylan
+	DISC ID: CH090654
+TRACK 01:
+	TITLE: Most Likely You Go Your Way (And I'll Go Mine)
+	ISRC: USSM19921966
+TRACK 02:
+	TITLE: Temporary Like Achilles
+	ISRC: USSM19921967
+TRACK 03:
+	TITLE: Absolutely Sweet Marie
+	ISRC: USSM19921968
+TRACK 04:
+	TITLE: Fourth Time Around
+	ISRC: USSM19921969
+TRACK 05:
+	TITLE: Obviously Five Believers
+	ISRC: USSM19921970
+TRACK 06:
+	TITLE: Sad-Eyed Lady Of The Lowlands
+	ISRC: USSM19921971

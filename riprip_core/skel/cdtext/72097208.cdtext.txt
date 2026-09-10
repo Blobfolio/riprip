@@ -1,0 +1,29 @@
+[English]
+DISC:
+	TITLE: The Bootleg Volume 6: Bob Dylan Live 1964 - Concert At Philharmonic Hall - ADVANCE
+	PERFORMER: Bob Dylan
+	DISC ID: CK86914
+TRACK 01:
+	TITLE: Talkin' World War III Blues
+	ISRC: USSM10307146
+TRACK 02:
+	TITLE: Don't Think Twice, It's All Right
+	ISRC: USSM10307976
+TRACK 03:
+	TITLE: The Lonesome Death Of Hattie Carroll
+	ISRC: USSM10307148
+TRACK 04:
+	TITLE: Mama, You Been On My Mind
+	ISRC: USSM10307149
+TRACK 05:
+	TITLE: Silver Dagger
+	ISRC: USSM10307150
+TRACK 06:
+	TITLE: With God On Our Side
+	ISRC: USSM10307151
+TRACK 07:
+	TITLE: It Ain't Me, Babe
+	ISRC: USSM10307152
+TRACK 08:
+	TITLE: All I Really Want To Do
+	ISRC: USSM10307153

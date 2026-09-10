@@ -1,0 +1,57 @@
+[English]
+DISC:
+	TITLE: The Freewheelin' Bob Dylan
+	PERFORMER: Bob Dylan
+	DISC ID: CH90321
+TRACK 01:
+	TITLE: Blowin' In The Wind
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07243
+TRACK 02:
+	TITLE: Girl From The North Country
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07244
+TRACK 03:
+	TITLE: Masters Of War
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07245
+TRACK 04:
+	TITLE: Down The Highway
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07246
+TRACK 05:
+	TITLE: Bob Dylan's Blues
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07247
+TRACK 06:
+	TITLE: A Hard Rain's A-Gonna Fall
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07248
+TRACK 07:
+	TITLE: Don't Think Twice, It's All Right
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07249
+TRACK 08:
+	TITLE: Bob Dylan's Dream
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07250
+TRACK 09:
+	TITLE: Oxford Town
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07251
+TRACK 10:
+	TITLE: Talkin' World War III Blues
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07252
+TRACK 11:
+	TITLE: Corrina, Corrina
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07253
+TRACK 12:
+	TITLE: Honey, Just Allow Me One More Chance
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07254
+TRACK 13:
+	TITLE: I Shall Be Free
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07255

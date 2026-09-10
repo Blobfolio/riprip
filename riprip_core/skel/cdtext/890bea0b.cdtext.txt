@@ -1,0 +1,38 @@
+[English]
+DISC:
+	TITLE: Another Side Of Bob Dylan
+	PERFORMER: Bob Dylan
+	DISC ID: CK92402
+TRACK 01:
+	TITLE: All I Really Want To Do
+	ISRC: USSM16401169
+TRACK 02:
+	TITLE: Black Crow Blues
+	ISRC: USSM16401170
+TRACK 03:
+	TITLE: Spanish Harlem Incident
+	ISRC: USSM16401171
+TRACK 04:
+	TITLE: Chimes Of Freedom
+	ISRC: USSM16401172
+TRACK 05:
+	TITLE: I Shall Be Free No. 10
+	ISRC: USSM16401173
+TRACK 06:
+	TITLE: To Ramona
+	ISRC: USSM16401174
+TRACK 07:
+	TITLE: Motorpsycho Nightmare
+	ISRC: USSM16401175
+TRACK 08:
+	TITLE: My Back Pages
+	ISRC: USSM16401176
+TRACK 09:
+	TITLE: I Don't Believe You (She Acts Like We Never Have Met)
+	ISRC: USSM16401177
+TRACK 10:
+	TITLE: Ballad In Plain D
+	ISRC: USSM16401178
+TRACK 11:
+	TITLE: It Ain't Me Babe
+	ISRC: USSM16401179

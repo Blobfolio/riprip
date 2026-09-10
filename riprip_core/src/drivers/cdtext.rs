@@ -1145,54 +1145,65 @@ fn chk_pack(src: &Pack) -> bool {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use std::{
+		ffi::OsStr,
+		path::PathBuf,
+	};
 
 	#[test]
 	fn t_libcdio_samples() {
-		macro_rules! compare {
-			( $stub:literal ) => {
-				let Ok(parsed) = CDText::from_bytes(include_bytes!(
-					concat!("../../skel/cdtext/", $stub, ".cdt")
-				)) else {
-					panic!("Failed to parse {}.cdt.", $stub);
-				};
-				let lhs = parsed.to_string();
-				let rhs = include_str!(concat!("../../skel/cdtext/", $stub, ".right"));
-				assert_eq!(
-					lhs,
-					rhs,
-					"Mismatch for {}:\n\n-----\n{lhs}\n-----\n{rhs}\n",
-					$stub,
-				);
-			};
+		let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("skel/cdtext");
+		if ! dir.is_dir() {
+			panic!("Invalid cdtext test directory.");
 		}
 
-		compare!("7e09530a");
-		compare!("8a0a110b");
-		compare!("1606c313");
-		compare!("57116227");
-		compare!("68095d08");
-		compare!("0d10c613");
-		compare!("410a6005");
-		compare!("4a129207");
-		compare!("5e085908");
-		compare!("640a6409");
-		compare!("6708210a");
-		compare!("77083e09");
-		compare!("7d050b0a");
-		compare!("810a120a");
-		compare!("8b09540b");
-		compare!("8f11c60b");
-		compare!("950b650d");
-		compare!("a308db0c");
-		compare!("a70f560e");
-		compare!("cdtext");
-		compare!("cdtext-krosis");
-		compare!("cdtext-libburnia");
-		compare!("d60f430e");
-		compare!("double");
-		compare!("f00c0e12");
-		compare!("f310b110");
-		compare!("fd0ebc13");
-		compare!("simple");
+		// Find all the files. Haha.
+		let mut bins = HashMap::<String, PathBuf>::new();
+		let mut txts = HashMap::<String, PathBuf>::new();
+		for e in std::fs::read_dir(&dir).expect("Unable to open cdtext test directory.") {
+			let e = e.unwrap();
+			let path = e.path();
+			let stub = path.file_stem().and_then(OsStr::to_str).unwrap();
+			let ext = path.extension().and_then(OsStr::to_str).unwrap();
+			match ext {
+				"bin" => { bins.insert(stub.to_owned(), path); },
+				"txt" => { txts.insert(stub.to_owned(), path); },
+				_ => {
+					panic!(
+						"Unexpected file in cdtext test directory: {}",
+						path.file_name().unwrap().display()
+					);
+				},
+			}
+		}
+
+		// Run through and compare!
+		assert!(
+			! txts.is_empty(),
+			"No CD-Text tests were found.",
+		);
+		for (stub, txt) in txts {
+			let Some(bin) = bins.remove(&stub) else {
+				panic!("Missing {stub}.bin.");
+			};
+
+			let txt_v = std::fs::read_to_string(&txt).unwrap();
+			let bin_v = std::fs::read(&bin).unwrap();
+			let Ok(parsed) = CDText::from_bytes(&bin_v) else {
+				panic!("Failed to parse {stub}.bin.");
+			};
+			let lhs = parsed.to_string();
+			assert_eq!(
+				lhs,
+				txt_v,
+				"Mismatch for {stub}:\n\n-----\nFOUND:\n{lhs}\n-----\nEXPECTED:\n{txt_v}\n",
+			);
+		}
+
+		// There shouldn't be any bins left.
+		assert!(
+			bins.is_empty(),
+			"Some CD-Text binary data is missing text counterparts: {bins:?}"
+		);
 	}
 }

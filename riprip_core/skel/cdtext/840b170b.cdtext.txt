@@ -1,0 +1,49 @@
+[English]
+DISC:
+	TITLE: Bringing It All Back Home
+	PERFORMER: Bob Dylan
+	DISC ID: CH90326
+TRACK 01:
+	TITLE: Subterranean Homesick Blues
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07631
+TRACK 02:
+	TITLE: She Belongs To Me
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07632
+TRACK 03:
+	TITLE: Maggie's Farm
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07633
+TRACK 04:
+	TITLE: Love Minus Zero/No Limit
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07260
+TRACK 05:
+	TITLE: Outlaw Blues
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07634
+TRACK 06:
+	TITLE: On The Road Again
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07635
+TRACK 07:
+	TITLE: Bob Dylan's 115th Dream
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07636
+TRACK 08:
+	TITLE: Mr. Tambourine Man
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07637
+TRACK 09:
+	TITLE: Gates Of Eden
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07638
+TRACK 10:
+	TITLE: It's Alright, Ma (I'm Only Bleeding)
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07639
+TRACK 11:
+	TITLE: It's All Over Now, Baby Blue
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07640

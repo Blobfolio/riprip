@@ -1,0 +1,57 @@
+[English]
+DISC:
+	TITLE: The Electric Mile
+	PERFORMER: G. Love and Special Sauce
+	DISC ID: EK61420
+TRACK 01:
+	TITLE: Unified
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00387
+TRACK 02:
+	TITLE: Praise Up
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00388
+TRACK 03:
+	TITLE: Night of the Living Dead
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00389
+TRACK 04:
+	TITLE: Parasite
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00390
+TRACK 05:
+	TITLE: Hopeless Case
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00391
+TRACK 06:
+	TITLE: Free At Last
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-00-19883
+TRACK 07:
+	TITLE: Shy Girl
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00392
+TRACK 08:
+	TITLE: Rain Jam
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00393
+TRACK 09:
+	TITLE: Electric Mile
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00394
+TRACK 10:
+	TITLE: Sarah's Song
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00395
+TRACK 11:
+	TITLE: 100 Magic Rings
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00396
+TRACK 12:
+	TITLE: Poison
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00397
+TRACK 13:
+	TITLE: Free at Last (Reprise)
+	PERFORMER: G. Love and Special Sauce
+	ISRC: US-SM1-01-00399

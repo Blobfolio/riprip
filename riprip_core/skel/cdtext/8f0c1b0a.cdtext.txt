@@ -1,0 +1,45 @@
+[English]
+DISC:
+	TITLE: Blood On The Tracks
+	PERFORMER: Bob Dylan
+	DISC ID: CH90323
+TRACK 01:
+	TITLE: Tangled Up In Blue
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07464
+TRACK 02:
+	TITLE: Simple Twist Of Fate
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07465
+TRACK 03:
+	TITLE: You're A Big Girl Now
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07466
+TRACK 04:
+	TITLE: Idiot Wind
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07467
+TRACK 05:
+	TITLE: You're Gonna Make Me Lonesome When You Go
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07468
+TRACK 06:
+	TITLE: Meet Me In The Morning
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07469
+TRACK 07:
+	TITLE: Lily, Rosemary And The Jack Of Hearts
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07470
+TRACK 08:
+	TITLE: If You See Her, Say Hello
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07471
+TRACK 09:
+	TITLE: Shelter From The Storm
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07472
+TRACK 10:
+	TITLE: Buckets Of Rain
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07473

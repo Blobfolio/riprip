@@ -1,0 +1,30 @@
+[English]
+DISC:
+	TITLE: The Jazz Age
+	PERFORMER: The Bryan Ferry Orchestra
+TRACK 01:
+	TITLE: Do The Strand
+TRACK 02:
+	TITLE: Love Is The Drug
+TRACK 03:
+	TITLE: Don't Stop The Dance
+TRACK 04:
+	TITLE: Just Like You
+TRACK 05:
+	TITLE: Avalon
+TRACK 06:
+	TITLE: The Bogus Man
+TRACK 07:
+	TITLE: Slave To Love
+TRACK 08:
+	TITLE: This Is Tomorrow
+TRACK 09:
+	TITLE: The Only Face
+TRACK 10:
+	TITLE: I Thought
+TRACK 11:
+	TITLE: Reason Or Rhyme
+TRACK 12:
+	TITLE: Virginia Plain
+TRACK 13:
+	TITLE: This Island Earth
