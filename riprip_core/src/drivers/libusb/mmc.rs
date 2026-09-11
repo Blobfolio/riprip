@@ -319,12 +319,11 @@ pub(super) trait Drive: Transport {
 		cdb[1] = SECTOR_TYPE_CDDA;
 
 		// Rip Rip's addressing parameters are already absolute LBAs.
-		let lba = lsn as u32;
-		cdb[2..6].copy_from_slice(&lba.to_be_bytes());
+		let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
+		cdb[2..=5].copy_from_slice(&lba.to_be_bytes());
 
-		// Transfer Length is a 24-bit BE integer spanning bytes 6, 7, and 8.
-		// Since we only ever read 1 sector, bytes 6 and 7 remain 0, and byte 8 is 1.
-		cdb[8] = 1;
+		// Transfer Length (24-bit BE integer): one sector.
+		cdb[6..=8].copy_from_slice(&[0, 0, 1]);
 
 		// Byte 9 is the Selection Field flag byte:
 		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
@@ -333,9 +332,8 @@ pub(super) trait Drive: Transport {
 		let c2_flag = if c2 { 0x02 } else { 0x00 };
 		cdb[9] = user_data_flag | c2_flag;
 
-		// Byte 10 defines the Sub-channel Selection configuration flags:
-		// 0x00 = No sub-channel data requested
-		// 0x02 = Raw Subchannel Data payload (16 bytes payload space)
+		// Byte 10 defines the Subchannel Selection configuration flags:
+		// 0 = none, 1 = raw P-W, 2 = formatted Q, 4 = corrected R-W.
 		cdb[10] = sub;
 
 		self.submit(&cdb, buf)
