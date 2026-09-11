@@ -32,7 +32,8 @@ type VendorModel = [u8; 24];
 /// # Main.
 fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
-	println!("cargo:rerun-if-changed=skel");
+	println!("cargo:rerun-if-changed=skel/drive-cache.txt");
+	println!("cargo:rerun-if-changed=skel/drive-offsets.bin");
 
 	let offsets = parse_offsets();
 	let caches = parse_caches(&offsets);
