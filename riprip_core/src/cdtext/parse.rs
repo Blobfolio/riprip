@@ -260,25 +260,40 @@ impl TryFrom<&[u8]> for ContextSize {
 	type Error = CDTextError;
 
 	fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
+		// The size block is exactly 36 bytes.
 		if buf.len() != 36 {
 			return Err(CDTextError::InvalidPayloadLength);
 		}
 
+		// Small stuff.
+		let char_code = buf[0];
 		let tracks = TrackRange::new(buf[1], buf[2])?;
+		let copyright = buf[3];
 
-		let mut pack_counts = [0_u8; 16];
-		pack_counts.copy_from_slice(&buf[4..20]);
+		// Pack counts.
+		let pack_counts = [
+			buf[4],  buf[5],  buf[6],  buf[7],
+			buf[8],  buf[9],  buf[10], buf[11],
+			buf[12], buf[13], buf[14], buf[15],
+			buf[16], buf[17], buf[18], buf[19],
+		];
 
-		let mut last_seq = [0_u8; 8];
-		last_seq.copy_from_slice(&buf[20..28]);
+		// Sequences.
+		let last_seq = [
+			buf[20], buf[21], buf[22], buf[23],
+			buf[24], buf[25], buf[26], buf[27],
+		];
 
-		let mut lang_code = [0_u8; 8];
-		lang_code.copy_from_slice(&buf[28..36]);
+		// Language Codes.
+		let lang_code = [
+			buf[28], buf[29], buf[30], buf[31],
+			buf[32], buf[33], buf[34], buf[35],
+		];
 
 		Ok(Self {
-			char_code: buf[0],
+			char_code,
 			tracks,
-			copyright: buf[3],
+			copyright,
 			pack_counts,
 			last_seq,
 			lang_code,
