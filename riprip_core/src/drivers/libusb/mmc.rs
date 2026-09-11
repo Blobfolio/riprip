@@ -327,7 +327,7 @@ pub(super) trait Drive: Transport {
 
 		// Byte 9 is the Selection Field flag byte:
 		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
-		// Bit 2..1: C2 Error Flag selection allocation (0x02 means include 294 bytes C2 space)
+		// Bit 2..1: C2 Error Flag selection allocation (Set to 1 to include 294 bytes C2 space)
 		let user_data_flag = 0x10;
 		let c2_flag = if c2 { 0x02 } else { 0x00 };
 		cdb[9] = user_data_flag | c2_flag;
