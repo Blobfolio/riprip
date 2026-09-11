@@ -235,13 +235,13 @@ impl Disc {
 				Ok(cdtext) => {
 					// Set the barcode.
 					out.barcode = cdtext.disc(DiscField::Barcode)
-						.find_map(|v| Barcode::try_from(v.as_bytes()).ok())
+						.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
 						.or_else(|| out.cdda.mcn_subchannel());
 
 					// Pull the track ISRCs (if any).
 					for t in out.toc.audio_tracks() {
 						let idx = t.number();
-						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx).next() {
+						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx) {
 							out.isrcs.insert(idx, isrc.to_owned());
 						}
 					}

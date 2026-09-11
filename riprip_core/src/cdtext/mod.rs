@@ -73,22 +73,35 @@ impl fmt::Display for CDText {
 
 impl CDText {
 	#[must_use]
-	/// # Search Disc Value(s).
+	/// # Disc Value.
 	///
-	/// Returns an iterator of matching values across all provided
-	/// languages.
-	pub(crate) fn disc(&self, field: DiscField) -> CDTextDiscFieldIter<'_> {
-		CDTextDiscFieldIter { field, set: &self.0 }
+	/// Return the matching disc field value from the first block, if any.
+	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
+		// Inner shouldn't ever be empty.
+		if self.0.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, 0])) {
+			Some(v.as_str())
+		}
+		else { None }
 	}
 
 	#[must_use]
 	/// # Search Track Value(s).
 	///
-	/// Returns an iterator of matching values across all provided
-	/// languages.
-	pub(crate) fn track(&self, field: TrackField, track: u8)
-	-> CDTextTrackFieldIter<'_> {
-		CDTextTrackFieldIter { field, track, set: &self.0 }
+	/// Return the matching track field value from the first block, if any.
+	pub(crate) fn track(&self, field: TrackField, track: u8) -> Option<&str> {
+		// Inner shouldn't ever be empty.
+		if self.0.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, track])) {
+			Some(v.as_str())
+		}
+		else { None }
 	}
 }
 
@@ -102,7 +115,7 @@ impl CDText {
 	/// This method will return an error if the CD-Text is malformed,
 	/// contains unsupported features, or is empty.
 	pub(crate) fn from_bytes(pack_data: &[u8]) -> Result<Self, CDTextError> {
-		// Build up the inner data.
+		// Build up the inner data block-by-block.
 		let blocks = ContextBlock::from_bytes(pack_data)?;
 		let mut inner = Vec::with_capacity(blocks.len());
 		for (i, block) in blocks.into_iter().enumerate().take(8) {
@@ -120,29 +133,37 @@ impl CDText {
 			let tracks = size_info.tracks();
 			let mut catalog = HashMap::default();
 			let mut genre_code = GenreCode::Unused;
+
 			for ((field, track), buf) in block.into_buffer() {
-				// Disc data?
+				// Disc-level data.
 				if track == 0 {
 					if let Some(field) = field.disc_field() {
 						let v = match field {
-							// Don't accept invalid barcodes.
+							// Force proper barcode formatting, skipping the
+							// field if invalid.
 							DiscField::Barcode => {
 								let Ok(v) = Barcode::try_from(buf.as_slice()) else {
 									continue;
 								};
 								v.to_string()
 							}
-							// Separate genre code and content.
+
+							// Separate genre code and freeform representations.
 							DiscField::Genre => {
 								let v = encoding.decode(&buf);
 								let (v1, v2) = GenreCode::split_raw(v.as_bytes());
 								genre_code = v1;
+
+								// Skip freeform insertion if empty.
 								if v2.is_empty() { continue; }
 								v2.to_owned()
 							},
-							// Decode anything else.
+
+							// Everything else just needs to be decoded.
 							_ => { encoding.decode(&buf) },
 						};
+
+						// Insert if non-empty!
 						if ! v.is_empty() {
 							catalog.insert(
 								u16::from_le_bytes([field as u8, 0]),
@@ -151,7 +172,7 @@ impl CDText {
 						}
 					}
 				}
-				// Track data?
+				// Track-level data.
 				else if let Some(field) = field.track_field() {
 					let v = encoding.decode(&buf);
 					if ! v.is_empty() {
@@ -175,73 +196,6 @@ impl CDText {
 		else { Ok(Self(inner)) }
 	}
 }
-
-
-
-#[derive(Debug)]
-/// # CD-Text `DiscField` Value Iterator.
-///
-/// This iterator yields all instances of `DiscField` across the various
-/// languages.
-pub(crate) struct CDTextDiscFieldIter<'a> {
-	/// # Field of Interest.
-	field: DiscField,
-
-	/// # Language Data Sets.
-	set: &'a [CDTextInner],
-}
-
-impl<'a> Iterator for CDTextDiscFieldIter<'a> {
-	type Item = &'a str;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		while let [ next, rest @ .. ] = &self.set {
-			self.set = rest;
-			if let Some(out) = next.disc(self.field) {
-				return Some(out);
-			}
-		}
-
-		None
-	}
-}
-
-impl std::iter::FusedIterator for CDTextDiscFieldIter<'_> {}
-
-
-
-#[derive(Debug)]
-/// # CD-Text `TrackField` Value Iterator.
-///
-/// This iterator yields all instances of `DiscField` across the various
-/// languages.
-pub(crate) struct CDTextTrackFieldIter<'a> {
-	/// # Field of Interest.
-	field: TrackField,
-
-	/// # Track Number.
-	track: u8,
-
-	/// # Language Data Sets.
-	set: &'a [CDTextInner],
-}
-
-impl<'a> Iterator for CDTextTrackFieldIter<'a> {
-	type Item = &'a str;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		while let [ next, rest @ .. ] = &self.set {
-			self.set = rest;
-			if let Some(out) = next.track(self.field, self.track) {
-				return Some(out);
-			}
-		}
-
-		None
-	}
-}
-
-impl std::iter::FusedIterator for CDTextTrackFieldIter<'_> {}
 
 
 
