@@ -38,6 +38,9 @@ pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Da
 // GET_CONFIGURATION Features
 const FEATURE_CD_AUDIO_C2: u16 = 0x001E;
 
+const CONFIGURATION_HEADER_LEN: u16 = 8;
+const CONFIGURATION_FEATURE_DESCRIPTOR_LEN: u16 = 8;
+
 // READ_CD Sector Types
 const SECTOR_TYPE_CDDA: u8 = 0x04;
 
@@ -163,22 +166,21 @@ pub(super) trait Drive: Transport {
 	}
 
 	fn check_c2__(&self) -> Result<(), RipRipError> {
-		// Request header (8 bytes) + feature descriptor payload (8 bytes).
-		const ALLOC_LEN: u16 = 16;
+		const ALLOC_LEN: u16 = CONFIGURATION_HEADER_LEN + CONFIGURATION_FEATURE_DESCRIPTOR_LEN;
 
 		let mut cdb = [0u8; 10];
 		cdb[0] = GET_CONFIGURATION;
 		cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
-		cdb[2..4].copy_from_slice(&FEATURE_CD_AUDIO_C2.to_be_bytes());
+		cdb[2..=3].copy_from_slice(&FEATURE_CD_AUDIO_C2.to_be_bytes());
 
-		cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+		cdb[7..=8].copy_from_slice(&ALLOC_LEN.to_be_bytes());
 
 		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf).is_err() {
+		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
 			return Err(RipRipError::C2Mode296);
 		}
 
-		let desc = &buf[8..16];
+		let desc = &buf[CONFIGURATION_HEADER_LEN as usize..];
 
 		if u16::from_be_bytes([desc[0], desc[1]]) == FEATURE_CD_AUDIO_C2 {
 			// Byte 4 houses the Feature-Specific configuration flags.
