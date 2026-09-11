@@ -1,0 +1,34 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Purgatory
+	PERFORMER: Tyler Childers
+TRACK 01:
+	TITLE: I Swear (to God)
+	PERFORMER: Tyler Childers
+TRACK 02:
+	TITLE: Feathered Indians
+	PERFORMER: Tyler Childers
+TRACK 03:
+	TITLE: Tattoos
+	PERFORMER: Tyler Childers
+TRACK 04:
+	TITLE: Born Again
+	PERFORMER: Tyler Childers
+TRACK 05:
+	TITLE: Whitehouse Road
+	PERFORMER: Tyler Childers
+TRACK 06:
+	TITLE: Banded Clovis
+	PERFORMER: Tyler Childers
+TRACK 07:
+	TITLE: Purgatory
+	PERFORMER: Tyler Childers
+TRACK 08:
+	TITLE: Honky Tonk Flame
+	PERFORMER: Tyler Childers
+TRACK 09:
+	TITLE: Universal Sound
+	PERFORMER: Tyler Childers
+TRACK 10:
+	TITLE: Lady May
+	PERFORMER: Tyler Childers

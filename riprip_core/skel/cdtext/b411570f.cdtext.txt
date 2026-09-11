@@ -1,0 +1,49 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Middle Cyclone
+	PERFORMER: Neko Case
+TRACK 01:
+	TITLE: This Tornado Loves You
+	PERFORMER: Neko Case
+TRACK 02:
+	TITLE: The Next Time You Say "Forever
+	PERFORMER: Neko Case
+TRACK 03:
+	TITLE: People Got A Lotta Nerve
+	PERFORMER: Neko Case
+TRACK 04:
+	TITLE: Polar Nettles
+	PERFORMER: Neko Case
+TRACK 05:
+	TITLE: Vengeance Is Sleeping
+	PERFORMER: Neko Case
+TRACK 06:
+	TITLE: Never Turn Your Back On Mother Earth
+	PERFORMER: Neko Case
+TRACK 07:
+	TITLE: Middle Cyclone
+	PERFORMER: Neko Case
+TRACK 08:
+	TITLE: Fever
+	PERFORMER: Neko Case
+TRACK 09:
+	TITLE: Magpie To The Morning
+	PERFORMER: Neko Case
+TRACK 10:
+	TITLE: I'm An Animal
+	PERFORMER: Neko Case
+TRACK 11:
+	TITLE: Prison Girls
+	PERFORMER: Neko Case
+TRACK 12:
+	TITLE: Don't Forget Me
+	PERFORMER: Neko Case
+TRACK 13:
+	TITLE: The Pharaohs
+	PERFORMER: Neko Case
+TRACK 14:
+	TITLE: Red Tide
+	PERFORMER: Neko Case
+TRACK 15:
+	TITLE: Marais La Nuit
+	PERFORMER: Neko Case

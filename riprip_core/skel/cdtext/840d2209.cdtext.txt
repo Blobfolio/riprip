@@ -1,0 +1,31 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Breaking Stretch
+	PERFORMER: Patricia Brennan
+TRACK 01:
+	TITLE: Los Otros Yo (The Other Selves)
+	PERFORMER: Patricia Brennan
+TRACK 02:
+	TITLE: Breaking Stretch
+	PERFORMER: Patricia Brennan
+TRACK 03:
+	TITLE: 555
+	PERFORMER: Patricia Brennan
+TRACK 04:
+	TITLE: Palo de Oros (Suit of Coins)
+	PERFORMER: Patricia Brennan
+TRACK 05:
+	TITLE: Sueños de Coral Azul (Blue Coral Dreams)
+	PERFORMER: Patricia Brennan
+TRACK 06:
+	TITLE: Five Suns
+	PERFORMER: Patricia Brennan
+TRACK 07:
+	TITLE: Mudanza (States of Change)
+	PERFORMER: Patricia Brennan
+TRACK 08:
+	TITLE: Manufacturers Trust Company Building
+	PERFORMER: Patricia Brennan
+TRACK 09:
+	TITLE: Earendel
+	PERFORMER: Patricia Brennan

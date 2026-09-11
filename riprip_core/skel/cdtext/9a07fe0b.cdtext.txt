@@ -1,0 +1,38 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: You're Dreaming
+	PERFORMER: The Cactus Blossoms
+	DISC ID: WT01
+TRACK 01:
+	TITLE: Stoplight Kisses
+	PERFORMER: The Cactus Blossoms
+TRACK 02:
+	TITLE: You're Dreaming
+	PERFORMER: The Cactus Blossoms
+TRACK 03:
+	TITLE: Queen of Them All
+	PERFORMER: The Cactus Blossoms
+TRACK 04:
+	TITLE: Clown Collector
+	PERFORMER: The Cactus Blossoms
+TRACK 05:
+	TITLE: Mississippi
+	PERFORMER: The Cactus Blossoms
+TRACK 06:
+	TITLE: Powder Blue
+	PERFORMER: The Cactus Blossoms
+TRACK 07:
+	TITLE: Change Your Ways Or Die
+	PERFORMER: The Cactus Blossoms
+TRACK 08:
+	TITLE: If I Can't Win
+	PERFORMER: The Cactus Blossoms
+TRACK 09:
+	TITLE: No More Crying The Blues
+	PERFORMER: The Cactus Blossoms
+TRACK 10:
+	TITLE: Adios Maria
+	PERFORMER: The Cactus Blossoms
+TRACK 11:
+	TITLE: Traveler's Paradise
+	PERFORMER: The Cactus Blossoms

@@ -1,0 +1,57 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Essential Leonard Cohen
+	PERFORMER: Leonard Cohen
+	DISC ID: CK86916
+TRACK 01:
+	TITLE: Ain't No Cure For Love
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-86-00182
+TRACK 02:
+	TITLE: Take This Waltz
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00515
+TRACK 03:
+	TITLE: First We Take Manhattan
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-86-00181
+TRACK 04:
+	TITLE: Dance Me To The End Of Love (Live)
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-93-50001
+TRACK 05:
+	TITLE: The Future
+	PERFORMER: Leonard Cohen
+	ISRC: CA-C22-92-00005
+TRACK 06:
+	TITLE: Democracy
+	PERFORMER: Leonard Cohen
+	ISRC: CA-C22-92-00008
+TRACK 07:
+	TITLE: Waiting For The Miracle
+	PERFORMER: Leonard Cohen
+	ISRC: CA-C22-92-00006
+TRACK 08:
+	TITLE: Closing Time
+	PERFORMER: Leonard Cohen
+	ISRC: CA-C22-92-00009
+TRACK 09:
+	TITLE: Anthem
+	PERFORMER: Leonard Cohen
+	ISRC: CA-C22-92-00010
+TRACK 10:
+	TITLE: In My Secret Life
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00137
+TRACK 11:
+	TITLE: Alexandra Leaving
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00144
+TRACK 12:
+	TITLE: A Thousand Kisses Deep
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00141
+TRACK 13:
+	TITLE: Love Itself
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00138

@@ -1,0 +1,43 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Nosebleed Weekend
+	PERFORMER: The Coathangers
+TRACK 01:
+	TITLE: Perfume
+	PERFORMER: The Coathangers
+TRACK 02:
+	TITLE: Dumb Baby
+	PERFORMER: The Coathangers
+TRACK 03:
+	TITLE: Squeeki Tiki
+	PERFORMER: The Coathangers
+TRACK 04:
+	TITLE: Excuse Me?
+	PERFORMER: The Coathangers
+TRACK 05:
+	TITLE: Make it Right
+	PERFORMER: The Coathangers
+TRACK 06:
+	TITLE: Nosebleed Weekend
+	PERFORMER: The Coathangers
+TRACK 07:
+	TITLE: Watch Your Back
+	PERFORMER: The Coathangers
+TRACK 08:
+	TITLE: Burn Me
+	PERFORMER: The Coathangers
+TRACK 09:
+	TITLE: I Don't Think So
+	PERFORMER: The Coathangers
+TRACK 10:
+	TITLE: Down Down
+	PERFORMER: The Coathangers
+TRACK 11:
+	TITLE: Hiya
+	PERFORMER: The Coathangers
+TRACK 12:
+	TITLE: Had Enough
+	PERFORMER: The Coathangers
+TRACK 13:
+	TITLE: Copycat
+	PERFORMER: The Coathangers
