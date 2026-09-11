@@ -14,6 +14,7 @@ use super::{
 	Encoding,
 	Language,
 	TrackField,
+	TrackRange,
 };
 
 
@@ -32,6 +33,9 @@ const PACK_CRC_OFFSET: usize = PACK_HEADER_LEN + PACK_PAYLOAD_LEN;
 
 /// # Data Pack.
 type Pack = [u8; PACK_LEN];
+
+/// # Pack Payload.
+type PackPayload = [u8; PACK_PAYLOAD_LEN];
 
 /// # Sanity Check.
 const _: () = {
@@ -55,9 +59,9 @@ struct Context {
 
 impl Context {
 	/// # From Bytes.
-	fn from_bytes(pack_data: &[u8]) -> Result<Self, CDTextError> {
+	fn from_bytes(packs: &[u8]) -> Result<Self, CDTextError> {
 		let mut out = Self::default();
-		let (chunks, remainder) = pack_data.as_chunks::<PACK_LEN>();
+		let (chunks, remainder) = packs.as_chunks::<PACK_LEN>();
 
 		// A single trailing \0 byte is a tolerated convention, otherwise
 		// assume parsing is incomplete.
@@ -70,7 +74,7 @@ impl Context {
 			return Err(CDTextError::IncompleteData);
 		}
 
-		// Parse the chunks.
+		// Parse the packs.
 		for pack in chunks {
 			if ! chk_pack(pack) {
 				log!(@trace "Invalid CD-Text pack {pack:?}.");
@@ -88,71 +92,86 @@ impl Context {
 
 	/// # Parse Pack.
 	fn parse_pack(&mut self, pack: &Pack) -> Result<(), CDTextError> {
-		let header = &pack[0..PACK_HEADER_LEN];
-		let payload = &pack[PACK_HEADER_LEN..PACK_CRC_OFFSET];
+		let (header, payload) = PackHeader::split(pack);
 
-		let (id1, id2, _, id4) = (header[0], header[1], header[2], header[3]);
+		// Extensions are unsupported.
+		if header.is_extension() { return Err(CDTextError::UnsupportedExtension); }
 
-		let is_extension = (id2 & 0x80) != 0; // Extension Flag (0 = normal, 1 = extension)
-		if is_extension {
-			return Err(CDTextError::UnsupportedExtension);
-		}
-		let mut track_number = id2 & 0x7F;
-		let block_id = (id4 >> 4) & 0x07; // Bits 4-6 define the language block ID.
+		// Pull track and block details.
+		let mut track_number = header.track_number();
+		let block_id = header.block_id();
 
-		self.language_blocks
-			.resize(block_id as usize + 1, ContextBlock::default());
+		// Make sure we have a corresponding entry.
+		self.language_blocks.resize(
+			block_id as usize + 1,
+			ContextBlock::default(),
+		);
 
+		// Increase the pack count accordingly.
 		self.language_blocks[block_id as usize].pack_count += 1;
 
-		let Some(field) = PackKind::from_u8(id1) else {
-			// Safe early exit per CD-Text specification guidelines.
-			return Ok(());
-		};
+		// What kind of pack is this? Note that per the CD-Text specification,
+		// we can safely exit without an error if invalid.
+		let Some(field) = header.pack_kind() else { return Ok(()); };
 
+		// If data (not text), just create/append the payload to the matching
+		// block buffer.
 		if field.is_data() {
 			let key = (field, 0);
 			let buffer = self.language_blocks[block_id as usize]
 				.buffer
 				.entry(key)
 				.or_default();
-			buffer.extend_from_slice(payload);
+			buffer.extend_from_slice(payload.as_slice());
 		}
+		// Double-byte isn't supported.
+		else if header.is_double_byte() {
+			return Err(CDTextError::UnsupportedDoubleByte);
+		}
+		// Otherwise file away the bytes, one at a time!
 		else {
-			let is_double_byte = (id4 & 0x80) != 0;
-			if is_double_byte {
-				return Err(CDTextError::UnsupportedDoubleByte);
-			}
 			for b in payload {
-				if *b == 0x00 {
-					if ! self.text_buf.is_empty() {
-						let key = (field, track_number);
-						self.language_blocks[block_id as usize]
+				match b {
+					// Text is null-terminated. Save the current buffer and
+					// reset.
+					b'\0' => {
+						// Assuming we've got a buffer, that is.
+						if ! self.text_buf.is_empty() {
+							let key = (field, track_number);
+							self.language_blocks[block_id as usize]
+								.buffer
+								.insert(key, self.text_buf.clone());
+							self.text_buf.clear();
+						}
+
+						// Bump the track number.
+						track_number += 1;
+					},
+
+					// Tabs mark a repetition. Copy the previous block buffer
+					// to the current slot.
+					b'\t' => {
+						let last_key = (field, track_number.saturating_sub(1));
+						let cloned_buf = self.language_blocks[block_id as usize]
 							.buffer
-							.insert(key, self.text_buf.clone());
-						self.text_buf.clear();
-					}
-					track_number += 1;
-				}
-				else if *b == b'\t' {
-					// Handle repetition.
-					let last_key = (field, track_number.saturating_sub(1));
-					let cloned_buf = self.language_blocks[block_id as usize]
-						.buffer
-						.get(&last_key)
-						.cloned();
-					if let Some(buf) = cloned_buf {
-						let key = (field, track_number);
-						self.language_blocks[block_id as usize]
-							.buffer
-							.insert(key, buf);
-					}
-				}
-				else {
-					self.text_buf.push(*b);
+							.get(&last_key)
+							.cloned();
+						if let Some(buf) = cloned_buf {
+							let key = (field, track_number);
+							self.language_blocks[block_id as usize]
+								.buffer
+								.insert(key, buf);
+						}
+					},
+
+					// Anything else is a work-in-progress. Push the byte to
+					// the text buffer.
+					_ => { self.text_buf.push(b); },
 				}
 			}
 		}
+
+		// Done!
 		Ok(())
 	}
 
@@ -212,11 +231,8 @@ pub(super) struct ContextSize {
 	/// # Encoding Code.
 	char_code: u8,
 
-	/// # First Track.
-	first_track: u8,
-
-	/// # Last Track.
-	last_track: u8,
+	/// # First and Last Tracks.
+	tracks: TrackRange,
 
 	/// # Copyright.
 	///
@@ -248,6 +264,8 @@ impl TryFrom<&[u8]> for ContextSize {
 			return Err(CDTextError::InvalidPayloadLength);
 		}
 
+		let tracks = TrackRange::new(buf[1], buf[2])?;
+
 		let mut pack_counts = [0_u8; 16];
 		pack_counts.copy_from_slice(&buf[4..20]);
 
@@ -259,8 +277,7 @@ impl TryFrom<&[u8]> for ContextSize {
 
 		Ok(Self {
 			char_code: buf[0],
-			first_track: buf[1],
-			last_track: buf[2],
+			tracks,
 			copyright: buf[3],
 			pack_counts,
 			last_seq,
@@ -297,15 +314,81 @@ impl ContextSize {
 
 	#[must_use]
 	/// # Track Range.
-	pub(super) const fn tracks(&self) -> (u8, u8) {
-		(self.first_track, self.last_track)
-	}
+	pub(super) const fn tracks(&self) -> TrackRange { self.tracks }
 
 	#[must_use]
 	/// # Total Expected Packs.
 	fn total_expected_packs(&self) -> usize {
 		self.pack_counts.iter().map(|&count| count as usize).sum()
 	}
+}
+
+
+
+#[derive(Debug, Clone, Copy)]
+/// # Pack Header.
+struct PackHeader([u8; PACK_HEADER_LEN]);
+
+impl PackHeader {
+	#[must_use]
+	/// # Split Header/Payload.
+	///
+	/// Split the header from the pack data, returning it and the rest of the
+	/// data (i.e. the payload).
+	const fn split(pack: &Pack) -> (Self, PackPayload) {
+		let header = Self([
+			pack[0], // Pack Kind.
+			pack[1], // Extension and Track Number.
+			pack[2],
+			pack[3], // Double-Byte and Block ID.
+		]);
+
+		let payload = [
+			pack[4],  pack[5],  pack[6],  pack[7],
+			pack[8],  pack[9],  pack[10], pack[11],
+			pack[12], pack[13], pack[14], pack[15],
+		];
+
+		(header, payload)
+	}
+
+	#[must_use]
+	/// # Block ID.
+	///
+	/// Return the block ID, derived from bits `4..=6` of the fourth header
+	/// byte. Note this value will always be in range `0..=7`.
+	const fn block_id(self) -> u8 { (self.0[3] >> 4) & 0b0000_0111 }
+
+	#[must_use]
+	/// # Is Double-Byte?
+	///
+	/// Returns `true` if the data is double-byte-encoded, using the highest
+	/// bit of the fourth header byte.
+	///
+	/// Note: this is unsupported by Rip Rip.
+	const fn is_double_byte(self) -> bool { 0 != self.0[3] & 0b1000_0000 }
+
+	#[must_use]
+	/// # Is Extension?
+	///
+	/// Returns `true` if the pack is an extension, derived from the high bit
+	/// of the second header byte.
+	///
+	/// Note: this is unsupported by Rip Rip.
+	const fn is_extension(self) -> bool { 0 != self.0[1] & 0b1000_0000 }
+
+	#[must_use]
+	/// # Pack Kind.
+	///
+	/// Return the `PackKind`, derived from the first header byte.
+	const fn pack_kind(self) -> Option<PackKind> { PackKind::from_u8(self.0[0]) }
+
+	#[must_use]
+	/// # Track Number.
+	///
+	/// Return the track number, derived from the low 7 bits of the second
+	/// header byte.
+	const fn track_number(self) -> u8 { self.0[1] & 0b0111_1111 }
 }
 
 

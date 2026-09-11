@@ -12,6 +12,7 @@ mod parse;
 mod field;
 mod genre;
 mod language;
+mod track;
 
 use crate::{
 	Barcode,
@@ -29,6 +30,7 @@ use std::{
 	collections::HashMap,
 	fmt,
 };
+use track::TrackRange;
 
 
 
@@ -115,7 +117,7 @@ impl CDText {
 
 			let language = size_info.language(i)?;
 			let encoding = size_info.encoding()?;
-			let (first_track, last_track) = size_info.tracks();
+			let tracks = size_info.tracks();
 			let mut catalog = HashMap::default();
 			let mut genre_code = GenreCode::Unused;
 			for ((field, track), buf) in block.into_buffer() {
@@ -162,13 +164,7 @@ impl CDText {
 			}
 
 			// Save it!
-			inner.push(CDTextInner {
-				first_track,
-				last_track,
-				language,
-				genre_code,
-				catalog,
-			});
+			inner.push(CDTextInner { tracks, language, genre_code, catalog });
 		}
 
 		// Done!
@@ -280,6 +276,7 @@ err! {
 	IncompleteData        "Raw CD-Text data is incomplete.",
 	InvalidLanguage       "CD-Text contains invalid language code.",
 	InvalidPayloadLength  "Invalid CD-Text payload length.",
+	InvalidTrackRange     "Invalid start/end track range.",
 	MissingSizeInfo       "Missing CD-Text size info.",
 	UnsupportedDoubleByte "Unsupported CD-Text double-byte encoding.",
 	UnsupportedEncoding   "Unsupported CD-Text encoding type.",
@@ -293,11 +290,8 @@ err! {
 ///
 /// This struct holds disc and track CD-Text in a single language.
 struct CDTextInner {
-	/// # First Track.
-	first_track: u8,
-
-	/// # Last Track.
-	last_track: u8,
+	/// # First and Last Tracks.
+	tracks: TrackRange,
 
 	/// # Language.
 	language: Language,
@@ -326,7 +320,7 @@ impl fmt::Display for CDTextInner {
 			}
 
 			// Track fields.
-			for track in self.first_track..=self.last_track {
+			for track in self.tracks.range() {
 				write!(f, "\n  TRACK {track:02}:")?;
 				for field in TrackField::ALL {
 					let v = self.track(field, track).map_or("", str::trim);
@@ -350,7 +344,7 @@ impl fmt::Display for CDTextInner {
 			}
 
 			// Track fields.
-			for track in self.first_track..=self.last_track {
+			for track in self.tracks.range() {
 				writeln!(f, "TRACK {track:02}:")?;
 				for field in TrackField::ALL {
 					let v = self.track(field, track).map_or("", str::trim);
