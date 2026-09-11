@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Beggars Banquet
 	PERFORMER: The Rolling Stones

@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Dark Side Of The Moon
 	PERFORMER: Pink Floyd

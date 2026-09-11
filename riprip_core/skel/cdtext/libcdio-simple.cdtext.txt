@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Test Disc
 	PERFORMER: Test Artist

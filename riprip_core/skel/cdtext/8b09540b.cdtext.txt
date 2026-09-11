@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 TRACK 01:
 	TITLE: A Little Crazy

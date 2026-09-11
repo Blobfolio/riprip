@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Night Cats II
 	PERFORMER: United Cat Orchestra
@@ -32,7 +32,7 @@ TRACK 03:
 	ARRANGER: Mia Kitten
 	ISRC: XYBLG1100006
 
-[German]
+[BLOCK 1: German]
 DISC:
 	TITLE: Nachtkratz II
 	PERFORMER: Vereinigtes Katzenorchester

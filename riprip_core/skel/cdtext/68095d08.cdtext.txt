@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Blonde On Blonde
 	PERFORMER: Bob Dylan
@@ -28,7 +28,7 @@ TRACK 08:
 	TITLE: Just Like A Woman
 	ISRC: USSM19921965
 
-[English]
+[BLOCK 1: English]
 DISC:
 	TITLE: Blonde On Blonde
 	PERFORMER: Bob Dylan

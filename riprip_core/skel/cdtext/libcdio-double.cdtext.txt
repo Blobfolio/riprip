@@ -1,4 +1,4 @@
-[Japanese]
+[BLOCK 0: Japanese]
 DISC:
 	TITLE: AAAAAAAAAAA猫
 	PERFORMER: ねこのおんがくだん

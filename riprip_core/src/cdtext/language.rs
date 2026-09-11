@@ -63,6 +63,12 @@ macro_rules! lang {
 					$( Self::$k => stringify!($k), )+
 				}
 			}
+
+			#[must_use]
+			/// # Is Some?
+			pub(super) const fn is_some(self) -> bool {
+				! matches!(self, Self::Unspecified)
+			}
 		}
 	);
 }

@@ -1,4 +1,4 @@
-[English]
+[BLOCK 0: English]
 DISC:
 	TITLE: Suspended Animation
 	PERFORMER: Fantomas

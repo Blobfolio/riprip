@@ -125,7 +125,7 @@ impl Context {
 			}
 			for b in payload {
 				if *b == 0x00 {
-					if !self.text_buf.is_empty() {
+					if ! self.text_buf.is_empty() {
 						let key = (field, track_number);
 						self.language_blocks[block_id as usize]
 							.buffer

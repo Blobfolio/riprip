@@ -1,4 +1,4 @@
-[Unspecified]
+[BLOCK 0]
 DISC:
 	TITLE: Wish You Were Here
 	PERFORMER: Pink Floyd

@@ -42,10 +42,27 @@ impl fmt::Display for CDText {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let mut any = false;
-		for v in &self.0 {
+		for (k, v) in self.0.iter().enumerate() {
 			if any { writeln!(f)?; }
 			else { any = true; }
 
+			// Print the block header.
+			if f.alternate() {
+				if let Some(language) = v.language() {
+					write!(f, "\n  [BLOCK {k}: {language}]")?;
+				}
+				else {
+					write!(f, "\n  [BLOCK {k}]")?;
+				}
+			}
+			else if let Some(language) = v.language() {
+				writeln!(f, "[BLOCK {k}: {language}]")?;
+			}
+			else {
+				writeln!(f, "[BLOCK {k}]")?;
+			}
+
+			// Defer for the rest.
 			<CDTextInner as fmt::Display>::fmt(v, f)?;
 		}
 		Ok(())
@@ -296,9 +313,6 @@ impl fmt::Display for CDTextInner {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		// Alternate formatting is used for the logger.
 		if f.alternate() {
-			// Language.
-			write!(f, "\n  [{}]", self.language)?;
-
 			// Disc fields first.
 			f.write_str("\n  DISC:")?;
 			for field in DiscField::ALL {
@@ -323,9 +337,6 @@ impl fmt::Display for CDTextInner {
 			}
 		}
 		else {
-			// Language.
-			writeln!(f, "[{}]", self.language)?;
-
 			// Disc fields first.
 			f.write_str("DISC:\n")?;
 			for field in DiscField::ALL {
@@ -361,6 +372,13 @@ impl CDTextInner {
 		let v = self.catalog.get(&u16::from_le_bytes([field as u8, 0]))?.trim();
 		if v.is_empty() { None }
 		else { Some(v) }
+	}
+
+	#[must_use]
+	/// # Language.
+	const fn language(&self) -> Option<Language> {
+		if self.language.is_some() { Some(self.language) }
+		else { None }
 	}
 
 	#[must_use]
