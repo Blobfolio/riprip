@@ -26,9 +26,6 @@ mod libcdio;
 #[cfg(feature = "libusb")]
 mod libusb;
 
-#[expect(dead_code)]
-mod cdtext;
-
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,

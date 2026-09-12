@@ -10,10 +10,9 @@ mod device;
 mod mmc;
 
 use crate::{
-	Barcode, CD_LEADIN, CDTextKind, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
+	Barcode, CD_LEADIN, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
 };
 
-use super::cdtext;
 use mmc::{Drive, TOC_HEADER_LEN, Transport};
 
 use nix::unistd::{Uid, setuid};
@@ -126,9 +125,6 @@ pub(crate) struct LibusbInstance<C: UsbContext = GlobalContext> {
 	endpoints: Endpoints,
 
 	cbw_tag: AtomicU32,
-
-	/// # CD-Text.
-	metadata: Option<cdtext::Metadata>,
 }
 
 impl<C: UsbContext> Drop for LibusbInstance<C> {
@@ -197,33 +193,16 @@ impl<C: UsbContext> LibusbInstance<C> {
 				.map_err(|_| RipRipError::Bug("Failed to drop process privileges."))?;
 		}
 
-		let mut out = Self {
+		let out = Self {
 			device_handle,
 			interface_id,
 			endpoints,
 			cbw_tag: AtomicU32::new(0x10000001),
-			metadata: None,
 		};
 
 		out.check_disc_mode__()?;
 
 		out.check_c2__()?;
-
-		if let Some(buf) = out.read_cdtext()? {
-			let pack_data = &buf[TOC_HEADER_LEN as usize..]; // Skip the header.
-
-			let metadata = cdtext::Metadata::from_bytes(pack_data).map_err(|e| {
-				log!(@error "{:?}", e);
-				RipRipError::CdText
-			})?;
-
-			if let Some(title) = metadata.layers.first().and_then(|ll| ll.album_title()) {
-				log!(@info "{title}");
-			}
-			log!(@debug "CD-Text:\n{:#?}", metadata);
-
-			out.metadata.replace(metadata);
-		}
 
 		Ok(out)
 	}
@@ -360,12 +339,13 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 		Ok(lba + u32::from(CD_LEADIN))
 	}
 
-	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
-		if let Some(metadata) = &self.metadata {
-			return metadata.layers[0]
-				.catalog
-				.get(&(kind.into(), idx))
-				.map(|s| s.clone());
+	fn cdtext(&self) -> Option<Vec<u8>> {
+		if let Some(mut buf) = self.read_cdtext().ok()? {
+			// Skip the header.
+			let n = TOC_HEADER_LEN as usize;
+			buf.copy_within(n.., 0);
+			buf.truncate(buf.len() - n);
+			return Some(buf);
 		}
 		None
 	}

@@ -18,8 +18,6 @@ encoding_rs = "0.8.*"
 tempfile = "3.8.0"
 trimothy = "0.9.*"
 utc2k = "0.21.*"
-crc = "3.4.0"
-encoding_rs = "0.8.35"
 
 [dependencies.fyi_msg]
 version = "2.7.*"
