@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "September 2026" "riprip v0.7.0" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "September 2026" "riprip v0.8.0" "User Commands"
 .SH NAME
-RIP RIP HOORAY! \- Manual page for riprip v0.7.0.
+RIP RIP HOORAY! \- Manual page for riprip v0.8.0.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -16,6 +16,9 @@ Alternate the sector read order between passes, forwards then backwards then for
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help information to STDOUT and exit.
+.TP
+\fB\-\-no\-cdtext\fR
+Do not try to read/parse CD\-Text data from the disc. Can speed things up if the disc is damaged in just the wrong way.
 .TP
 \fB\-\-no\-resume\fR
 Ignore any previous rip states, starting over from scratch.
