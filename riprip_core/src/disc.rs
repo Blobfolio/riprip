@@ -330,10 +330,22 @@ impl Disc {
 			let htoa_any = saved.contains_key(&0);
 			let htoa_likely = saved.get(&0).is_some_and(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
 			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
-			let col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
+			let mut col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
 			// A header of sorts.
 			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
+			if let Some((cdtext1, cdtext2)) = self.cdtext_paths() {
+				if cdtext1.is_file() {
+					let _res = writeln!(&mut handle, dim!("  {}"), cdtext1.display());
+					log!(@info "Saved CD-Text (raw).\n  {}", cdtext1.display());
+					col1 = usize::max(col1, cdtext1.to_string_lossy().len());
+				}
+				if cdtext2.is_file() {
+					let _res = writeln!(&mut handle, dim!("  {}"), cdtext2.display());
+					log!(@info "Saved CD-Text.\n  {}", cdtext2.display());
+					col1 = usize::max(col1, cdtext2.to_string_lossy().len());
+				}
+			}
 			log!(@info "Finished rip.{}", LoggableFruits(&saved));
 
 			// If we did all tracks, make a cue sheet and print its path.
@@ -392,16 +404,23 @@ impl Disc {
 		Ok(())
 	}
 
+	/// # CD-Text Paths.
+	fn cdtext_paths(&self) -> Option<(PathBuf, PathBuf)> {
+		let prefix = cache_prefix(&self.toc);
+		let bin = cache_path(format!("{prefix}.cdtext.bin")).ok()?;
+		let txt = cache_path(format!("{prefix}.cdtext.txt")).ok()?;
+		Some((bin, txt))
+	}
+
 	/// # Save CD-Text Data.
 	///
 	/// Try to save the raw and decoded CD-Text data to disk.
 	pub fn save_cdtext(&self, progress: &Progless) {
 		let Some((bin, txt)) = &self.cdtext else { return; };
-		let prefix = cache_prefix(&self.toc);
+		let Some((dst_bin, dst_txt)) = self.cdtext_paths() else { return; };
 
 		// Save the raw binary data first, unless it already exists.
 		if
-			let Ok(dst_bin) = cache_path(format!("{prefix}.cdtext.bin")) &&
 			(
 				! dst_bin.is_file() ||
 				std::fs::read(&dst_bin).ok().is_none_or(|v| v != *bin)
@@ -419,7 +438,6 @@ impl Disc {
 			Ok(txt) => {
 				let txt = txt.to_string();
 				if
-					let Ok(dst_txt) = cache_path(format!("{prefix}.cdtext.txt")) &&
 					(
 						! dst_txt.is_file() ||
 						std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
@@ -439,7 +457,7 @@ impl Disc {
 					"         the ", dim!("{prefix}.cdtext.bin"), " so we can fix that!\n",
 					ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
 					),
-					prefix=prefix,
+					prefix=cache_prefix(&self.toc),
 				)));
 			},
 
