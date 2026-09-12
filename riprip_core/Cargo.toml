@@ -28,6 +28,19 @@ version = "=3.0.0"
 default-features = false
 optional = true
 
+[dependencies.rusb]
+version = "0.9.4"
+optional = true
+
+[dependencies.nix]
+version = "0.31.3"
+features = ["user"]
+optional = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-io-kit = { version = "0.3.2", optional = true }
+objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
+
 [dependencies.minreq]
 version = "3.0.*"
 default-features = false
@@ -61,3 +74,10 @@ libcdio = [ "libcdio-sys" ]
 
 # Build and link libcdio statically.
 libcdio-static = [ "libcdio", "libcdio-sys/vendored" ]
+
+libusb = [
+    "rusb",
+    "nix",
+    "objc2-io-kit",
+    "objc2-core-foundation",
+]

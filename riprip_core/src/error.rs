@@ -134,6 +134,9 @@ pub enum RipRipError {
 	/// # Bug!
 	Bug(&'static str),
 
+	/// # Internal.
+	Internal(String),
+
 	/// # C2 296 Isn't Supported.
 	C2Mode296,
 
@@ -145,6 +148,9 @@ pub enum RipRipError {
 
 	/// # CDTOC passthrough.
 	Cdtoc(TocError),
+
+	/// # CD-Text error.
+	CdText,
 
 	/// # CD read error.
 	CdRead,
@@ -249,6 +255,7 @@ impl fmt::Display for RipRipError {
 		match self {
 			Self::Barcode => f.write_str("Invalid/unsupported barcode."),
 			Self::Bug(s) => write!(f, "Bug: {s}."),
+			Self::Internal(s) => write!(f, "Internal error {s}."),
 			Self::C2Mode296 => f.write_str("This drive does not seem to support 296-byte C2 blocks."),
 			Self::Cache => f.write_str("Unable to establish a cache directory."),
 			Self::CachePath(s) => write!(f, "Invalid cache path {s}."),
@@ -256,6 +263,7 @@ impl fmt::Display for RipRipError {
 			Self::CdReadNotPermitted => f.write_str("Unable to read CD; operation not permitted."),
 			Self::CdReadUnsupported => f.write_str("Unable to read CD; operation unsupported (driver)."),
 			Self::Cdtoc(s) => write!(f, "{s}"),
+			Self::CdText => write!(f, "Unable to decode CD-Text."),
 			Self::Device(s) => write!(f, "Invalid device path {s}."),
 			Self::DeviceOpen(s) =>
 				if let Some(s) = s { write!(f, "Unable to open connection with {s}.") }
