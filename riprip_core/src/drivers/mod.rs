@@ -75,17 +75,6 @@ thread_local! {
 ///
 /// This trait is used to help deduplicate code between drivers.
 pub(crate) trait CddaDriverExt: Sized {
-	/// # New!
-	///
-	/// Initialize a new instance, optionally connecting to a specific device.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if initialization fails, or if the provided
-	/// device path is obviously wrong.
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where P: AsRef<Path>;
-
 	/// # First Track Number.
 	///
 	/// Return the first track number on the disc, almost always but not
@@ -265,6 +254,24 @@ pub(crate) trait CddaDriverExt: Sized {
 		// As good as we can do!
 		Ok(())
 	}
+}
+
+
+
+/// # CDDA Construction Trait.
+///
+/// This trait provides driver construction.
+pub(crate) trait CddaDriverNewExt: Sized {
+	/// # New!
+	///
+	/// Initialize a new instance, optionally connecting to a specific device.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if initialization fails, or if the provided
+	/// device path is obviously wrong.
+	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
+	where P: AsRef<Path>;
 }
 
 

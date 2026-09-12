@@ -14,6 +14,7 @@ use crate::{
 	CD_LEADOUT_LABEL,
 	CddaDriver,
 	CddaDriverExt,
+	CddaDriverNewExt,
 	cdtext::{
 		CDText,
 		CDTextError,

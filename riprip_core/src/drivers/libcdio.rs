@@ -10,6 +10,7 @@ use crate::{
 	Barcode,
 	CD_LEADIN,
 	CddaDriverExt,
+	CddaDriverNewExt,
 	DriveVendorModel,
 	macros::log,
 	RipRipError,
@@ -73,7 +74,7 @@ impl Drop for LibcdioInstance {
 	}
 }
 
-impl CddaDriverExt for LibcdioInstance {
+impl CddaDriverNewExt for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # New!
 	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
@@ -122,7 +123,9 @@ impl CddaDriverExt for LibcdioInstance {
 			Ok(out)
 		}
 	}
+}
 
+impl CddaDriverExt for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # First Track Number.
 	fn first_track_num(&self) -> Result<u8, RipRipError> {
