@@ -1,0 +1,53 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Love And Theft
+	PERFORMER: Bob Dylan
+	DISC ID: CH90340
+TRACK 01:
+	TITLE: Tweedle Dee & Tweedle Dum
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07807
+TRACK 02:
+	TITLE: Mississippi
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07808
+TRACK 03:
+	TITLE: Summer Days
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07809
+TRACK 04:
+	TITLE: Bye And Bye
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07810
+TRACK 05:
+	TITLE: Lonesome Day Blues
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07811
+TRACK 06:
+	TITLE: Floater (Too Much To Ask)
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07812
+TRACK 07:
+	TITLE: High Water (For Charley Patton)
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07813
+TRACK 08:
+	TITLE: Moonlight
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07347
+TRACK 09:
+	TITLE: Honest With Me
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07815
+TRACK 10:
+	TITLE: Po' Boy
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07816
+TRACK 11:
+	TITLE: Cry A While
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07817
+TRACK 12:
+	TITLE: Sugar Baby
+	PERFORMER: Bob Dylan
+	ISRC: US-SM1-03-07818

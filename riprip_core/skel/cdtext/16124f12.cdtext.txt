@@ -1,0 +1,77 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Essential Leonard Cohen
+	PERFORMER: Leonard Cohen
+	DISC ID: CK86915
+TRACK 01:
+	TITLE: Suzanne
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-67-01039
+TRACK 02:
+	TITLE: The Stranger Song
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-13404
+TRACK 03:
+	TITLE: Sisters Of Mercy
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-13405
+TRACK 04:
+	TITLE: Hey, That's No Way To Say Goodbye
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-13407
+TRACK 05:
+	TITLE: So Long, Marianne
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-13406
+TRACK 06:
+	TITLE: Bird On A Wire
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-99-17381
+TRACK 07:
+	TITLE: The Partisan
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-99-17384
+TRACK 08:
+	TITLE: Famous Blue Raincoat
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-99-19473
+TRACK 09:
+	TITLE: Chelsea Hotel #2
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-02-03146
+TRACK 10:
+	TITLE: Take This Longing
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-02-03154
+TRACK 11:
+	TITLE: Who By Fire
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-02-03153
+TRACK 12:
+	TITLE: The Guests
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-99-17391
+TRACK 13:
+	TITLE: Hallelujah
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-26643
+TRACK 14:
+	TITLE: If It Be Your Will
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-26644
+TRACK 15:
+	TITLE: Night Comes On
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-26191
+TRACK 16:
+	TITLE: I'm Your Man
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-27492
+TRACK 17:
+	TITLE: Everybody Knows
+	PERFORMER: Leonard Cohen
+	ISRC: US-SM1-00-27491
+TRACK 18:
+	TITLE: Tower Of Song
+	PERFORMER: Leonard Cohen
+	ISRC: NL-B63-01-00516

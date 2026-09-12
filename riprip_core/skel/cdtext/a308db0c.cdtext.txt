@@ -1,0 +1,47 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Rat City
+	PERFORMER: Jack Oblivian
+TRACK 01:
+	TITLE: Rat City
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126501
+TRACK 02:
+	TITLE: Mass Confusion
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126502
+TRACK 03:
+	TITLE: Old Folks Boogie
+	PERFORMER: Jack Oblivian
+TRACK 04:
+	TITLE: Dark Eyes
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126503
+TRACK 05:
+	TITLE: Kidnapper
+	PERFORMER: Jack Oblivian
+TRACK 06:
+	TITLE: Crime of Love
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126504
+TRACK 07:
+	TITLE: Girl on the Beach
+	PERFORMER: Jack Oblivian
+TRACK 08:
+	TITLE: Moses and Me
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126505
+TRACK 09:
+	TITLE: Girl With the Bruises
+	PERFORMER: Jack Oblivian
+TRACK 10:
+	TITLE: Lover Please
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126506
+TRACK 11:
+	TITLE: Jealous Heart
+	PERFORMER: Jack Oblivian
+TRACK 12:
+	TITLE: Jumping Your Caboose
+	PERFORMER: Jack Oblivian
+	ISRC: USFP71126507

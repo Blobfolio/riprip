@@ -1,0 +1,53 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Blonde On Blonde
+	PERFORMER: Bob Dylan
+	DISC ID: CH090653
+TRACK 01:
+	TITLE: Rainy Day Women #12 & 35
+	ISRC: USSM19921958
+TRACK 02:
+	TITLE: Pledging My Time
+	ISRC: USSM19921959
+TRACK 03:
+	TITLE: Visions Of Johanna
+	ISRC: USSM19921960
+TRACK 04:
+	TITLE: One Of Us Must Know (Sooner Or Later)
+	ISRC: USSM19921961
+TRACK 05:
+	TITLE: I Want You
+	ISRC: USSM19921962
+TRACK 06:
+	TITLE: Stuck Inside Of Mobile With The Memphis Blues Again
+	ISRC: USSM19921963
+TRACK 07:
+	TITLE: Leopard-Skin Pill-Box Hat
+	ISRC: USSM19921964
+TRACK 08:
+	TITLE: Just Like A Woman
+	ISRC: USSM19921965
+
+[BLOCK 1: English]
+DISC:
+	TITLE: Blonde On Blonde
+	PERFORMER: Bob Dylan
+	DISC ID: CH090654
+TRACK 01:
+	TITLE: Most Likely You Go Your Way (And I'll Go Mine)
+	ISRC: USSM19921966
+TRACK 02:
+	TITLE: Temporary Like Achilles
+	ISRC: USSM19921967
+TRACK 03:
+	TITLE: Absolutely Sweet Marie
+	ISRC: USSM19921968
+TRACK 04:
+	TITLE: Fourth Time Around
+	ISRC: USSM19921969
+TRACK 05:
+	TITLE: Obviously Five Believers
+	ISRC: USSM19921970
+TRACK 06:
+	TITLE: Sad-Eyed Lady Of The Lowlands
+	ISRC: USSM19921971

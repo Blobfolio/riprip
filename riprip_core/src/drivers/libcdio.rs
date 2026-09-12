@@ -1,15 +1,15 @@
 /*!
 # Rip Rip Hooray: `libcdio` Wrappers
 
-Somewhat useful documentation:
+Resources:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
+<https://github.com/xbmc/libcdio/blob/master/example/cdtext.c>
 */
 
 use crate::{
 	Barcode,
 	CD_LEADIN,
 	CddaDriverExt,
-	CDTextKind,
 	DriveVendorModel,
 	macros::log,
 	RipRipError,
@@ -33,10 +33,7 @@ use std::{
 		CStr,
 		CString,
 	},
-	os::{
-		raw::c_char,
-		unix::ffi::OsStrExt,
-	},
+	os::unix::ffi::OsStrExt,
 	path::Path,
 	sync::Once,
 };
@@ -60,9 +57,6 @@ pub(crate) struct LibcdioInstance {
 
 	/// # CDIO Instance (Pointer).
 	ptr: *mut libcdio_sys::CdIo_t,
-
-	/// # CD-Text (Pointer).
-	cdtext: Option<*mut libcdio_sys::cdtext_t>,
 }
 
 impl Drop for LibcdioInstance {
@@ -118,16 +112,11 @@ impl CddaDriverExt for LibcdioInstance {
 		}
 		// Otherwise maybe!
 		else {
-			let mut out = Self {
-				dev,
-				ptr,
-				cdtext: None,
-			};
+			let out = Self { dev, ptr };
 
 			// Make sure the disc is present and valid before leaving, and
-			// initialize the CDText to have it ready for later queries.
+			// initialize the CD-Text to have it ready for later queries.
 			out.check_disc_mode__()?;
-			out.init_cdtext__();
 
 			// Done!
 			Ok(out)
@@ -197,22 +186,48 @@ impl CddaDriverExt for LibcdioInstance {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # CDText Value.
+	/// # CD-Text (Raw).
 	///
-	/// Return the value associated with the CDText field, if any. If the track
-	/// number is zero, data associated with the album will be returned.
-	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String> {
-		let ptr = self.cdtext?;
-		// Safety: this is an FFI call…
-		let raw = unsafe {
-			libcdio_sys::cdtext_get_const(
-				ptr.cast(),
-				kind as u32,
-				idx,
-			)
+	/// Read and return the raw CD-Text data, if any.
+	fn cdtext(&self) -> Option<Vec<u8>> {
+		// Perform a raw read of the CD-Text data, if any.
+		// Safety: `libcdio` promises that if there is no data or the read
+		// failed, the pointer will be null.
+		let ptr = unsafe { libcdio_sys::cdio_get_cdtext_raw(self.as_mut_ptr()) };
+		if ptr.is_null() {
+			log!(@trace "Disc contains no CD-Text data.");
+			return None;
+		}
+
+		// Otherwise we need to fetch the length of the allocated array, which
+		// is stored in the first two bytes (big endian).
+		let p: *const u8 = ptr.cast_const();
+		// Safety: the minimum length is therefore two.
+		let raw_len = unsafe {
+			usize::from((u16::from(*p) << 8) | u16::from(*p.add(1)))
 		};
 
-		c_char_to_string(raw)
+		// The `raw_len` doesn't include itself, but the first two bytes
+		// following it are padding, so we need to subtract another two for
+		// the relevant total.
+		let out =
+			if let Some(len) = raw_len.checked_sub(2) && 2 < len {
+				// Safety: see above.
+				unsafe {
+					std::slice::from_raw_parts(
+						p.add(4), // Skip 2 bytes length, 2 bytes padding.
+						len,
+					)
+				}.to_vec()
+			}
+			else { Vec::new() };
+
+		// Safety: this is an FFI call…
+		unsafe { libcdio_sys::cdio_free(ptr.cast()); }
+
+		// Done!
+		if out.is_empty() { None }
+		else { Some(out) }
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
@@ -271,7 +286,7 @@ impl CddaDriverExt for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
-	/// Try pulling MCN via `cdio_get_mcn` in cases where CDText fails.
+	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		// Safety: this is an FFI call…
 		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
@@ -371,49 +386,9 @@ impl LibcdioInstance {
 		}
 		else { Err(RipRipError::DiscMode) }
 	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Initialize CDText.
-	///
-	/// This initializes (but does not parse) the CDText information contained
-	/// on the disc, if any.
-	///
-	/// The data on the other end of this pointer gets cleaned up when the
-	/// parent instance is destroyed, so it makes sense keeping the two
-	/// together.
-	fn init_cdtext__(&mut self) {
-		// Safety: this is an FFI call…
-		let ptr = unsafe { libcdio_sys::cdio_get_cdtext(self.as_mut_ptr()) };
-		if ptr.is_null() {
-			log!(@trace "Disc contains no CDText data.");
-		}
-		else {
-			log!(@trace "Initialized buffer for CDText data.");
-			self.cdtext.replace(ptr);
-		}
-	}
 }
 
 
-
-#[expect(unsafe_code, reason = "For FFI.")]
-/// # Pointer to String.
-///
-/// Convert C-string pointers to a string, unless they're null.
-fn c_char_to_string(ptr: *const c_char) -> Option<String> {
-	if ptr.is_null() { None }
-	else {
-		// Safety: this is an FFI call…
-		unsafe { CStr::from_ptr(ptr) }
-			.to_str()
-			.ok()
-			.and_then(|s| {
-				let s = s.trim();
-				if s.is_empty() { None }
-				else { Some(s.to_owned()) }
-			})
-	}
-}
 
 #[expect(unsafe_code, reason = "For FFI.")]
 /// # Initialize `libcdio`.

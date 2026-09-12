@@ -1,0 +1,38 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Bootleg Volume 6: Bob Dylan Live 1964 - Concert At Philharmonic Hall - ADVANCE
+	PERFORMER: Bob Dylan
+	DISC ID: CK86913
+TRACK 01:
+	TITLE: The Times They Are A-Changin'
+	ISRC: USSM10307135
+TRACK 02:
+	TITLE: Spanish Harlem Incident
+	ISRC: USSM10307136
+TRACK 03:
+	TITLE: Talkin' John Birch Paranoid Blues
+	ISRC: USSM10307137
+TRACK 04:
+	TITLE: To Ramona
+	ISRC: USSM10307138
+TRACK 05:
+	TITLE: Who Killed Davey Moore?
+	ISRC: USSM10307139
+TRACK 06:
+	TITLE: Gates Of Eden
+	ISRC: USSM10307140
+TRACK 07:
+	TITLE: If You Gotta Go, Go Now (Or Else You Got To Stay All Night)
+	ISRC: USSM10307141
+TRACK 08:
+	TITLE: It's Alright, Ma (I'm Only Bleeding)
+	ISRC: USSM10307142
+TRACK 09:
+	TITLE: I Don't Believe You
+	ISRC: USSM10307143
+TRACK 10:
+	TITLE: Mr. Tamborine Man
+	ISRC: USSM10307144
+TRACK 11:
+	TITLE: A Hard Rain's A-Gonna Fall
+	ISRC: USSM10307145

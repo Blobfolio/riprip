@@ -38,9 +38,7 @@ use crate::{
 use dactyl::NoHash;
 use std::{
 	cell::RefCell,
-	cmp::Ordering,
 	collections::HashSet,
-	fmt,
 	path::Path,
 	range::legacy::Range,
 	time::{
@@ -52,7 +50,7 @@ use std::{
 
 
 #[cfg(feature = "libcdio")]
-/// # CDIO Driver Middleware.
+/// # CD/IO Driver Middleware.
 ///
 /// This type alias is how the rest of the library references the chosen
 /// driver.
@@ -69,77 +67,6 @@ thread_local! {
 	/// Keep track of sectors that trigger hard read errors so we don't
 	/// accidentally try them in a cache-bust situation.
 	static SHITLIST: RefCell<HashSet<i32, NoHash>> = RefCell::new(HashSet::with_hasher(NoHash::default()));
-}
-
-
-
-/// # Helper: CDText Fields.
-macro_rules! fields {
-	( $( $k:ident $v:ident $vstr:literal ),+ $(,)? ) => (
-		#[repr(u32)]
-		#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-		/// # CDText Field.
-		///
-		/// This enum simply rearranges the constants exported from `libcdio` in a
-		/// friendlier format.
-		pub enum CDTextKind {
-			$(
-				#[cfg(feature = "libcdio")]
-				#[doc = concat!("# ", stringify!($k), ".")]
-				$k = ::libcdio_sys::$v,
-
-				#[cfg(not(feature = "libcdio"))]
-				#[doc = concat!("# ", stringify!($k), ".")]
-				$k,
-			)+
-		}
-
-		impl CDTextKind {
-			#[must_use]
-			/// # As Str.
-			///
-			/// Return the field as an uppercase string, similar to how it would
-			/// appear in track metadata.
-			pub const fn as_str(self) -> &'static str {
-				match self {
-					$( Self::$k => $vstr, )+
-				}
-			}
-		}
-	);
-}
-
-fields! {
-	Arranger   cdtext_field_t_CDTEXT_FIELD_ARRANGER   "ARRANGER",
-	Barcode    cdtext_field_t_CDTEXT_FIELD_UPC_EAN    "BARCODE",
-	Composer   cdtext_field_t_CDTEXT_FIELD_COMPOSER   "COMPOSER",
-	Isrc       cdtext_field_t_CDTEXT_FIELD_ISRC       "ISRC",
-	Message    cdtext_field_t_CDTEXT_FIELD_MESSAGE    "COMMENT",
-	Performer  cdtext_field_t_CDTEXT_FIELD_PERFORMER  "ARTIST",
-	Songwriter cdtext_field_t_CDTEXT_FIELD_SONGWRITER "SONGWRITER",
-	Title      cdtext_field_t_CDTEXT_FIELD_TITLE      "TITLE",
-}
-
-impl AsRef<str> for CDTextKind {
-	#[inline]
-	fn as_ref(&self) -> &str { self.as_str() }
-}
-
-impl fmt::Display for CDTextKind {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		<str as fmt::Display>::fmt(self.as_str(), f)
-	}
-}
-
-impl Ord for CDTextKind {
-	#[inline]
-	fn cmp(&self, rhs: &Self) -> Ordering { self.as_str().cmp(rhs.as_str()) }
-}
-
-impl PartialOrd for CDTextKind {
-	#[inline]
-	fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> { Some(self.cmp(rhs)) }
 }
 
 
@@ -188,11 +115,10 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// track.
 	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError>;
 
-	/// # CDText Value.
+	/// # CD-Text (Raw).
 	///
-	/// Return the value associated with the CDText field, if any. If the track
-	/// number is zero, data associated with the album will be returned.
-	fn cdtext(&self, idx: u8, kind: CDTextKind) -> Option<String>;
+	/// Read and return the raw CD-Text data, if any.
+	fn cdtext(&self) -> Option<Vec<u8>>;
 
 	/// # Drive Vendor/Model.
 	///
@@ -221,22 +147,6 @@ pub(crate) trait CddaDriverExt: Sized {
 		sub: u8,
 		block_size: u16,
 	) -> Result<(), RipRipError>;
-
-	/// # MCN.
-	///
-	/// Return the disc's associated UPC/EAN, if present, either from CDText
-	/// or the leadin subchannel data.
-	fn mcn(&self) -> Option<Barcode> {
-		self.mcn_cdtext().or_else(|| self.mcn_subchannel())
-	}
-
-	/// # MCN From CDText.
-	///
-	/// Return the MCN as stored in the CDText, if any.
-	fn mcn_cdtext(&self) -> Option<Barcode> {
-		self.cdtext(0, CDTextKind::Barcode)
-			.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
-	}
 
 	/// # Cache Bust.
 	///

@@ -1,0 +1,24 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Lost Themes III
+	PERFORMER: John Carpenter
+TRACK 01:
+	TITLE: Alive After Death
+TRACK 02:
+	TITLE: Weeping Ghost
+TRACK 03:
+	TITLE: Dripping Blood
+TRACK 04:
+	TITLE: Dead Eyes
+TRACK 05:
+	TITLE: Vampire's Touch
+TRACK 06:
+	TITLE: Cemetary
+TRACK 07:
+	TITLE: Skeleton
+TRACK 08:
+	TITLE: Turning The Bones
+TRACK 09:
+	TITLE: The Dead Walk
+TRACK 10:
+	TITLE: Carpathian Darkness

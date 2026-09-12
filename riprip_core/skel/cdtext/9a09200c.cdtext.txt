@@ -1,0 +1,41 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: John Wesley Harding
+	PERFORMER: Bob Dylan
+	DISC ID: CK92395
+TRACK 01:
+	TITLE: John Wesley Harding
+	ISRC: USSM19922532
+TRACK 02:
+	TITLE: As I Went Out One Morning
+	ISRC: USSM19922533
+TRACK 03:
+	TITLE: I Dreamed I Saw St. Augustine
+	ISRC: USSM19922550
+TRACK 04:
+	TITLE: All Along The Watchtower
+	ISRC: USSM19922549
+TRACK 05:
+	TITLE: The Ballad Of Frankie Lee And Judas Priest
+	ISRC: USSM19922548
+TRACK 06:
+	TITLE: Drifter's Escape
+	ISRC: USSM19922547
+TRACK 07:
+	TITLE: Dear Landlord
+	ISRC: USSM19922546
+TRACK 08:
+	TITLE: I Am A Lonesome Hobo
+	ISRC: USSM19922545
+TRACK 09:
+	TITLE: I Pity The Poor Immigrant
+	ISRC: USSM19922534
+TRACK 10:
+	TITLE: The Wicked Messenger
+	ISRC: USSM19922544
+TRACK 11:
+	TITLE: Down Along The Cove
+	ISRC: USSM19922543
+TRACK 12:
+	TITLE: I'll Be Your Baby Tonight
+	ISRC: USSM19922542

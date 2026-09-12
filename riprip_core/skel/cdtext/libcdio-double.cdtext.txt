@@ -1,0 +1,13 @@
+[BLOCK 0: Japanese]
+DISC:
+	TITLE: AAAAAAAAAAA猫
+	PERFORMER: ねこのおんがくだん
+TRACK 01:
+	TITLE: Simple ASCII Track One
+	PERFORMER: ネコネコネコオーケストラ
+TRACK 02:
+	TITLE: ひるねのうた
+	PERFORMER: 猫音楽団
+TRACK 03:
+	TITLE: 猫と星空の小さな音楽会そして夜の夢
+	PERFORMER: スーパーキャットミュージックアンサンブルオーケストラ
