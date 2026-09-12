@@ -236,8 +236,7 @@ impl Disc {
 				Ok(cdtext) => {
 					// Set the barcode.
 					out.barcode = cdtext.disc(DiscField::Barcode)
-						.and_then(|v| Barcode::try_from(v.as_bytes()).ok())
-						.or_else(|| out.cdda.mcn_subchannel());
+						.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
 
 					// Pull the track ISRCs (if any).
 					for t in out.toc.audio_tracks() {
@@ -253,6 +252,11 @@ impl Disc {
 					out.cdtext.replace((raw_cdtext, Err(e)));
 				},
 			}
+		}
+
+		// Look for barcode in subchannel if we don't have it yet.
+		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
+			out.barcode.replace(barcode);
 		}
 
 		// Finally done!
