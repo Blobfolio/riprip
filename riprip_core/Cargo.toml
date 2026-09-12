@@ -11,7 +11,6 @@ publish = false
 
 [dependencies]
 cdtoc = "0.14.*"
-crc = "3.4.*"
 crc32fast = "1.5.*"
 dactyl = "0.13.*"
 encoding_rs = "0.8.*"
