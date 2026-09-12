@@ -1,0 +1,11 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Ghosteen
+	PERFORMER: Nick Cave & The Bad Seeds
+	BARCODE: 5-056167-114789
+TRACK 01:
+	TITLE: Ghosteen
+TRACK 02:
+	TITLE: Fireflies
+TRACK 03:
+	TITLE: Hollywood

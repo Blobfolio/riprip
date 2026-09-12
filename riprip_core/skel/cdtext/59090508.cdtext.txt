@@ -1,0 +1,21 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Ghosteen
+	PERFORMER: Nick Cave & The Bad Seeds
+	BARCODE: 5-056167-114789
+TRACK 01:
+	TITLE: Spinning Song
+TRACK 02:
+	TITLE: Bright Horses
+TRACK 03:
+	TITLE: Waiting for You
+TRACK 04:
+	TITLE: Night Raid
+TRACK 05:
+	TITLE: Sun Forest
+TRACK 06:
+	TITLE: Galleon Ship
+TRACK 07:
+	TITLE: Ghosteen Speaks
+TRACK 08:
+	TITLE: Leviathan

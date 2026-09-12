@@ -1,0 +1,74 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: A Memoir of Free Will
+	PERFORMER: Krosis
+TRACK 01:
+	TITLE: Gone But Not Forgotten
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905204
+TRACK 02:
+	TITLE: Insanity A Moniker Of Me
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905205
+TRACK 03:
+	TITLE: To Persist or Adhere
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905206
+TRACK 04:
+	TITLE: An Elegy for a Man Alive
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905207
+TRACK 05:
+	TITLE: Psychoticlysm
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905208
+TRACK 06:
+	TITLE: An Intramural Madness
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905209
+TRACK 07:
+	TITLE: Questions of a Holistic Divine
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905210
+TRACK 08:
+	TITLE: With Virtue I Am Free
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905211
+TRACK 09:
+	TITLE: Battles Are Won Within
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905212
+TRACK 10:
+	TITLE: A Memior of Free Will
+	PERFORMER: Krosis
+	SONGWRITER: Krosis
+	COMPOSER: Krosis
+	ARRANGER: Krosis
+	ISRC: QM7281905213

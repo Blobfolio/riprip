@@ -42,6 +42,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 		Backward       "--backward"    "--backwards",
 		FlipFlop       "--flip-flop",
 		Help      "-h" "--help",
+		NoCdText       "--no-cdtext",
 		NoResume       "--no-resume",
 		NoRip          "--no-rip",
 		NoSummary      "--no-summary",
@@ -63,6 +64,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	}
 
 	let mut opts = RipOptions::default();
+	let mut no_cdtext = false;
 	let mut no_rip = false;
 	let mut no_summary = false;
 	let mut status = false;
@@ -75,6 +77,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 		match arg {
 			Argument::Backward =>  { opts = opts.with_backwards(true); },
 			Argument::FlipFlop =>  { opts = opts.with_flip_flop(true); },
+			Argument::NoCdText =>  { no_cdtext = true; },
 			Argument::NoResume =>  { opts = opts.with_resume(false); },
 			Argument::NoRip =>     { no_rip = true; },
 			Argument::NoSummary => { no_summary = true; },
@@ -131,12 +134,15 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	}
 
 	// Figure out the disc and drive.
-	let disc = Disc::new(dev)?;
+	let disc = Disc::new(dev, ! no_cdtext)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if level.is_some() {
 		if let Some(v) = drivevendormodel { log!(@info "{v}"); }
 		log!(@info "{}", LoggableDisc(&disc));
 		log!(@info "{}", LoggableTracks(&disc));
+		if let Some(cdtext) = disc.cdtext() {
+			log!(@debug "Found CD-Text.{cdtext:#}");
+		}
 	}
 
 	// Set up some drive-dependent things.
@@ -264,10 +270,10 @@ fn parse_rip_option_tracks(disc: &Disc, mut opts: RipOptions, tracks: &str)
 
 
 
-/// # Loggable Disc Details.
+/// # Loggable CD-Text.
 ///
-/// This struct is used to format disc-related output for the `-v`/`--verbose`
-/// log.
+/// This struct is used to format the CD-Text data in a format suitable for the
+/// logger.
 struct LoggableDisc<'a>(&'a Disc);
 
 impl fmt::Display for LoggableDisc<'_> {

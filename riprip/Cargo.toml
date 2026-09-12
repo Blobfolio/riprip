@@ -45,6 +45,10 @@ long = "--help"
 description = "Print help information to STDOUT and exit."
 
 [[package.metadata.bashman.switches]]
+long = "--no-cdtext"
+description = "Do not try to read/parse CD-Text data from the disc. Can speed things up if the disc is damaged in just the wrong way."
+
+[[package.metadata.bashman.switches]]
 long = "--no-resume"
 description = "Ignore any previous rip states, starting over from scratch."
 

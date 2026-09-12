@@ -114,6 +114,23 @@ impl<'a> CacheWriter<'a> {
 			Err(RipRipError::CachePath(self.dst.to_string_lossy().into_owned()))
 		}
 	}
+
+	/// # One-Shot.
+	///
+	/// Create, write, and persist all in one go.
+	pub(super) fn oneshot(dst: &'a Path, data: &[u8]) -> Result<(), RipRipError> {
+		use std::io::Write;
+
+		let mut tmp = Self::new(dst)?;
+		{
+			let writer = tmp.writer();
+			if writer.write_all(data).is_err() {
+				log!(@trace "Failed to write data.\n  {}", dst.display());
+				return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
+			}
+		}
+		tmp.finish()
+	}
 }
 
 

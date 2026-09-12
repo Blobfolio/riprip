@@ -1,0 +1,69 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Joyful Nights
+	PERFORMER: United Cat Orchestra
+	SONGWRITER: Various Songwriters
+	COMPOSER: Various Composers
+	MESSAGE: For all our fans
+	ARRANGER: Tom Cat
+	DISC ID: 1234567890
+	GENRE: Feline classic music
+	GENRE CODE: 5 (Classical)
+TRACK 01:
+	TITLE: Song of Joy
+	PERFORMER: Felix and The Purrs
+	SONGWRITER: Friedrich Schiller
+	COMPOSER: Ludwig van Beethoven
+	MESSAGE: Fritz and Louie once were punks
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1101234
+TRACK 02:
+	TITLE: Humpty Dumpty
+	PERFORMER: Catwalk Beauties
+	SONGWRITER: Mother Goose
+	COMPOSER: unknown
+	MESSAGE: Pluck the goose
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1100005
+TRACK 03:
+	TITLE: Mee Owwww
+	PERFORMER: Mia Kitten
+	SONGWRITER: Mia Kitten
+	COMPOSER: Mia Kitten
+	ARRANGER: Mia Kitten
+	ISRC: XYBLG1100006
+
+[BLOCK 1: German]
+DISC:
+	TITLE: Freudvolle Nächte
+	PERFORMER: Vereinigtes Katzenorchester
+	SONGWRITER: Verschiedene Liedschreiber
+	COMPOSER: Verschiedene Komponisten
+	MESSAGE: Für alle unsere Fans
+	ARRANGER: Tom Cat
+	DISC ID: 1234567890
+	GENRE: Katzenhafte Klassik
+	GENRE CODE: 5 (Classical)
+TRACK 01:
+	TITLE: Lied der Freude
+	PERFORMER: Felix und Die Schnurrer
+	SONGWRITER: Friedrich Schiller
+	COMPOSER: Ludwig van Beethoven
+	MESSAGE: Fritz und Louie waren einmal Punks
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1101234
+TRACK 02:
+	TITLE: Rubbeldiekatz
+	PERFORMER: Katzengang Schönheiten
+	SONGWRITER: Mutter Gans
+	COMPOSER: unbekannt
+	MESSAGE: Rupft die Gans
+	ARRANGER: Tom Cat
+	ISRC: XYBLG1100005
+TRACK 03:
+	TITLE: Mie auu
+	PERFORMER: Mia Kätzchen
+	SONGWRITER: Mia Kätzchen
+	COMPOSER: Mia Kätzchen
+	ARRANGER: Mia Kätzchen
+	ISRC: XYBLG1100006

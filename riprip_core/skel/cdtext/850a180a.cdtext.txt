@@ -1,0 +1,24 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Lost Themes IV
+	PERFORMER: John Carpenter
+TRACK 01:
+	TITLE: My Name Is Death
+TRACK 02:
+	TITLE: Machine Fear
+TRACK 03:
+	TITLE: Last Rites
+TRACK 04:
+	TITLE: The Burning Door
+TRACK 05:
+	TITLE: He Walks By Night
+TRACK 06:
+	TITLE: Beyond the Gallows
+TRACK 07:
+	TITLE: Kiss the Blood Off My Fingers
+TRACK 08:
+	TITLE: Guillotine
+TRACK 09:
+	TITLE: The Demon's Shadow
+TRACK 10:
+	TITLE: Shadows Have A Thousand Eyes

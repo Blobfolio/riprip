@@ -1,0 +1,34 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Treasure
+	PERFORMER: Cocteau Twins
+TRACK 01:
+	TITLE: Ivo
+	PERFORMER: Cocteau Twins
+TRACK 02:
+	TITLE: Lorelei
+	PERFORMER: Cocteau Twins
+TRACK 03:
+	TITLE: Beatrix
+	PERFORMER: Cocteau Twins
+TRACK 04:
+	TITLE: Persephone
+	PERFORMER: Cocteau Twins
+TRACK 05:
+	TITLE: Pandora
+	PERFORMER: Cocteau Twins
+TRACK 06:
+	TITLE: Amelia
+	PERFORMER: Cocteau Twins
+TRACK 07:
+	TITLE: Aloysius
+	PERFORMER: Cocteau Twins
+TRACK 08:
+	TITLE: Cicely
+	PERFORMER: Cocteau Twins
+TRACK 09:
+	TITLE: Otterley
+	PERFORMER: Cocteau Twins
+TRACK 10:
+	TITLE: Donimo
+	PERFORMER: Cocteau Twins

@@ -1,0 +1,42 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Suck My Shirt
+	PERFORMER: The Coathangers
+	GENRE: Rock Music
+	GENRE CODE: 23 (Rock)
+TRACK 01:
+	TITLE: Follow Me
+	PERFORMER: The Coathangers
+TRACK 02:
+	TITLE: Shut Up
+	PERFORMER: The Coathangers
+TRACK 03:
+	TITLE: Springfield Cannonball
+	PERFORMER: The Coathangers
+TRACK 04:
+	TITLE: Merry Go Round
+	PERFORMER: The Coathangers
+TRACK 05:
+	TITLE: Love Em and Leave Em
+	PERFORMER: The Coathangers
+TRACK 06:
+	TITLE: Zombie
+	PERFORMER: The Coathangers
+TRACK 07:
+	TITLE: Smother
+	PERFORMER: The Coathangers
+TRACK 08:
+	TITLE: Dead Battery
+	PERFORMER: The Coathangers
+TRACK 09:
+	TITLE: Adderall
+	PERFORMER: The Coathangers
+TRACK 10:
+	TITLE: Derek's Song
+	PERFORMER: The Coathangers
+TRACK 11:
+	TITLE: I Wait
+	PERFORMER: The Coathangers
+TRACK 12:
+	TITLE: Drive
+	PERFORMER: The Coathangers

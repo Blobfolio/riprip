@@ -1,0 +1,45 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Beggars Banquet
+	PERFORMER: The Rolling Stones
+	DISC ID: 9539-2
+TRACK 01:
+	TITLE: Sympathy For The Devil
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810010
+TRACK 02:
+	TITLE: No Expectations
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810020
+TRACK 03:
+	TITLE: Dear Doctor
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810030
+TRACK 04:
+	TITLE: Parachute Woman
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810040
+TRACK 05:
+	TITLE: Jigsaw Puzzle
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810050
+TRACK 06:
+	TITLE: Street Fighting Man
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810060
+TRACK 07:
+	TITLE: Prodigal Son
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810070
+TRACK 08:
+	TITLE: Stray Cat Blues
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810080
+TRACK 09:
+	TITLE: Factory Girl
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810090
+TRACK 10:
+	TITLE: Salt Of The Earth
+	PERFORMER: The Rolling Stones
+	ISRC: USA176810100

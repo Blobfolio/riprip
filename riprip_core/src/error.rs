@@ -105,6 +105,9 @@ MISCELLANEOUS:
                       to STDOUT so you can redirect it to a location of your
                       choosing, e.g. `riprip -v > out.log`.
     -V, --version     Print version information to STDOUT and exit.
+        --no-cdtext   Do not try to read/parse CD-Text data from the disc. Can
+                      speed things up if the disc is damaged in just the wrong
+                      way.
         --no-rip      Print the basic drive and disc information to STDERR and
                       exit (without ripping anything).
         --no-summary  Skip the drive and disc summary and jump straight to

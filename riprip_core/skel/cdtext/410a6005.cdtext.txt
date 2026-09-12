@@ -1,0 +1,24 @@
+[BLOCK 0]
+DISC:
+	TITLE: Wish You Were Here
+	PERFORMER: Pink Floyd
+TRACK 01:
+	TITLE: Shine On You Crazy Diamond (parts I-V)
+	PERFORMER: Pink Floyd
+	ISRC: GBN9Y1100085
+TRACK 02:
+	TITLE: Welcome To The Machine
+	PERFORMER: Pink Floyd
+	ISRC: GBN9Y1100086
+TRACK 03:
+	TITLE: Have A Cigar
+	PERFORMER: Pink Floyd
+	ISRC: GBN9Y1100087
+TRACK 04:
+	TITLE: Wish You Were Here
+	PERFORMER: Pink Floyd
+	ISRC: GBN9Y1100088
+TRACK 05:
+	TITLE: Shine On You Crazy Diamond (parts VI-IX)
+	PERFORMER: Pink Floyd
+	ISRC: GBN9Y1100089

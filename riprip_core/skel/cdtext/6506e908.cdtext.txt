@@ -1,0 +1,28 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Live On Red Barn Radio I & II
+	PERFORMER: Tyler Childers
+TRACK 01:
+	TITLE: Shake the Frost
+	PERFORMER: Tyler Childers
+TRACK 02:
+	TITLE: Deadman's Curve
+	PERFORMER: Tyler Childers
+TRACK 03:
+	TITLE: Charleston Girl
+	PERFORMER: Tyler Childers
+TRACK 04:
+	TITLE: Whitehouse Road
+	PERFORMER: Tyler Childers
+TRACK 05:
+	TITLE: Rock Salt and Nails
+	PERFORMER: Tyler Childers
+TRACK 06:
+	TITLE: Coming Down
+	PERFORMER: Tyler Childers
+TRACK 07:
+	TITLE: Follow You to Virgie
+	PERFORMER: Tyler Childers
+TRACK 08:
+	TITLE: Bottles and Bibles
+	PERFORMER: Tyler Childers

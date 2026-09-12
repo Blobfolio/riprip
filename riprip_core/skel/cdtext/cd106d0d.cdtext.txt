@@ -1,0 +1,43 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Earthling
+	PERFORMER: David Bowie
+	DISC ID: CK92098
+TRACK 01:
+	TITLE: Little Wonder
+	ISRC: USRF30000047
+TRACK 02:
+	TITLE: Looking For Satellites
+	ISRC: USRF30000048
+TRACK 03:
+	TITLE: Battle For Britain (the Letter)
+	ISRC: USRF30000049
+TRACK 04:
+	TITLE: Seven Years In Tibet
+	ISRC: USRF39900026
+TRACK 05:
+	TITLE: Dead Man Walking
+	ISRC: USRF30000050
+TRACK 06:
+	TITLE: Telling Lies
+	ISRC: USRF30000051
+TRACK 07:
+	TITLE: The Last Thing You Should Do
+	ISRC: USRF30000052
+TRACK 08:
+	TITLE: I'm Afraid Of Americans
+	ISRC: USRF30000053
+TRACK 09:
+	TITLE: Law (Earthlings On Fire)
+	ISRC: USRF30000054
+TRACK 10:
+	TITLE: Little Wonder (Danny Saber Dance Mix)
+	ISRC: USRF30400002
+TRACK 11:
+	TITLE: I'm Afraid Of Americans (NIN V.1 Mix)
+TRACK 12:
+	TITLE: Dead Man Walking (Moby Mix 2 US Promo 12")
+	ISRC: USRF30400003
+TRACK 13:
+	TITLE: Telling Lies (Adam F Mix)
+	ISRC: USRF30400004
