@@ -11,7 +11,7 @@ use crate::{
 	cache_path,
 	cache_prefix,
 	CacheWriter,
-	CD_LEADOUT_LABEL,
+	CD_LEADOUT,
 	CddaDriver,
 	CddaDriverExt,
 	CddaDriverNewExt,
@@ -168,8 +168,8 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			concat!(csi!(dim), "{}  {:>6}                      LEAD-OUT"),
-			CD_LEADOUT_LABEL,
+			concat!(csi!(dim), "{:02X}  {:>6}                      LEAD-OUT"),
+			CD_LEADOUT,
 			self.toc.leadout_normalized(),
 		)?;
 

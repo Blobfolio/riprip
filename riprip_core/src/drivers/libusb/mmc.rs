@@ -5,6 +5,8 @@ Provides opcodes, profiles, and format constants for SCSI MMC and core SPC comma
 used to inspect and read audio CDs.
 */
 
+use crate::{CD_LEADIN, CD_LEADOUT, CddaDriverExt};
+
 // Opcodes
 const READ_SUB_CHANNEL: u8 = 0x42;
 const READ_TOC: u8 = 0x43;
@@ -14,7 +16,6 @@ const READ_CD: u8 = 0xBE;
 // Architectural Constraints
 const FIRST_TRACK: u8 = 0x01;
 const MAX_TRACK_NUMBER: u8 = 99;
-pub(super) const LEAD_OUT: u8 = 0xAA;
 
 // READ_SUB_CHANNEL Data Formats
 const SUB_FORMAT_MCN: u8 = 0x02;
@@ -339,5 +340,94 @@ pub(super) trait MmcDriverExt: TransportExt {
 		cdb[10] = sub;
 
 		self.submit(&cdb, buf)
+	}
+}
+
+impl<T: MmcDriverExt> CddaDriverExt for T {
+	fn first_track_num(&self) -> Result<u8, RipRipError> {
+		let (first, _) = self.get_toc_header()?;
+
+		if first == 0 {
+			Err(RipRipError::FirstTrackNum)
+		} else {
+			Ok(first)
+		}
+	}
+
+	fn leadout_lba(&self) -> Result<u32, RipRipError> {
+		// In the SCSI MMC specification, the leadout track information is
+		// explicitly queried using the standard magic track index 0xAA.
+		self.track_lba_start(CD_LEADOUT)
+	}
+
+	fn num_tracks(&self) -> Result<u8, RipRipError> {
+		let (first, last) = self.get_toc_header()?;
+
+		if last == 0 {
+			Err(RipRipError::NumTracks)
+		} else {
+			// Handles discs that might not explicitly start at track 1
+			Ok(last - first + 1)
+		}
+	}
+
+	fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
+		let (control_adr, _) = self
+			.get_track_descriptor(idx)
+			.map_err(|_| RipRipError::TrackFormat(idx))?;
+
+		// In SCSI MMC TOC structures, the 4-bit CONTROL field dictates data types.
+		// Bit 2 (0x04) is set if the track is a data track, and clear if it's audio.
+		let is_data = (control_adr & CTRL_DATA_TRACK) > 0;
+
+		Ok(!is_data)
+	}
+
+	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
+		if idx == 0 {
+			return Err(RipRipError::TrackNumber(0));
+		}
+
+		let (_, lba) = self
+			.get_track_descriptor(idx)
+			.map_err(|_| RipRipError::TrackLba(idx))?;
+
+		Ok(lba + u32::from(CD_LEADIN))
+	}
+
+	fn cdtext(&self) -> Option<Vec<u8>> {
+		if let Some(mut buf) = self.read_cdtext().ok()? {
+			// Skip the header.
+			let n = TOC_HEADER_LEN as usize;
+			buf.copy_within(n.., 0);
+			buf.truncate(buf.len() - n);
+			return Some(buf);
+		}
+		None
+	}
+
+	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
+		self.drive_vendor_model__().ok()
+	}
+
+	fn mcn_subchannel(&self) -> Option<Barcode> {
+		self.mcn_subchannel__().ok().flatten()
+	}
+
+	fn read_cd(
+		&self,
+		buf: &mut [u8],
+		lsn: i32,
+		c2: bool,
+		sub: u8,
+		_block_size: u16,
+	) -> Result<(), RipRipError> {
+		match self.read_cd__(buf, lsn, c2, sub) {
+			Ok(_) => Ok(()),
+			Err(_) => {
+				crate::drivers::set_bad_sector(lsn);
+				Err(RipRipError::CdRead)
+			}
+		}
 	}
 }

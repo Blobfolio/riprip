@@ -217,10 +217,8 @@ const CD_LEADIN: u16 = 150;
 /// # Frames Per Second.
 const FRAMES_PER_SECOND: u8 = 75;
 
-/// # Lead-out Label.
-///
-/// This is used solely for the table of contents printout; e.g. 01 02 03 AA.
-pub const CD_LEADOUT_LABEL: &str = "AA";
+/// # Lead-out Track Number.
+pub const CD_LEADOUT: u8 = 0xAA;
 
 /// # Null sample.
 ///
