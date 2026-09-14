@@ -57,16 +57,16 @@ mod spc {
 
 use crate::{Barcode, DriveVendorModel, RipRipError, macros::log};
 
-pub(super) trait Transport {
+pub(super) trait TransportExt {
 	/// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
 	fn submit<const N: usize>(&self, cdb: &[u8; N], data: &mut [u8]) -> Result<usize, RipRipError>;
 }
 
 /// A low-level API for interacting with a physical CD drive specifically to read audio data.
 ///
-/// Relies on the underlying `Transport` trait to handle the hardware bus communication
+/// Relies on the underlying `TransportExt` trait to handle the hardware bus communication
 /// (e.g. USB BOT or `/dev/sg`).
-pub(super) trait Drive: Transport {
+pub(super) trait MmcDriverExt: TransportExt {
 	fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
 		const ALLOC_LEN: u16 = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
@@ -95,7 +95,7 @@ pub(super) trait Drive: Transport {
 				return Barcode::try_from(raw_ascii).map(Some);
 			}
 		}
-		
+
 		log!(@trace "Subchannel contains no MCN data.");
 		Ok(None)
 	}

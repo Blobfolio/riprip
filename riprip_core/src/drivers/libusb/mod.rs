@@ -13,7 +13,7 @@ use crate::{
 	Barcode, CD_LEADIN, CddaDriverExt, CddaDriverNewExt, DriveVendorModel, RipRipError, macros::log,
 };
 
-use mmc::{Drive, TOC_HEADER_LEN, Transport};
+use mmc::{MmcDriverExt, TOC_HEADER_LEN, TransportExt};
 
 use nix::unistd::{Uid, setuid};
 use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};
@@ -208,7 +208,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 	}
 }
 
-impl<T: UsbContext> Transport for LibusbInstance<T> {
+impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
 		use bot::{CSW_LEN, CommandBlockWrapper, CommandStatusWrapper};
 
@@ -278,9 +278,9 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
 	}
 }
 
-impl<T: UsbContext> Drive for LibusbInstance<T> {}
+impl<T: UsbContext> MmcDriverExt for LibusbInstance<T> {}
 
-impl CddaDriverExt for LibusbInstance<GlobalContext> {
+impl<T: MmcDriverExt> CddaDriverExt for T {
 	fn first_track_num(&self) -> Result<u8, RipRipError> {
 		let (first, _) = self.get_toc_header()?;
 
