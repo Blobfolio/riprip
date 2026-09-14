@@ -10,7 +10,7 @@ mod device;
 mod mmc;
 
 use crate::{
-	Barcode, CD_LEADIN, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
+	Barcode, CD_LEADIN, CddaDriverExt, CddaDriverNewExt, DriveVendorModel, RipRipError, macros::log,
 };
 
 use mmc::{Drive, TOC_HEADER_LEN, Transport};
@@ -281,13 +281,6 @@ impl<T: UsbContext> Transport for LibusbInstance<T> {
 impl<T: UsbContext> Drive for LibusbInstance<T> {}
 
 impl CddaDriverExt for LibusbInstance<GlobalContext> {
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where
-		P: AsRef<Path>,
-	{
-		Self::with_context(GlobalContext::default(), dev)
-	}
-
 	fn first_track_num(&self) -> Result<u8, RipRipError> {
 		let (first, _) = self.get_toc_header()?;
 
@@ -373,5 +366,14 @@ impl CddaDriverExt for LibusbInstance<GlobalContext> {
 				Err(RipRipError::CdRead)
 			}
 		}
+	}
+}
+
+impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
+	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
+	where
+		P: AsRef<Path>,
+	{
+		Self::with_context(GlobalContext::default(), dev)
 	}
 }
