@@ -46,18 +46,15 @@ impl CommandBlockWrapper {
 	) -> Self {
 		const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
 
-		let mut cbw = Self {
+		Self {
 			signature: CBW_SIGNATURE,
 			tag,
 			data_transfer_length,
 			flags,
 			lun,
 			cb_length: N as u8,
-			cdb: [0; 16],
-		};
-
-		cbw.cdb[..N].copy_from_slice(cdb);
-		cbw
+			cdb: std::array::from_fn(|i| cdb.get(i).copied().unwrap_or(0)),
+		}
 	}
 
 	pub(super) fn to_bytes(&self) -> [u8; CBW_LEN] {
