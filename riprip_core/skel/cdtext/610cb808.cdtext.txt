@@ -1,0 +1,28 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The End [EP]
+	PERFORMER: Black Sabbath
+TRACK 01:
+	TITLE: Season Of The Dead
+	PERFORMER: Black Sabbath
+TRACK 02:
+	TITLE: Cry All Night
+	PERFORMER: Black Sabbath
+TRACK 03:
+	TITLE: Take Me Home
+	PERFORMER: Black Sabbath
+TRACK 04:
+	TITLE: Isolated Man
+	PERFORMER: Black Sabbath
+TRACK 05:
+	TITLE: God Is Dead? (Live Sydney, Australia 4/27/13)
+	PERFORMER: Black Sabbath
+TRACK 06:
+	TITLE: Under The Sun (Live Auckland, New Zealand 4/20/13)
+	PERFORMER: Black Sabbath
+TRACK 07:
+	TITLE: End Of The Beginning (Live Hamilton, ON Canada 4/11/14)
+	PERFORMER: Black Sabbath
+TRACK 08:
+	TITLE: Age Of Reason (Live Hamilton, ON Canada 4/11/14)
+	PERFORMER: Black Sabbath

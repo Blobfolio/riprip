@@ -10,6 +10,7 @@ _basher___riprip() {
 		opts+=("-h")
 		opts+=("--help")
 	fi
+	[[ " ${COMP_LINE} " =~ " --no-cdtext " ]] || opts+=("--no-cdtext")
 	[[ " ${COMP_LINE} " =~ " --no-resume " ]] || opts+=("--no-resume")
 	[[ " ${COMP_LINE} " =~ " --no-rip " ]] || opts+=("--no-rip")
 	[[ " ${COMP_LINE} " =~ " --no-summary " ]] || opts+=("--no-summary")

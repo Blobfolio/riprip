@@ -102,6 +102,7 @@ use chk::{
 use drivers::{
 	CddaDriver,
 	CddaDriverExt,
+	CddaDriverNewExt,
 };
 use rip::{
 	buf::RipBuffer,
