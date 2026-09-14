@@ -79,7 +79,7 @@ pub(super) struct CommandStatusWrapper {
 }
 
 impl CommandStatusWrapper {
-	pub(super) fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
+	pub(super) const fn from_bytes(buf: &[u8; CSW_LEN]) -> Self {
 		Self {
 			signature: u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]),
 			tag: u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]),
@@ -88,16 +88,16 @@ impl CommandStatusWrapper {
 		}
 	}
 
-	pub(super) fn is_valid(&self, tag: u32) -> bool {
+	pub(super) const fn is_valid(&self, tag: u32) -> bool {
 		self.signature == CSW_SIGNATURE && self.tag == tag
 	}
 
-	pub(super) fn status(&self) -> u8 {
+	pub(super) const fn status(&self) -> u8 {
 		self.status
 	}
 
 	#[allow(dead_code)]
-	pub(super) fn data_residue(&self) -> u32 {
+	pub(super) const fn data_residue(&self) -> u32 {
 		self.data_residue
 	}
 }

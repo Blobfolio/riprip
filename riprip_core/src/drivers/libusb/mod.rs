@@ -30,7 +30,7 @@ const READ_BULK_TIMEOUT: Duration = Duration::from_secs(5);
 const STATUS_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn find_and_open_device<C: UsbContext>(
-	devices: DeviceList<C>,
+	devices: &DeviceList<C>,
 	vid: u16,
 	pid: u16,
 ) -> Result<DeviceHandle<C>, RipRipError> {
@@ -54,7 +54,7 @@ fn find_and_open_device<C: UsbContext>(
 }
 
 fn find_and_open_cd_drive<C: UsbContext>(
-	devices: DeviceList<C>,
+	devices: &DeviceList<C>,
 ) -> Result<DeviceHandle<C>, RipRipError> {
 	devices
 		.iter()
@@ -141,7 +141,7 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
 }
 
 impl<C: UsbContext> LibusbInstance<C> {
-	pub(super) fn with_context<P>(context: C, dev: Option<P>) -> Result<Self, RipRipError>
+	pub(super) fn with_context<P>(context: &C, dev: Option<P>) -> Result<Self, RipRipError>
 	where
 		P: AsRef<Path>,
 	{
@@ -159,12 +159,12 @@ impl<C: UsbContext> LibusbInstance<C> {
 			if let Some((vid, pid)) = device::get_desc(&path)? {
 				log!(@debug "Using USB device {vid:04x}:{pid:04x}.");
 
-				find_and_open_device(devices, vid, pid)?
+				find_and_open_device(&devices, vid, pid)?
 			} else {
 				return Err(RipRipError::DeviceOpen(Some(device_path.into_owned())));
 			}
 		} else {
-			find_and_open_cd_drive(devices)?
+			find_and_open_cd_drive(&devices)?
 		};
 
 		let endpoints = detect_bulk_endpoints(&device_handle.device())?;
@@ -172,7 +172,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 		let interface_id = 0;
 
 		// Check if kernel driver is owning our device and detach it if so
-		if let Ok(true) = device_handle.kernel_driver_active(interface_id) {
+		if device_handle.kernel_driver_active(interface_id) == Ok(true) {
 			device_handle
 				.detach_kernel_driver(interface_id)
 				.map_err(|e| RipRipError::Device(e.to_string()))?;
@@ -218,7 +218,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		let cbw = CommandBlockWrapper::new(
 			current_tag,
-			data_len as u32,
+			u32::try_from(buf.len()).map_err(|e| RipRipError::Internal(e.to_string()))?,
 			0x80, // Device-to-Host
 			0,
 			cdb,
@@ -283,6 +283,6 @@ impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
 	where
 		P: AsRef<Path>,
 	{
-		Self::with_context(GlobalContext::default(), dev)
+		Self::with_context(&GlobalContext::default(), dev)
 	}
 }

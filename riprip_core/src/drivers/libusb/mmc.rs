@@ -102,6 +102,8 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
+		const TOC_TRACK_DESCRIPTOR_LEN_USIZE: usize = TOC_TRACK_DESCRIPTOR_LEN as usize;
+
 		let mut buf = vec![];
 
 		let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
@@ -155,7 +157,9 @@ pub(super) trait MmcDriverExt: TransportExt {
 		// Search the descriptors. If an audio track is found, early exit,
 		// otherwise default to a DiscMode error.
 		let has_audio = buf[TOC_HEADER_LEN as usize..]
-			.chunks_exact(TOC_TRACK_DESCRIPTOR_LEN as usize)
+			.as_chunks::<TOC_TRACK_DESCRIPTOR_LEN_USIZE>()
+			.0
+			.iter()
 			.take(track_count)
 			.any(|desc| (desc[1] & CTRL_DATA_TRACK) == 0);
 
@@ -276,7 +280,13 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn drive_vendor_model__(&self) -> Result<DriveVendorModel, RipRipError> {
-		use spc::*;
+		use spc::{INQUIRY_HEADER_LEN, INQUIRY_VENDOR_ID_LEN, INQUIRY_PRODUCT_ID_LEN, INQUIRY_REVISION_LEVEL_LEN};
+
+		const VENDOR_ID_RANGE: std::ops::Range<usize> =
+			INQUIRY_HEADER_LEN as usize..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN) as usize;
+
+		const PRODUCT_ID_RANGE: std::ops::Range<usize> =
+			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN as usize;
 
 		const ALLOC_LEN: u8 = INQUIRY_HEADER_LEN
 			+ INQUIRY_VENDOR_ID_LEN
@@ -291,15 +301,6 @@ pub(super) trait MmcDriverExt: TransportExt {
 		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
 			return Err(RipRipError::DriveModel);
 		}
-
-		// Standard SCSI Inquiry layout maps fields at fixed offsets:
-		// Bytes 8..16  -> Vendor Identification (8 bytes)
-		const VENDOR_ID_RANGE: std::ops::Range<usize> =
-			INQUIRY_HEADER_LEN as usize..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN) as usize;
-
-		// Bytes 16..32 -> Product Identification / Model (16 bytes)
-		const PRODUCT_ID_RANGE: std::ops::Range<usize> =
-			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN as usize;
 
 		let vendor_id = &buf[VENDOR_ID_RANGE];
 		let model_id = &buf[PRODUCT_ID_RANGE];
@@ -422,12 +423,9 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		sub: u8,
 		_block_size: u16,
 	) -> Result<(), RipRipError> {
-		match self.read_cd__(buf, lsn, c2, sub) {
-			Ok(_) => Ok(()),
-			Err(_) => {
-				crate::drivers::set_bad_sector(lsn);
-				Err(RipRipError::CdRead)
-			}
+		if self.read_cd__(buf, lsn, c2, sub).is_ok() { Ok(()) } else {
+			crate::drivers::set_bad_sector(lsn);
+			Err(RipRipError::CdRead)
 		}
 	}
 }

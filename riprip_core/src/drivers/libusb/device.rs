@@ -11,7 +11,7 @@ use crate::RipRipError;
 
 #[cfg(target_os = "macos")]
 mod macos {
-	use super::*;
+	use super::{Path, RipRipError};
 
 	use std::ffi::CString;
 	use std::os::unix::ffi::OsStrExt;
@@ -148,16 +148,16 @@ where
 {
 	#[cfg(target_os = "macos")]
 	{
-		return macos::get_desc(dev);
+		macos::get_desc(dev)
 	}
 
 	#[cfg(target_os = "linux")]
 	{
-		return Ok(linux::get_desc(dev));
+		Ok(linux::get_desc(dev))
 	}
 
 	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 	{
-		return Ok(None);
+		Ok(None)
 	}
 }
