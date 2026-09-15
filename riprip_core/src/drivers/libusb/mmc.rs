@@ -77,13 +77,61 @@ const fn copy_bytes<const N: usize, const M: usize>(
     offset: usize,
     src: [u8; M],
 ) {
-    assert!(offset + M <= N, "TODO");
+    assert!(offset + M <= N, "copy exceeds destination");
 
     let mut i = 0;
     while i < M {
         dst[offset + i] = src[i];
         i += 1;
     }
+}
+
+const fn copy_bytes_range<const N: usize, const M: usize>(
+    dst: &mut [u8; N],
+    start: usize,
+    end: usize,
+    src: [u8; M],
+) {
+    assert!(start <= end, "invalid byte range");
+    assert!(end <= N, "range exceeds destination");
+    assert!(end - start == M, "byte range does not match value size");
+
+    copy_bytes(dst, start, src);
+}
+
+macro_rules! cdb {
+    (
+        $len:literal;
+        $($rest:tt)*
+    ) => {{
+        let mut cdb = [0u8; $len];
+        cdb!(@parse cdb, $($rest)*);
+        cdb
+    }};
+
+    (@parse $cdb:ident,) => {};
+
+    // Single byte.
+    (@parse $cdb:ident, $offset:literal => $value:expr, $($rest:tt)*) => {{
+        $cdb[$offset] = $value;
+        cdb!(@parse $cdb, $($rest)*);
+    }};
+
+    // Range.
+    (@parse $cdb:ident, $start:literal .. $end:literal => $value:expr, $($rest:tt)*) => {{
+        copy_bytes_range(&mut $cdb, $start, $end, $value);
+        cdb!(@parse $cdb, $($rest)*);
+    }};
+
+    // Final single byte.
+    (@parse $cdb:ident, $offset:literal => $value:expr $(,)?) => {{
+        $cdb[$offset] = $value;
+    }};
+
+    // Final range.
+    (@parse $cdb:ident, $start:literal .. $end:literal => $value:expr $(,)?) => {{
+        copy_bytes_range(&mut $cdb, $start, $end, $value);
+    }};
 }
 
 pub(super) trait TransportExt {
@@ -99,15 +147,13 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
 		const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = READ_SUB_CHANNEL;
-			cdb[1] = FORMAT_MSF;
-			cdb[2] = 0x40; // Sub-Q Channel tracking bit
-			cdb[3] = SUB_FORMAT_MCN;
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => READ_SUB_CHANNEL,
+			1 => FORMAT_MSF,
+			2 => 0x40, // Sub-Q Channel tracking bit.
+			3 => SUB_FORMAT_MCN,
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 
 		let mut buf = [0u8; ALLOC_LEN];
@@ -135,20 +181,17 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = READ_TOC;
-			cdb[1] = FORMAT_LBA;
-			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-			cdb[6] = FIRST_TRACK; // Starting track.
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => READ_TOC,
+			1 => FORMAT_LBA,
+			2 => TOC_FORMAT_TOC, // Format 0: Standard Table of Contents.
+			6 => FIRST_TRACK, // Starting track.
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 
-		let mut buf = vec![0; ALLOC_LEN];
-
 		// Asks only for enough bytes to discover how large the TOC is.
+		let mut buf = [0u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
@@ -160,9 +203,8 @@ pub(super) trait MmcDriverExt: TransportExt {
 		// Patch the CDB with the expected allocation length.
 		let mut cdb = CDB;
 		copy_bytes(&mut cdb, 7, toc_len.to_be_bytes());
-		buf.clear();
-		buf.resize(toc_len.into(), 0);
 
+		let mut buf = vec![0u8; toc_len.into()];
 		let len = self.submit(&cdb, &mut buf)?;
 		if len < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
@@ -204,14 +246,12 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn check_c2__(&self) -> Result<(), RipRipError> {
 		const ALLOC_LEN: usize = CONFIGURATION_HEADER_LEN + CONFIGURATION_FEATURE_DESCRIPTOR_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = GET_CONFIGURATION;
-			cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
-			copy_bytes(&mut cdb, 2, FEATURE_CD_AUDIO_C2.to_be_bytes());
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => GET_CONFIGURATION,
+			1 => 0x02, // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
+			2..4 => FEATURE_CD_AUDIO_C2.to_be_bytes(),
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 
 		let mut buf = [0u8; ALLOC_LEN];
@@ -235,15 +275,13 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn read_cdtext(&self) -> Result<Option<Vec<u8>>, RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = READ_TOC;
-			cdb[1] = FORMAT_LBA;
-			cdb[2] = TOC_FORMAT_CDTEXT;
-			cdb[6] = 0; // Track number to start reading from (0 = entire disc).
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => READ_TOC,
+			1 => FORMAT_LBA,
+			2 => TOC_FORMAT_CDTEXT,
+			6 => 0, // Track number to start reading from (0 = entire disc).
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 
 		let mut buf = vec![0; ALLOC_LEN];
@@ -275,15 +313,13 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = READ_TOC;
-			cdb[1] = FORMAT_LBA;
-			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-			cdb[6] = 0;
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => READ_TOC,
+			1 => FORMAT_LBA,
+			2 => TOC_FORMAT_TOC, // Format 0: Standard Table of Contents.
+			6 => 0,
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 
 		let mut buf = [0u8; ALLOC_LEN];
@@ -300,14 +336,12 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
 
-		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
-			cdb[0] = READ_TOC;
-			cdb[1] = FORMAT_LBA;
-			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-
-			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 10] = cdb! {
+			10;
+			0 => READ_TOC,
+			1 => FORMAT_LBA,
+			2 => TOC_FORMAT_TOC, // Format 0: Standard Table of Contents.
+			7..9 => to_be_u16(ALLOC_LEN),
 		};
 		
 		let mut cdb = CDB;
@@ -341,11 +375,10 @@ pub(super) trait MmcDriverExt: TransportExt {
 			+ INQUIRY_PRODUCT_ID_LEN
 			+ INQUIRY_REVISION_LEVEL_LEN;
 
-		const CDB: [u8; 6] = {
-			let mut cdb = [0; _];
-			cdb[0] = spc::INQUIRY;
-			copy_bytes(&mut cdb, 4, to_be_u8(ALLOC_LEN));
-			cdb
+		const CDB: [u8; 6] = cdb! {
+			6;
+			0 => spc::INQUIRY,
+			4..5 => to_be_u8(ALLOC_LEN),
 		};
 
 		let mut buf = [0u8; ALLOC_LEN];
@@ -369,17 +402,18 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn read_cd__(&self, buf: &mut [u8], lsn: i32, c2: bool, sub: u8) -> Result<usize, RipRipError> {
-		let mut cdb = [0u8; 12];
-		cdb[0] = READ_CD;
-		cdb[1] = SECTOR_TYPE_CDDA;
+		const CDB: [u8; 12] = cdb! {
+			12;
+			0 => READ_CD,
+			1 => SECTOR_TYPE_CDDA,
+			// Transfer Length (24-bit BE integer): one sector.
+			6..9 => [0, 0, 1]
+		};
+		let mut cdb = CDB;
 
 		// Rip Rip's addressing parameters are already absolute LBAs.
 		let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
-		cdb[2..=5].copy_from_slice(&lba.to_be_bytes());
-
-		// Transfer Length (24-bit BE integer): one sector.
-		cdb[6..=8].copy_from_slice(&[0, 0, 1]);
-
+		cdb[2..6].copy_from_slice(&lba.to_be_bytes());
 		// Byte 9 is the Selection Field flag byte:
 		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
 		// Bit 2..1: C2 Error Flag selection allocation (Set to 1 to include 294 bytes C2 space)
