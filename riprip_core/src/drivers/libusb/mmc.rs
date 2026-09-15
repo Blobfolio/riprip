@@ -5,7 +5,9 @@ Provides opcodes, profiles, and format constants for SCSI MMC and core SPC comma
 used to inspect and read audio CDs.
 */
 
-use crate::{CD_LEADIN, CD_LEADOUT, CddaDriverExt};
+use crate::{
+	Barcode, CD_LEADIN, CD_LEADOUT, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
+};
 
 // Opcodes
 const READ_SUB_CHANNEL: u8 = 0x42;
@@ -20,8 +22,8 @@ const MAX_TRACK_NUMBER: u8 = 99;
 // READ_SUB_CHANNEL Data Formats
 const SUB_FORMAT_MCN: u8 = 0x02;
 
-const SUB_CHANNEL_HEADER_LEN: u16 = 4;
-const SUB_CHANNEL_MCN_DATA_LEN: u16 = 22;
+const SUB_CHANNEL_HEADER_LEN: usize = 4;
+const SUB_CHANNEL_MCN_DATA_LEN: usize = 22;
 
 // READ_TOC Time/Address Format
 const FORMAT_LBA: u8 = 0x00;
@@ -31,16 +33,16 @@ const FORMAT_MSF: u8 = 0x02;
 const TOC_FORMAT_TOC: u8 = 0x00;
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
-pub(super) const TOC_HEADER_LEN: u16 = 4;
-const TOC_TRACK_DESCRIPTOR_LEN: u16 = 8;
+pub(super) const TOC_HEADER_LEN: usize = 4;
+const TOC_TRACK_DESCRIPTOR_LEN: usize = 8;
 
 pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
 
 // GET_CONFIGURATION Features
 const FEATURE_CD_AUDIO_C2: u16 = 0x001E;
 
-const CONFIGURATION_HEADER_LEN: u16 = 8;
-const CONFIGURATION_FEATURE_DESCRIPTOR_LEN: u16 = 8;
+const CONFIGURATION_HEADER_LEN: usize = 8;
+const CONFIGURATION_FEATURE_DESCRIPTOR_LEN: usize = 8;
 
 // READ_CD Sector Types
 const SECTOR_TYPE_CDDA: u8 = 0x04;
@@ -50,13 +52,40 @@ const SECTOR_TYPE_CDDA: u8 = 0x04;
 mod spc {
 	pub(super) const INQUIRY: u8 = 0x12;
 
-	pub(super) const INQUIRY_HEADER_LEN: u8 = 8;
-	pub(super) const INQUIRY_VENDOR_ID_LEN: u8 = 8;
-	pub(super) const INQUIRY_PRODUCT_ID_LEN: u8 = 16;
-	pub(super) const INQUIRY_REVISION_LEVEL_LEN: u8 = 4;
+	pub(super) const INQUIRY_HEADER_LEN: usize = 8;
+	pub(super) const INQUIRY_VENDOR_ID_LEN: usize = 8;
+	pub(super) const INQUIRY_PRODUCT_ID_LEN: usize = 16;
+	pub(super) const INQUIRY_REVISION_LEVEL_LEN: usize = 4;
 }
 
-use crate::{Barcode, DriveVendorModel, RipRipError, macros::log};
+const fn to_be_u8(value: usize) -> [u8; 1] {
+	assert!(value <= u8::MAX as usize, "value does not fit in u8");
+
+	let bytes = value.to_be_bytes();
+	[bytes[bytes.len() - 1]]
+}
+
+const fn to_be_u16(value: usize) -> [u8; 2] {
+	assert!(value <= u16::MAX as usize, "value does not fit in u16");
+
+	let bytes = value.to_be_bytes();
+	let x = [bytes[bytes.len() - 2], bytes[bytes.len() - 1]];
+	x
+}
+
+const fn copy_bytes<const N: usize, const M: usize>(
+    dst: &mut [u8; N],
+    offset: usize,
+    src: [u8; M],
+) {
+    assert!(offset + M <= N, "TODO");
+
+    let mut i = 0;
+    while i < M {
+        dst[offset + i] = src[i];
+        i += 1;
+    }
+}
 
 pub(super) trait TransportExt {
 	/// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
@@ -69,18 +98,21 @@ pub(super) trait TransportExt {
 /// (e.g. USB BOT or `/dev/sg`).
 pub(super) trait MmcDriverExt: TransportExt {
 	fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
-		const ALLOC_LEN: u16 = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
+		const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
-		let mut cdb = [0u8; 10];
-		cdb[0] = READ_SUB_CHANNEL;
-		cdb[1] = FORMAT_MSF;
-		cdb[2] = 0x40; // Sub-Q Channel tracking bit
-		cdb[3] = SUB_FORMAT_MCN;
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
+			cdb[0] = READ_SUB_CHANNEL;
+			cdb[1] = FORMAT_MSF;
+			cdb[2] = 0x40; // Sub-Q Channel tracking bit
+			cdb[3] = SUB_FORMAT_MCN;
 
-		cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
+		};
 
-		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+		let mut buf = [0u8; ALLOC_LEN];
+		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			log!(@trace "Subchannel contains no MCN data.");
 			return Ok(None);
 		}
@@ -102,28 +134,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
-		const TOC_TRACK_DESCRIPTOR_LEN_USIZE: usize = TOC_TRACK_DESCRIPTOR_LEN as usize;
+		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		let mut buf = vec![];
-
-		let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
-			let mut cdb = [0u8; 10];
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
 			cdb[6] = FIRST_TRACK; // Starting track.
 
-			cdb[7..9].copy_from_slice(&alloc_len.to_be_bytes());
-
-			buf.clear();
-			buf.resize(alloc_len as usize, 0);
-
-			self.submit(&cdb, buf).map_err(|_| RipRipError::DiscMode)
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
 		};
 
+		let mut buf = vec![0; ALLOC_LEN];
+
 		// Asks only for enough bytes to discover how large the TOC is.
-		let len = read_toc(TOC_HEADER_LEN, &mut buf)?;
-		if len < TOC_HEADER_LEN as usize {
+		if self.submit(&CDB, &mut buf)? < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
 
@@ -131,8 +158,14 @@ pub(super) trait MmcDriverExt: TransportExt {
 			.checked_add(2) // Length excludes the 2-byte length field itself.
 			.ok_or(RipRipError::DiscMode)?;
 
-		let len = read_toc(toc_len, &mut buf)?;
-		if len < TOC_HEADER_LEN as usize {
+		// Patch the CDB with the expected allocation length.
+		let mut cdb = CDB;
+		copy_bytes(&mut cdb, 7, toc_len.to_be_bytes());
+		buf.clear();
+		buf.resize(toc_len.into(), 0);
+
+		let len = self.submit(&cdb, &mut buf)?;
+		if len < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
 
@@ -148,16 +181,15 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		let total_count = track_count + 1; // Lead-out.
 
-		let required_len =
-			TOC_HEADER_LEN as usize + total_count * TOC_TRACK_DESCRIPTOR_LEN as usize;
+		let required_len = TOC_HEADER_LEN + total_count * TOC_TRACK_DESCRIPTOR_LEN;
 		if len < required_len {
 			return Err(RipRipError::DiscMode);
 		}
 
 		// Search the descriptors. If an audio track is found, early exit,
 		// otherwise default to a DiscMode error.
-		let has_audio = buf[TOC_HEADER_LEN as usize..]
-			.as_chunks::<TOC_TRACK_DESCRIPTOR_LEN_USIZE>()
+		let has_audio = buf[TOC_HEADER_LEN..]
+			.as_chunks::<TOC_TRACK_DESCRIPTOR_LEN>()
 			.0
 			.iter()
 			.take(track_count)
@@ -171,21 +203,24 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn check_c2__(&self) -> Result<(), RipRipError> {
-		const ALLOC_LEN: u16 = CONFIGURATION_HEADER_LEN + CONFIGURATION_FEATURE_DESCRIPTOR_LEN;
+		const ALLOC_LEN: usize = CONFIGURATION_HEADER_LEN + CONFIGURATION_FEATURE_DESCRIPTOR_LEN;
 
-		let mut cdb = [0u8; 10];
-		cdb[0] = GET_CONFIGURATION;
-		cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
-		cdb[2..=3].copy_from_slice(&FEATURE_CD_AUDIO_C2.to_be_bytes());
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
+			cdb[0] = GET_CONFIGURATION;
+			cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
+			copy_bytes(&mut cdb, 2, FEATURE_CD_AUDIO_C2.to_be_bytes());
 
-		cdb[7..=8].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
+		};
 
-		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+		let mut buf = [0u8; ALLOC_LEN];
+		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::C2Mode296);
 		}
 
-		let desc = &buf[CONFIGURATION_HEADER_LEN as usize..];
+		let desc = &buf[CONFIGURATION_HEADER_LEN..];
 
 		if u16::from_be_bytes([desc[0], desc[1]]) == FEATURE_CD_AUDIO_C2 {
 			// Byte 4 houses the Feature-Specific configuration flags.
@@ -199,26 +234,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn read_cdtext(&self) -> Result<Option<Vec<u8>>, RipRipError> {
-		let mut buf = vec![];
+		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		let read_toc = |alloc_len: u16, buf: &mut Vec<u8>| -> Result<usize, RipRipError> {
-			let mut cdb = [0u8; 10];
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_CDTEXT;
 			cdb[6] = 0; // Track number to start reading from (0 = entire disc).
 
-			cdb[7..9].copy_from_slice(&alloc_len.to_be_bytes());
-
-			buf.clear();
-			buf.resize(alloc_len as usize, 0);
-
-			self.submit(&cdb, buf).map_err(|_| RipRipError::CdText)
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
 		};
 
+		let mut buf = vec![0; ALLOC_LEN];
+
 		// Asks only for enough bytes to discover how large the CD-Text is.
-		let len = read_toc(TOC_HEADER_LEN, &mut buf)?;
-		if len < TOC_HEADER_LEN as usize {
+		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::CdText);
 		}
 
@@ -226,28 +258,37 @@ pub(super) trait MmcDriverExt: TransportExt {
 			.checked_add(2) // Length excludes the 2-byte length field itself.
 			.ok_or(RipRipError::CdText)?;
 
-		if cdtext_len == TOC_HEADER_LEN {
+		if cdtext_len as usize == TOC_HEADER_LEN {
 			return Ok(None); // No CD-Text exists on this disc.
 		}
 
-		read_toc(cdtext_len, &mut buf)?;
+		// Patch the CDB with the expected allocation length.
+		let mut cdb = CDB;
+		copy_bytes(&mut cdb, 7, cdtext_len.to_be_bytes());
+		buf.clear();
+		buf.resize(cdtext_len.into(), 0);
+
+		self.submit(&cdb, &mut buf)?;
 
 		Ok(Some(buf))
 	}
 
 	fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
-		const ALLOC_LEN: u16 = TOC_HEADER_LEN;
+		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
-		let mut cdb = [0u8; 10];
-		cdb[0] = READ_TOC;
-		cdb[1] = FORMAT_LBA;
-		cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-		cdb[6] = 0;
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
+			cdb[0] = READ_TOC;
+			cdb[1] = FORMAT_LBA;
+			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
+			cdb[6] = 0;
 
-		cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
+		};
 
-		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+		let mut buf = [0u8; ALLOC_LEN];
+		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::FirstTrackNum);
 		}
 
@@ -258,18 +299,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
-		const ALLOC_LEN: u16 = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
+		const ALLOC_LEN: usize = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
 
-		let mut cdb = [0u8; 10];
-		cdb[0] = READ_TOC;
-		cdb[1] = FORMAT_LBA;
-		cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
+		const CDB: [u8; 10] = {
+			let mut cdb = [0; _];
+			cdb[0] = READ_TOC;
+			cdb[1] = FORMAT_LBA;
+			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
+
+			copy_bytes(&mut cdb, 7, to_be_u16(ALLOC_LEN));
+			cdb
+		};
+		
+		let mut cdb = CDB;
 		cdb[6] = idx;
 
-		cdb[7..9].copy_from_slice(&ALLOC_LEN.to_be_bytes());
-
-		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+		let mut buf = [0u8; ALLOC_LEN];
+		if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::TrackLba(idx));
 		}
 
@@ -280,25 +326,31 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	fn drive_vendor_model__(&self) -> Result<DriveVendorModel, RipRipError> {
-		use spc::{INQUIRY_HEADER_LEN, INQUIRY_VENDOR_ID_LEN, INQUIRY_PRODUCT_ID_LEN, INQUIRY_REVISION_LEVEL_LEN};
+		use spc::{
+			INQUIRY_HEADER_LEN, INQUIRY_PRODUCT_ID_LEN, INQUIRY_REVISION_LEVEL_LEN,
+			INQUIRY_VENDOR_ID_LEN,
+		};
 
 		const VENDOR_ID_RANGE: std::ops::Range<usize> =
-			INQUIRY_HEADER_LEN as usize..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN) as usize;
+			INQUIRY_HEADER_LEN..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN);
 
 		const PRODUCT_ID_RANGE: std::ops::Range<usize> =
-			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN as usize;
+			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN;
 
-		const ALLOC_LEN: u8 = INQUIRY_HEADER_LEN
+		const ALLOC_LEN: usize = INQUIRY_HEADER_LEN
 			+ INQUIRY_VENDOR_ID_LEN
 			+ INQUIRY_PRODUCT_ID_LEN
 			+ INQUIRY_REVISION_LEVEL_LEN;
 
-		let mut cdb = [0u8; 6];
-		cdb[0] = spc::INQUIRY;
-		cdb[4] = ALLOC_LEN;
+		const CDB: [u8; 6] = {
+			let mut cdb = [0; _];
+			cdb[0] = spc::INQUIRY;
+			copy_bytes(&mut cdb, 4, to_be_u8(ALLOC_LEN));
+			cdb
+		};
 
-		let mut buf = [0u8; ALLOC_LEN as usize];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN as usize {
+		let mut buf = [0u8; ALLOC_LEN];
+		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::DriveModel);
 		}
 
@@ -399,9 +451,8 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 	fn cdtext(&self) -> Option<Vec<u8>> {
 		if let Some(mut buf) = self.read_cdtext().ok()? {
 			// Skip the header.
-			let n = TOC_HEADER_LEN as usize;
-			buf.copy_within(n.., 0);
-			buf.truncate(buf.len() - n);
+			buf.copy_within(TOC_HEADER_LEN.., 0);
+			buf.truncate(buf.len() - TOC_HEADER_LEN);
 			return Some(buf);
 		}
 		None
@@ -423,7 +474,9 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		sub: u8,
 		_block_size: u16,
 	) -> Result<(), RipRipError> {
-		if self.read_cd__(buf, lsn, c2, sub).is_ok() { Ok(()) } else {
+		if self.read_cd__(buf, lsn, c2, sub).is_ok() {
+			Ok(())
+		} else {
 			crate::drivers::set_bad_sector(lsn);
 			Err(RipRipError::CdRead)
 		}
