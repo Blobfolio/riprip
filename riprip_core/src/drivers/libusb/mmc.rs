@@ -69,8 +69,7 @@ const fn to_be_u16(value: usize) -> [u8; 2] {
 	assert!(value <= u16::MAX as usize, "value does not fit in u16");
 
 	let bytes = value.to_be_bytes();
-	let x = [bytes[bytes.len() - 2], bytes[bytes.len() - 1]];
-	x
+	[bytes[bytes.len() - 2], bytes[bytes.len() - 1]]
 }
 
 const fn copy_bytes<const N: usize, const M: usize>(
