@@ -73,7 +73,7 @@ mod macos {
 
 		let mut iterator = 0;
 		let res =
-			unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &mut iterator) };
+			unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &raw mut iterator) };
 		if res != kIOReturnSuccess {
 			return Err(RipRipError::Internal(format!(
 				"IOServiceGetMatchingServices failed: 0x{res:08x}"
