@@ -73,30 +73,30 @@ const fn to_be_u16(value: usize) -> [u8; 2] {
 }
 
 const fn copy_bytes<const N: usize, const M: usize>(
-    dst: &mut [u8; N],
-    offset: usize,
-    src: [u8; M],
+	dst: &mut [u8; N],
+	offset: usize,
+	src: [u8; M],
 ) {
-    assert!(offset + M <= N, "copy exceeds destination");
+	assert!(offset + M <= N, "copy exceeds destination");
 
-    let mut i = 0;
-    while i < M {
-        dst[offset + i] = src[i];
-        i += 1;
-    }
+	let mut i = 0;
+	while i < M {
+		dst[offset + i] = src[i];
+		i += 1;
+	}
 }
 
 const fn copy_bytes_range<const N: usize, const M: usize>(
-    dst: &mut [u8; N],
-    start: usize,
-    end: usize,
-    src: [u8; M],
+	dst: &mut [u8; N],
+	start: usize,
+	end: usize,
+	src: [u8; M],
 ) {
-    assert!(start <= end, "invalid byte range");
-    assert!(end <= N, "range exceeds destination");
-    assert!(end - start == M, "byte range does not match value size");
+	assert!(start <= end, "invalid byte range");
+	assert!(end <= N, "range exceeds destination");
+	assert!(end - start == M, "byte range does not match value size");
 
-    copy_bytes(dst, start, src);
+	copy_bytes(dst, start, src);
 }
 
 macro_rules! cdb {
@@ -343,7 +343,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			2 => TOC_FORMAT_TOC, // Format 0: Standard Table of Contents.
 			7..9 => to_be_u16(ALLOC_LEN),
 		};
-		
+
 		let mut cdb = CDB;
 		cdb[6] = idx;
 
