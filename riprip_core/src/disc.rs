@@ -18,11 +18,9 @@ use crate::{
 	cdtext::{
 		CDText,
 		CDTextError,
-		DiscField,
-		TrackField,
 	},
 	DriveVendorModel,
-	Isrc,
+	IsrcMap,
 	KillSwitch,
 	macros::log,
 	RipOptions,
@@ -30,7 +28,6 @@ use crate::{
 	RipRipError,
 	SavedRips,
 };
-use dactyl::NoHash;
 use fyi_msg::{
 	fyi_ansi::{
 		ansi,
@@ -42,7 +39,6 @@ use fyi_msg::{
 };
 use std::{
 	borrow::Cow,
-	collections::HashMap,
 	ffi::OsStr,
 	fmt,
 	io::StderrLock,
@@ -69,9 +65,6 @@ pub struct Disc {
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
-
-	/// # Track ISRCs.
-	isrcs: HashMap<u8, Isrc, NoHash>,
 }
 
 impl fmt::Display for Disc {
@@ -108,10 +101,11 @@ impl fmt::Display for Disc {
 		}
 
 		// Start the table of contents.
+		let isrcs = self.isrcs();
 		write!(
 			f,
 			dim!("\nNO   FIRST    LAST  LENGTH             {}\n"),
-			if self.has_isrcs() { "ISRC" } else { "" },
+			if isrcs.is_some() { "ISRC" } else { "" },
 		)?;
 		f.write_str(DIVIDER)?;
 
@@ -146,7 +140,7 @@ impl fmt::Display for Disc {
 			let num = t.number();
 			let rng = t.sector_range_normalized();
 			let len = rng.end - rng.start;
-			if let Some(isrc) = self.isrc(num) {
+			if let Some(isrc) = isrcs.and_then(|v| v.get(&num).copied()) {
 				writeln!(
 					f,
 					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
@@ -236,7 +230,6 @@ impl Disc {
 			toc,
 			cdtext: None,
 			barcode: None,
-			isrcs: HashMap::with_hasher(NoHash::default()),
 		};
 
 		// Unless the user opted out of CD-Text parsing, let's handle that
@@ -244,21 +237,7 @@ impl Disc {
 		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
 			match CDText::from_bytes(&raw_cdtext) {
 				Ok(cdtext) => {
-					// Set the barcode.
-					out.barcode = cdtext.disc(DiscField::Barcode)
-						.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
-
-					// Pull the track ISRCs (if any).
-					for t in out.toc.audio_tracks() {
-						let idx = t.number();
-						if
-							let Some(isrc) = cdtext.track(TrackField::Isrc, idx) &&
-							let Ok(isrc) = Isrc::try_from(isrc.as_bytes())
-						{
-							out.isrcs.insert(idx, isrc);
-						}
-					}
-
+					out.barcode = cdtext.barcode();
 					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
 				},
 				Err(e) => {
@@ -297,12 +276,10 @@ impl Disc {
 	}
 
 	#[must_use]
-	/// # Has ISRC Data?
-	pub fn has_isrcs(&self) -> bool { ! self.isrcs.is_empty() }
-
-	#[must_use]
-	/// # ISRC.
-	pub fn isrc(&self, idx: u8) -> Option<Isrc> { self.isrcs.get(&idx).copied() }
+	/// # Track ISRCs.
+	pub fn isrcs(&self) -> Option<&IsrcMap> {
+		self.cdtext().and_then(CDText::isrcs)
+	}
 
 	#[must_use]
 	/// # Table of Contents.

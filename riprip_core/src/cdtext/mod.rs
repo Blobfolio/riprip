@@ -17,6 +17,7 @@ mod track;
 use crate::{
 	Barcode,
 	Isrc,
+	IsrcMap,
 	macros::log,
 };
 use dactyl::NoHash;
@@ -42,13 +43,22 @@ use track::TrackRange;
 /// # CD-Text!
 ///
 /// This struct holds CD-Text in all available languages.
-pub struct CDText(Vec<CDTextInner>);
+pub struct CDText {
+	/// # Barcode.
+	barcode: Option<Barcode>,
+
+	/// # Track ISRCs.
+	isrcs: IsrcMap,
+
+	/// # Blocks.
+	blocks: Vec<CDTextInner>,
+}
 
 impl fmt::Display for CDText {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let mut any = false;
-		for (k, v) in self.0.iter().enumerate() {
+		for (k, v) in self.blocks.iter().enumerate() {
 			if any { writeln!(f)?; }
 			else { any = true; }
 
@@ -77,35 +87,18 @@ impl fmt::Display for CDText {
 
 impl CDText {
 	#[must_use]
-	/// # Disc Value.
+	/// # Barcode.
 	///
-	/// Return the matching disc field value from the first block, if any.
-	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
-		// Inner shouldn't ever be empty.
-		if self.0.is_empty() {
-			std::hint::cold_path();
-			None
-		}
-		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, 0])) {
-			Some(v.as_str())
-		}
-		else { None }
-	}
+	/// Return the barcode defined by the first block, if any.
+	pub(crate) const fn barcode(&self) -> Option<Barcode> { self.barcode }
 
 	#[must_use]
-	/// # Search Track Value(s).
+	/// # ISRCs.
 	///
-	/// Return the matching track field value from the first block, if any.
-	pub(crate) fn track(&self, field: TrackField, track: u8) -> Option<&str> {
-		// Inner shouldn't ever be empty.
-		if self.0.is_empty() {
-			std::hint::cold_path();
-			None
-		}
-		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, track])) {
-			Some(v.as_str())
-		}
-		else { None }
+	/// Return the track ISRCs defined by the first block, if any.
+	pub(crate) fn isrcs(&self) -> Option<&IsrcMap> {
+		if self.isrcs.is_empty() { None }
+		else { Some(&self.isrcs) }
 	}
 }
 
@@ -122,6 +115,8 @@ impl CDText {
 		// Build up the inner data block-by-block, skipping any unused
 		// placeholders.
 		let blocks = Block::from_stream(pack_data)?;
+		let mut barcode = None;
+		let mut isrcs = IsrcMap::with_hasher(NoHash::default());
 		let mut inner = Vec::with_capacity(BlockId::LEN);
 		for (i, block) in BlockId::ALL.into_iter().zip(blocks.into_iter().filter(Block::is_some)) {
 			// Parse the size info.
@@ -150,6 +145,11 @@ impl CDText {
 								let Ok(v) = Barcode::try_from(buf.as_slice()) else {
 									continue;
 								};
+
+								// If the first block, copy the value to a
+								// position of honor.
+								if inner.is_empty() { barcode.replace(v); }
+
 								v.to_string()
 							}
 
@@ -188,6 +188,11 @@ impl CDText {
 							let Ok(v) = Isrc::try_from(buf.as_slice()) else {
 								continue;
 							};
+
+							// If the first block, copy the value to a
+							// position of honor.
+							if inner.is_empty() { isrcs.insert(track, v); }
+
 							v.to_string()
 						},
 
@@ -204,6 +209,7 @@ impl CDText {
 			}
 
 			// Save it!
+			catalog.shrink_to_fit(); // This won't change.
 			inner.push(CDTextInner { tracks, language, genre_code, catalog });
 		}
 
@@ -212,7 +218,14 @@ impl CDText {
 			std::hint::cold_path();
 			Err(CDTextError::Empty)
 		}
-		else { Ok(Self(inner)) }
+		else {
+			isrcs.shrink_to_fit(); // This won't change.
+			Ok(Self {
+				barcode,
+				isrcs,
+				blocks: inner,
+			})
+		}
 	}
 }
 

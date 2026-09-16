@@ -322,10 +322,11 @@ impl fmt::Display for LoggableTracks<'_> {
 
 		// Table of contents.
 		let mut total = 0;
+		let isrcs = self.0.isrcs();
 		write!(
 			f,
 			"\n  NO   FIRST    LAST  LENGTH             {}",
-			if self.0.has_isrcs() { "ISRC" } else { "" },
+			if isrcs.is_some() { "ISRC" } else { "" },
 		)?;
 
 		// HTOA.
@@ -357,7 +358,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			let num = t.number();
 			let rng = t.sector_range_normalized();
 			let len = rng.end - rng.start;
-			if let Some(isrc) = self.0.isrc(num) {
+			if let Some(isrc) = isrcs.and_then(|v| v.get(&num).copied()) {
 				write!(
 					f,
 					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
