@@ -8,14 +8,15 @@ Resources:
 <https://github.com/xbmc/libcdio/blob/master/example/cdtext.c>
 */
 
-mod parse;
 mod field;
 mod genre;
 mod language;
+mod stream;
 mod track;
 
 use crate::{
 	Barcode,
+	Isrc,
 	macros::log,
 };
 use dactyl::NoHash;
@@ -25,10 +26,13 @@ pub use field::{
 };
 use genre::GenreCode;
 use language::Language;
-use parse::ContextBlock;
 use std::{
 	collections::HashMap,
 	fmt,
+};
+use stream::{
+	Block,
+	BlockId,
 };
 use track::TrackRange;
 
@@ -106,19 +110,20 @@ impl CDText {
 }
 
 impl CDText {
-	/// # Decode Raw Pack Data.
+	/// # From Pack Stream.
 	///
-	/// Decode and return a structured representation of the CD-Text.
+	/// Parse, decode, and return a structured representation of the CD-Text.
 	///
 	/// ## Errors
 	///
 	/// This method will return an error if the CD-Text is malformed,
 	/// contains unsupported features, or is empty.
 	pub(crate) fn from_bytes(pack_data: &[u8]) -> Result<Self, CDTextError> {
-		// Build up the inner data block-by-block.
-		let blocks = ContextBlock::from_bytes(pack_data)?;
-		let mut inner = Vec::with_capacity(blocks.len());
-		for (i, block) in blocks.into_iter().enumerate().take(8) {
+		// Build up the inner data block-by-block, skipping any unused
+		// placeholders.
+		let blocks = Block::from_stream(pack_data)?;
+		let mut inner = Vec::with_capacity(BlockId::LEN);
+		for (i, block) in BlockId::ALL.into_iter().zip(blocks.into_iter().filter(Block::is_some)) {
 			// Parse the size info.
 			let size_info = match block.size_info() {
 				Ok(v) => v,
@@ -134,7 +139,7 @@ impl CDText {
 			let mut catalog = HashMap::default();
 			let mut genre_code = GenreCode::Unused;
 
-			for ((field, track), buf) in block.into_buffer() {
+			for ((field, track), buf) in block.into_buffers() {
 				// Disc-level data.
 				if track == 0 {
 					if let Some(field) = field.disc_field() {
@@ -148,10 +153,13 @@ impl CDText {
 								v.to_string()
 							}
 
+							// Disc ID is always ASCII.
+							DiscField::DiscId => { Encoding::Ascii.decode(&buf) },
+
 							// Separate genre code and freeform representations.
+							// Both are always ASCII.
 							DiscField::Genre => {
-								let v = encoding.decode(&buf);
-								let (v1, v2) = GenreCode::split_raw(v.as_bytes());
+								let (v1, v2) = GenreCode::split_raw(&buf);
 								genre_code = v1;
 
 								// Skip freeform insertion if empty.
@@ -174,7 +182,18 @@ impl CDText {
 				}
 				// Track-level data.
 				else if let Some(field) = field.track_field() {
-					let v = encoding.decode(&buf);
+					let v = match field {
+						// Force proper ISRC formatting.
+						TrackField::Isrc => {
+							let Ok(v) = Isrc::try_from(buf.as_slice()) else {
+								continue;
+							};
+							v.to_string()
+						},
+
+						// Everything else just needs to be decoded.
+						_ => { encoding.decode(&buf) },
+					};
 					if ! v.is_empty() {
 						catalog.insert(
 							u16::from_le_bytes([field as u8, track]),
@@ -225,13 +244,13 @@ macro_rules! err {
 }
 
 err! {
-	ChecksumMismatch      "Unable to verify CD-Text data.",
+	ChecksumMismatch      "CD-Text pack data failed checksum verification.",
 	Empty                 "CD-Text exists, but is empty.",
 	IncompleteData        "Raw CD-Text data is incomplete.",
+	InvalidBlockInfo      "CD-Text block metadata is incomplete.",
 	InvalidLanguage       "CD-Text contains invalid language code.",
-	InvalidPayloadLength  "Invalid CD-Text payload length.",
 	InvalidTrackRange     "Invalid start/end track range.",
-	MissingSizeInfo       "Missing CD-Text size info.",
+	MissingBlockInfo      "Missing CD-Text block metadata.",
 	UnsupportedDoubleByte "Unsupported CD-Text double-byte encoding.",
 	UnsupportedEncoding   "Unsupported CD-Text encoding type.",
 	UnsupportedExtension  "Unsupported CD-Text extension.",
@@ -354,7 +373,7 @@ impl CDTextInner {
 
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// # Encoding Kind.
 enum Encoding {
 	/// # ISO-8859-1 (8 bit), Latin-1.
@@ -384,14 +403,32 @@ impl Encoding {
 	///
 	/// Parse a raw byte stream into a string, given the encoding.
 	fn decode(self, bytes: &[u8]) -> String {
+		use trimothy::TrimMut;
+
 		match self {
-			Self::Iso8859_1 | Self::Ascii => {
-				// Try to parse directly as UTF-8/ASCII first without looping.
-				std::str::from_utf8(bytes).map_or_else(
-					|_| bytes.iter().map(|&b| b as char).collect(),
-					std::borrow::ToOwned::to_owned,
-				)
-			}
+			Self::Ascii =>
+				// If this fails, the CD is a goddamn liar!
+				if
+					let Ok(out) = std::str::from_utf8(bytes) &&
+					out.is_ascii()
+				{
+					out.trim().to_owned()
+				}
+				// LIAR!
+				else { String::new() },
+
+			Self::Iso8859_1 => {
+				// This is a subset of UTF-8, but each byte is its own
+				// character. To avoid accidental "combining", we need to map
+				// each byte individually.
+				let mut out: String = bytes.iter()
+					.copied()
+					.map(|b| b as char)
+					.collect();
+				out.trim_mut();
+				out
+			},
+
 			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
 		}
 	}
@@ -440,20 +477,35 @@ mod test {
 			"No CD-Text tests were found.",
 		);
 		for (stub, txt) in txts {
+			// Pull the matching bin.
 			let Some(bin) = bins.remove(&stub) else {
 				panic!("Missing {stub}.bin.");
 			};
 
+			// Read both.
 			let txt_v = std::fs::read_to_string(&txt).unwrap();
-			let bin_v = std::fs::read(&bin).unwrap();
-			let Ok(parsed) = CDText::from_bytes(&bin_v) else {
-				panic!("Failed to parse {stub}.bin.");
+			let mut bin_v = std::fs::read(&bin).unwrap();
+
+			// None of the tests are empty.
+			assert!(! bin_v.is_empty(), "{stub}.bin is empty.");
+
+			// Parse the binary version and compare its text with the expected
+			// text.
+			let parsed = match CDText::from_bytes(&bin_v) {
+				Ok(v) => v.to_string(),
+				Err(e) => panic!("Failed to parse {stub}.bin: {e}"),
 			};
-			let lhs = parsed.to_string();
 			assert_eq!(
-				lhs,
+				parsed,
 				txt_v,
-				"Mismatch for {stub}:\n\n-----\nFOUND:\n{lhs}\n-----\nEXPECTED:\n{txt_v}\n",
+				"Mismatch for {stub}:\n\n-----\nFOUND:\n{parsed}\n-----\nEXPECTED:\n{txt_v}\n",
+			);
+
+			// Ensure (simple) corruption is properly detected during parsing.
+			bin_v[0] = bin_v[0].wrapping_add(1);
+			assert!(
+				matches!(CDText::from_bytes(&bin_v), Err(CDTextError::ChecksumMismatch)),
+				"Corrupted {stub}.bin failed to trigger checksum mismatch.",
 			);
 		}
 
@@ -461,6 +513,14 @@ mod test {
 		assert!(
 			bins.is_empty(),
 			"Some CD-Text binary data is missing text counterparts: {bins:?}"
+		);
+	}
+
+	#[test]
+	fn t_cdtext_empty() {
+		assert!(
+			matches!(CDText::from_bytes(&[]), Err(CDTextError::Empty)),
+			"Empty CD-Text parsed Ok().",
 		);
 	}
 }

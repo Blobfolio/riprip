@@ -2,42 +2,18 @@
 # Rip Rip Hooray: Disc
 */
 
-use cdtoc::{
-	Toc,
-	TocKind,
-};
 use crate::{
-	Barcode,
-	cache_path,
+	Barcode, CD_LEADOUT, CacheWriter, CddaDriver, CddaDriverExt, CddaDriverNewExt,
+	DriveVendorModel, Isrc, KillSwitch, RipOptions, RipRipError, Ripper, SavedRips, cache_path,
 	cache_prefix,
-	CacheWriter,
-	CD_LEADOUT,
-	CddaDriver,
-	CddaDriverExt,
-	CddaDriverNewExt,
-	cdtext::{
-		CDText,
-		CDTextError,
-		DiscField,
-		TrackField,
-	},
-	DriveVendorModel,
-	KillSwitch,
+	cdtext::{CDText, CDTextError, DiscField, TrackField},
 	macros::log,
-	RipOptions,
-	Ripper,
-	RipRipError,
-	SavedRips,
 };
+use cdtoc::{Toc, TocKind};
 use dactyl::NoHash;
 use fyi_msg::{
-	fyi_ansi::{
-		ansi,
-		csi,
-		dim,
-	},
-	Msg,
-	Progless,
+	Msg, Progless,
+	fyi_ansi::{ansi, csi, dim},
 };
 use std::{
 	borrow::Cow,
@@ -45,13 +21,8 @@ use std::{
 	ffi::OsStr,
 	fmt,
 	io::StderrLock,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::{Path, PathBuf},
 };
-
-
 
 /// # Disc.
 ///
@@ -70,7 +41,7 @@ pub struct Disc {
 	barcode: Option<Barcode>,
 
 	/// # Track ISRCs.
-	isrcs: HashMap<u8, String, NoHash>,
+	isrcs: HashMap<u8, Isrc, NoHash>,
 }
 
 impl fmt::Display for Disc {
@@ -80,15 +51,31 @@ impl fmt::Display for Disc {
 	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		/// # Divider.
-		const DIVIDER: &str = dim!("----------------------------------------\n");
+		const DIVIDER: &str = dim!("-------------------------------------------\n");
 
 		// A few key/value pairs.
 		let mut kv: Vec<(&str, &str, String)> = vec![
 			("CDTOC:", csi!(bold, 199), self.toc.to_string()),
-			("AccurateRip:", csi!(bold, blue), self.toc.accuraterip_id().to_string()),
-			("CDDB:", csi!(bold, blue), cache_prefix(&self.toc).to_owned()),
-			("CUETools:", csi!(bold, blue), self.toc.ctdb_id().to_string()),
-			("MusicBrainz:", csi!(bold, blue), self.toc.musicbrainz_id().to_string()),
+			(
+				"AccurateRip:",
+				csi!(bold, blue),
+				self.toc.accuraterip_id().to_string(),
+			),
+			(
+				"CDDB:",
+				csi!(bold, blue),
+				cache_prefix(&self.toc).to_owned(),
+			),
+			(
+				"CUETools:",
+				csi!(bold, blue),
+				self.toc.ctdb_id().to_string(),
+			),
+			(
+				"MusicBrainz:",
+				csi!(bold, blue),
+				self.toc.musicbrainz_id().to_string(),
+			),
 		];
 		if let Some(barcode) = self.barcode.as_ref() {
 			kv.push(("Barcode:", csi!(bold, 199), barcode.to_string()));
@@ -99,17 +86,17 @@ impl fmt::Display for Disc {
 			writeln!(
 				f,
 				concat!("{color}{k:col_max$}", csi!(), " {v}"),
-				color=color,
-				k=k,
-				col_max=col_max,
-				v=v,
+				color = color,
+				k = k,
+				col_max = col_max,
+				v = v,
 			)?;
 		}
 
 		// Start the table of contents.
 		write!(
 			f,
-			dim!("\nNO   FIRST    LAST  LENGTH          {}\n"),
+			dim!("\nNO   FIRST    LAST  LENGTH             {}\n"),
 			if self.has_isrcs() { "ISRC" } else { "" },
 		)?;
 		f.write_str(DIVIDER)?;
@@ -122,7 +109,7 @@ impl fmt::Display for Disc {
 			let len = rng.end - rng.start;
 			writeln!(
 				f,
-				dim!("00  {:>6}  {:>6}  {:>6}          HTOA"),
+				dim!("00  {:>6}  {:>6}  {:>6}             HTOA"),
 				rng.start,
 				rng.end - 1,
 				len,
@@ -133,7 +120,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                    DATA TRACK"),
+				dim!("{:02}  {:>6}                       DATA TRACK"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -145,13 +132,21 @@ impl fmt::Display for Disc {
 			let num = t.number();
 			let rng = t.sector_range_normalized();
 			let len = rng.end - rng.start;
-			let isrc = self.isrc(num).unwrap_or_default();
-			writeln!(
-				f,
-				"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
-				rng.start,
-				rng.end - 1,
-			)?;
+			if let Some(isrc) = self.isrc(num) {
+				writeln!(
+					f,
+					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			} else {
+				writeln!(
+					f,
+					"{num:02}  {:>6}  {:>6}  {len:>6}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			}
 		}
 
 		// Trailing data track.
@@ -159,7 +154,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                    DATA TRACK"),
+				dim!("{:02}  {:>6}                       DATA TRACK"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -168,7 +163,7 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			concat!(csi!(dim), "{:02X}  {:>6}                      LEAD-OUT"),
+			concat!(csi!(dim), "{:02X}  {:>6}                         LEAD-OUT"),
 			CD_LEADOUT,
 			self.toc.leadout_normalized(),
 		)?;
@@ -188,9 +183,10 @@ impl Disc {
 	///
 	/// This will return an error if there's a problem communicating with the
 	/// drive, the disc is unsupported, etc.
-	pub fn new<P>(dev: Option<P>, cdtext: bool)
-	-> Result<Self, RipRipError>
-	where P: AsRef<Path> {
+	pub fn new<P>(dev: Option<P>, cdtext: bool) -> Result<Self, RipRipError>
+	where
+		P: AsRef<Path>,
+	{
 		let cdda = CddaDriver::new(dev)?;
 
 		// Parse the table of contents into the pieces needed for `Toc`.
@@ -200,15 +196,16 @@ impl Disc {
 		// The inclusive range to search.
 		let from = cdda.first_track_num()?;
 		let to = cdda.num_tracks()?;
-		if to < from { return Err(RipRipError::NumTracks); }
+		if to < from {
+			return Err(RipRipError::NumTracks);
+		}
 
 		// Grab the position and type for each track.
 		for idx in from..=to {
 			let start = cdda.track_lba_start(idx)?;
 			if cdda.track_format(idx)? {
 				audio.push(start);
-			}
-			else {
+			} else {
 				if data.is_some() || (idx != 1 && idx != to) {
 					return Err(RipRipError::TrackFormat(idx));
 				}
@@ -235,27 +232,32 @@ impl Disc {
 			match CDText::from_bytes(&raw_cdtext) {
 				Ok(cdtext) => {
 					// Set the barcode.
-					out.barcode = cdtext.disc(DiscField::Barcode)
+					out.barcode = cdtext
+						.disc(DiscField::Barcode)
 						.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
 
 					// Pull the track ISRCs (if any).
 					for t in out.toc.audio_tracks() {
 						let idx = t.number();
-						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx) {
-							out.isrcs.insert(idx, isrc.to_owned());
+						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx)
+							&& let Ok(isrc) = Isrc::try_from(isrc.as_bytes())
+						{
+							out.isrcs.insert(idx, isrc);
 						}
 					}
 
 					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
-				},
+				}
 				Err(e) => {
 					out.cdtext.replace((raw_cdtext, Err(e)));
-				},
+				}
 			}
 		}
 
 		// Look for barcode in subchannel if we don't have it yet.
-		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
+		if out.barcode.is_none()
+			&& let Some(barcode) = out.cdda.mcn_subchannel()
+		{
 			out.barcode.replace(barcode);
 		}
 
@@ -267,13 +269,18 @@ impl Disc {
 impl Disc {
 	#[must_use]
 	/// # Barcode.
-	pub const fn barcode(&self) -> Option<Barcode> { self.barcode }
+	pub const fn barcode(&self) -> Option<Barcode> {
+		self.barcode
+	}
 
 	#[must_use]
 	/// # CD-Text.
 	pub const fn cdtext(&self) -> Option<&CDText> {
-		if let Some((_, Ok(v))) = self.cdtext.as_ref() { Some(v) }
-		else { None }
+		if let Some((_, Ok(v))) = self.cdtext.as_ref() {
+			Some(v)
+		} else {
+			None
+		}
 	}
 
 	#[must_use]
@@ -285,21 +292,27 @@ impl Disc {
 
 	#[must_use]
 	/// # Has ISRC Data?
-	pub fn has_isrcs(&self) -> bool { ! self.isrcs.is_empty() }
+	pub fn has_isrcs(&self) -> bool {
+		!self.isrcs.is_empty()
+	}
 
 	#[must_use]
 	/// # ISRC.
-	pub fn isrc(&self, idx: u8) -> Option<&str> {
-		self.isrcs.get(&idx).map(String::as_str)
+	pub fn isrc(&self, idx: u8) -> Option<Isrc> {
+		self.isrcs.get(&idx).copied()
 	}
 
 	#[must_use]
 	/// # Table of Contents.
-	pub const fn toc(&self) -> &Toc { &self.toc }
+	pub const fn toc(&self) -> &Toc {
+		&self.toc
+	}
 
 	#[must_use]
 	/// # Internal CDIO.
-	pub(super) const fn cdda(&self) -> &CddaDriver { &self.cdda }
+	pub(super) const fn cdda(&self) -> &CddaDriver {
+		&self.cdda
+	}
 }
 
 impl Disc {
@@ -311,8 +324,12 @@ impl Disc {
 	/// ## Errors
 	///
 	/// This will bubble up any IO/rip/etc. errors encountered along the way.
-	pub fn rip(&self, opts: &RipOptions, progress: &Progless, killed: KillSwitch)
-	-> Result<(), RipRipError> {
+	pub fn rip(
+		&self,
+		opts: &RipOptions,
+		progress: &Progless,
+		killed: KillSwitch,
+	) -> Result<(), RipRipError> {
 		use std::io::Write;
 
 		// Handle all the ripping business!
@@ -328,9 +345,15 @@ impl Disc {
 			let mut good = 0;
 
 			let htoa_any = saved.contains_key(&0);
-			let htoa_likely = saved.get(&0).is_some_and(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
-			let conf = saved.values().any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
-			let mut col1 = saved.first_key_value().map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
+			let htoa_likely = saved
+				.get(&0)
+				.is_some_and(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
+			let conf = saved
+				.values()
+				.any(|(_, ar, ctdb)| ar.is_some() || ctdb.is_some());
+			let mut col1 = saved
+				.first_key_value()
+				.map_or(0, |(_, (dst, _, _))| dst.to_string_lossy().len());
 
 			// A header of sorts.
 			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
@@ -357,21 +380,33 @@ impl Disc {
 			// Print the verification status for all track(s).
 			for (idx, (file, ar, ctdb)) in saved {
 				total += 1;
-				if ar.is_some() || ctdb.is_some() { good += 1; }
+				if ar.is_some() || ctdb.is_some() {
+					good += 1;
+				}
 
 				let _res = writeln!(
 					&mut handle,
 					concat!(dim!("  {:<col1$}"), "{}{}"),
 					file.display(),
 					if conf {
-						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "            *")) }
-						else { fmt_ar(ar, true) }
-					} else { Cow::Borrowed(ansi!((reset, light_red) "            x")) },
+						if idx == 0 {
+							Cow::Borrowed(ansi!((reset, light_yellow) "            *"))
+						} else {
+							fmt_ar(ar, true)
+						}
+					} else {
+						Cow::Borrowed(ansi!((reset, light_red) "            x"))
+					},
 					if conf {
-						if idx == 0 { Cow::Borrowed(ansi!((reset, light_yellow) "         *")) }
-						else { fmt_ctdb(ctdb, true) }
-					} else { Cow::Borrowed(ansi!((reset, light_red) "         x")) },
-					col1=col1,
+						if idx == 0 {
+							Cow::Borrowed(ansi!((reset, light_yellow) "         *"))
+						} else {
+							fmt_ctdb(ctdb, true)
+						}
+					} else {
+						Cow::Borrowed(ansi!((reset, light_red) "         x"))
+					},
+					col1 = col1,
 				);
 			}
 
@@ -380,22 +415,30 @@ impl Disc {
 				&mut handle,
 				concat!(
 					"  {line: >width$}  AccurateRip  CUETools  ",
-					csi!(dim), "(",
+					csi!(dim),
+					"(",
 					"{color}{good}",
 					ansi!((reset, dim) "/"),
 					"{total}",
 					dim!(")"),
 				),
-				line="",
-				width=col1,
-				color=if good == 0 { csi!(reset, light_red) } else { csi!(reset, light_green) },
-				good=good,
-				total=total
+				line = "",
+				width = col1,
+				color = if good == 0 {
+					csi!(reset, light_red)
+				} else {
+					csi!(reset, light_green)
+				},
+				good = good,
+				total = total
 			);
 
 			// Add HTOA footnote, if applicable.
-			if htoa_likely { write_htoa_likely(&mut handle); }
-			else if htoa_any { write_htoa_any(&mut handle); }
+			if htoa_likely {
+				write_htoa_likely(&mut handle);
+			} else if htoa_any {
+				write_htoa_any(&mut handle);
+			}
 
 			// Add an extra line break for separation, flush, and quit.
 			let _res = writeln!(&mut handle).and_then(|()| handle.flush());
@@ -416,16 +459,16 @@ impl Disc {
 	///
 	/// Try to save the raw and decoded CD-Text data to disk.
 	pub fn save_cdtext(&self, progress: &Progless) {
-		let Some((bin, txt)) = &self.cdtext else { return; };
-		let Some((dst_bin, dst_txt)) = self.cdtext_paths() else { return; };
+		let Some((bin, txt)) = &self.cdtext else {
+			return;
+		};
+		let Some((dst_bin, dst_txt)) = self.cdtext_paths() else {
+			return;
+		};
 
 		// Save the raw binary data first, unless it already exists.
-		if
-			(
-				! dst_bin.is_file() ||
-				std::fs::read(&dst_bin).ok().is_none_or(|v| v != *bin)
-			) &&
-			CacheWriter::oneshot(&dst_bin, bin).is_err()
+		if (!dst_bin.is_file() || std::fs::read(&dst_bin).ok().is_none_or(|v| v != *bin))
+			&& CacheWriter::oneshot(&dst_bin, bin).is_err()
 		{
 			// This shouldn't fail, but if it does, we won't be able to save
 			// the other version either.
@@ -437,32 +480,37 @@ impl Disc {
 		match txt {
 			Ok(txt) => {
 				let txt = txt.to_string();
-				if
-					(
-						! dst_txt.is_file() ||
-						std::fs::read_to_string(&dst_txt).ok().is_none_or(|v| v != txt)
-					) &&
-					CacheWriter::oneshot(&dst_txt, txt.as_bytes()).is_err()
+				if (!dst_txt.is_file()
+					|| std::fs::read_to_string(&dst_txt)
+						.ok()
+						.is_none_or(|v| v != txt))
+					&& CacheWriter::oneshot(&dst_txt, txt.as_bytes()).is_err()
 				{
 					std::hint::cold_path();
 				}
-			},
+			}
 
 			// If decoding had failed due to a feature-related issue, ask the
 			// user to open a bug report.
-			Err(CDTextError::UnsupportedDoubleByte | CDTextError::UnsupportedEncoding | CDTextError::UnsupportedExtension) => {
+			Err(
+				CDTextError::UnsupportedDoubleByte
+				| CDTextError::UnsupportedEncoding
+				| CDTextError::UnsupportedExtension,
+			) => {
 				let _res = progress.push_msg(Msg::warning(format!(
 					concat!(
-					"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
-					"         the ", dim!("{prefix}.cdtext.bin"), " so we can fix that!\n",
-					ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
+						"Rip Rip wasn't able to decode the CD-Text. Please consider sharing\n",
+						"         the ",
+						dim!("{prefix}.cdtext.bin"),
+						" so we can fix that!\n",
+						ansi!((light_blue) "         https://github.com/Blobfolio/riprip/issues/new"),
 					),
-					prefix=cache_prefix(&self.toc),
+					prefix = cache_prefix(&self.toc),
 				)));
-			},
+			}
 
 			// If decoding had failed for some other reason, do nothing.
-			_ => {},
+			_ => {}
 		}
 	}
 
@@ -473,8 +521,12 @@ impl Disc {
 	/// ## Errors
 	///
 	/// This will return an error if there are I/O problems or the user aborts.
-	pub fn status(&self, opts: &RipOptions, progress: &Progless, killed: KillSwitch)
-	-> Result<(), RipRipError> {
+	pub fn status(
+		&self,
+		opts: &RipOptions,
+		progress: &Progless,
+		killed: KillSwitch,
+	) -> Result<(), RipRipError> {
 		// Load the ripper.
 		let mut rip = Ripper::new(self, opts)?;
 		rip.status(progress, killed)?;
@@ -484,60 +536,63 @@ impl Disc {
 	}
 }
 
-
-
 /// # Format AccurateRip.
 fn fmt_ar(ar: Option<(u8, u8)>, color: bool) -> Cow<'static, str> {
 	if let Some((v1, v2)) = ar {
-		let c1 =
-			if ! color { "" }
-			else if v1 == 0 { csi!(reset, light_red) }
-			else if v1 <= 5 { csi!(reset, light_yellow) }
-			else { csi!(reset, light_green) };
+		let c1 = if !color {
+			""
+		} else if v1 == 0 {
+			csi!(reset, light_red)
+		} else if v1 <= 5 {
+			csi!(reset, light_yellow)
+		} else {
+			csi!(reset, light_green)
+		};
 
-		let r1 =
-			if color { csi!(reset, dim) }
-			else { "" };
+		let r1 = if color { csi!(reset, dim) } else { "" };
 
-		let c2 =
-			if ! color { "" }
-			else if v2 == 0 { csi!(reset, light_red) }
-			else if v2 <= 5 { csi!(reset, light_yellow) }
-			else { csi!(reset, light_green) };
+		let c2 = if !color {
+			""
+		} else if v2 == 0 {
+			csi!(reset, light_red)
+		} else if v2 <= 5 {
+			csi!(reset, light_yellow)
+		} else {
+			csi!(reset, light_green)
+		};
 
-		let r2 =
-			if color { csi!() }
-			else { "" };
+		let r2 = if color { csi!() } else { "" };
 
 		Cow::Owned(format!(
 			"        {c1}{:02}{r1}+{c2}{:02}{r2}",
 			v1.min(99),
 			v2.min(99),
 		))
+	} else {
+		Cow::Borrowed("             ")
 	}
-	else { Cow::Borrowed("             ") }
 }
 
 #[expect(clippy::option_if_let_else, reason = "Too messy.")]
 /// # Format CUETools.
 fn fmt_ctdb(ctdb: Option<u16>, color: bool) -> Cow<'static, str> {
 	if let Some(v1) = ctdb {
-		let c1 =
-			if ! color { "" }
-			else if v1 == 0 { csi!(reset, light_red) }
-			else if v1 <= 5 { csi!(reset, light_yellow) }
-			else { csi!(reset, light_green) };
+		let c1 = if !color {
+			""
+		} else if v1 == 0 {
+			csi!(reset, light_red)
+		} else if v1 <= 5 {
+			csi!(reset, light_yellow)
+		} else {
+			csi!(reset, light_green)
+		};
 
-		let r1 =
-			if color { csi!() }
-			else { "" };
+		let r1 = if color { csi!() } else { "" };
 
-		Cow::Owned(format!(
-			"       {c1}{:03}{r1}",
-			v1.min(999),
-		))
+		Cow::Owned(format!("       {c1}{:03}{r1}", v1.min(999),))
+	} else {
+		Cow::Borrowed("          ")
 	}
-	else { Cow::Borrowed("          ") }
 }
 
 /// # Generate CUE Sheet if Complete.
@@ -574,9 +629,11 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 		// If there's an HTOA, it needs to be grouped with the first track.
 		if track.position().is_first() && toc.htoa().is_some() {
 			// This should have been ripped with everything else.
-			let Some(src0) = ripped.get(&0)
+			let Some(src0) = ripped
+				.get(&0)
 				.and_then(|(dst, _, _)| dst.file_name())
-				.and_then(OsStr::to_str) else {
+				.and_then(OsStr::to_str)
+			else {
 				log!(@trace "Unable to obtain output file name for HTOA; skipping cuesheet.");
 				return None;
 			};
@@ -622,11 +679,13 @@ fn write_htoa_likely(stderr: &mut StderrLock<'static>) {
 	let _res = writeln!(
 		stderr,
 		concat!(
-			csi!(light_yellow), "\n*",
+			csi!(light_yellow),
+			"\n*",
 			csi!(reset, dim),
 			" HTOA tracks cannot be verified w/ AccurateRip or CTDB,\n",
 			"  but this rip rates ",
-			csi!(reset, light_yellow), "likely",
+			csi!(reset, light_yellow),
+			"likely",
 			ansi!((reset, dim) ", which is the next best thing!"),
 		),
 	);
@@ -643,27 +702,30 @@ fn write_htoa_any(stderr: &mut StderrLock<'static>) {
 	let _res = writeln!(
 		stderr,
 		concat!(
-			csi!(light_yellow), "\n*",
+			csi!(light_yellow),
+			"\n*",
 			csi!(reset, dim),
 			" HTOA tracks cannot be verified w/ AccurateRip or CTDB\n",
 			"  so you should re-rip it until it rates ",
-			csi!(reset, light_yellow), "likely",
+			csi!(reset, light_yellow),
+			"likely",
 			ansi!((reset, dim) " to be safe."),
 		),
 	);
 }
-
-
 
 /// # Loggable AccurateRip.
 struct LoggableAccurateRip(Option<(u8, u8)>);
 
 impl fmt::Display for LoggableAccurateRip {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		if let Some((v1, v2)) = self.0 && (v1 != 0 || v2 != 0) {
+		if let Some((v1, v2)) = self.0
+			&& (v1 != 0 || v2 != 0)
+		{
 			write!(f, "\n    AccurateRip {}+{}", v1.min(99), v2.min(99))
+		} else {
+			Ok(())
 		}
-		else { Ok(()) }
 	}
 }
 
@@ -672,10 +734,13 @@ struct LoggableCTDB(Option<u16>);
 
 impl fmt::Display for LoggableCTDB {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		if let Some(v) = self.0 && v != 0 {
+		if let Some(v) = self.0
+			&& v != 0
+		{
 			write!(f, "\n    CUETools {}", v.min(999))
+		} else {
+			Ok(())
 		}
-		else { Ok(()) }
 	}
 }
 
@@ -685,8 +750,9 @@ struct LoggableFruits<'a>(&'a SavedRips);
 impl fmt::Display for LoggableFruits<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		for (idx, (file, ar, ctdb)) in self.0 {
-			if *idx == 0 { write!(f, "\n  {} (HTOA)", file.display())?; }
-			else {
+			if *idx == 0 {
+				write!(f, "\n  {} (HTOA)", file.display())?;
+			} else {
 				write!(
 					f,
 					"\n  {}{}{}",

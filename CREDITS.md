@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.8.0
+    Version:   0.8.1
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2026-09-12 20:24:25 UTC
+    Generated: 2026-09-16 07:14:12 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -11,15 +11,13 @@
 | [aws-lc-sys](https://github.com/aws/aws-lc-rs) | 0.45.0 | AWS-LC | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) |
 | [bitflags](https://github.com/bitflags/bitflags) | 2.13.2 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | RustCrypto Developers | MIT OR Apache-2.0 |
-| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.4.5 |  | MIT OR Apache-2.0 |
+| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.4.6 |  | MIT OR Apache-2.0 |
 | [**cdtoc**](https://github.com/Blobfolio/cdtoc) | 0.14.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.4 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [cmake](https://github.com/rust-lang/cmake-rs) ⚒️ | 0.1.58 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [const-oid](https://github.com/RustCrypto/formats) | 0.10.2 | RustCrypto Developers | Apache-2.0 OR MIT |
 | [core_detect](https://github.com/thomcc/core_detect) | 1.0.0 | [Thom Chiovoloni](mailto:chiovolonit@gmail.com) | MIT OR Apache-2.0 |
 | [cpufeatures](https://github.com/RustCrypto/utils) | 0.3.1 | RustCrypto Developers | MIT OR Apache-2.0 |
-| [**crc**](https://github.com/mrhooray/crc-rs.git) | 3.4.0 | [Rui Hu](mailto:code@mrhooray.com) and [Akhil Velagapudi](mailto:4@4khil.com) | MIT OR Apache-2.0 |
-| [crc-catalog](https://github.com/akhilles/crc-catalog.git) | 2.5.0 | [Akhil Velagapudi](mailto:akhilvelagapudi@gmail.com) | MIT OR Apache-2.0 |
 | [**crc32fast**](https://github.com/srijs/rust-crc32fast) | 1.5.2 | [Sam Rijs](mailto:srijs@airpost.net) and [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [**dactyl**](https://github.com/Blobfolio/dactyl) | 0.13.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
@@ -43,9 +41,9 @@
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
 | [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.7.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [pkg-config](https://github.com/rust-lang/pkg-config-rs) ⚒️ | 0.3.34 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.8.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.8.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| [rustls](https://github.com/rustls/rustls) | 0.23.44 |  | Apache-2.0 OR ISC OR MIT |
+| [rustls](https://github.com/rustls/rustls) | 0.23.45 |  | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 |  | MIT OR Apache-2.0 |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 |  | ISC |
 | [rustversion](https://github.com/dtolnay/rustversion) ⚒️ | 1.0.23 | [David Tolnay](mailto:dtolnay@gmail.com) | MIT OR Apache-2.0 |

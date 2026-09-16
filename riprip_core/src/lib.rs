@@ -67,6 +67,7 @@ mod disc;
 mod drive;
 mod drivers;
 mod error;
+mod isrc;
 mod loglog;
 pub mod macros;
 mod rip;
@@ -82,6 +83,7 @@ pub use drive::{
 	ReadOffset,
 };
 pub use error::RipRipError;
+pub use isrc::Isrc;
 pub use loglog::{
 	LogLog,
 	LogLevel,

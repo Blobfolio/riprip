@@ -16,21 +16,21 @@ TRACK 01:
 	COMPOSER: Ludwig van Beethoven
 	MESSAGE: Fritz and Louie once were punks
 	ARRANGER: Tom Cat
-	ISRC: XYBLG1101234
+	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: The Hunt
 	PERFORMER: Catwalk Beauties
 	SONGWRITER: Mother Nature
 	COMPOSER: unknown
 	ARRANGER: Tom Cat
-	ISRC: XYBLG1100005
+	ISRC: XY-BLG-11-00005
 TRACK 03:
 	TITLE: Mee Owwww
 	PERFORMER: Mia Kitten
 	SONGWRITER: Mia Kitten
 	COMPOSER: Mia Kitten
 	ARRANGER: Mia Kitten
-	ISRC: XYBLG1100006
+	ISRC: XY-BLG-11-00006
 
 [BLOCK 1: German]
 DISC:
@@ -50,18 +50,18 @@ TRACK 01:
 	COMPOSER: Ludwig van Beethoven
 	MESSAGE: Fritz und Louie waren einmal Punks
 	ARRANGER: Tom Cat
-	ISRC: XYBLG1101234
+	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: Die Jagd
 	PERFORMER: Laufsteg Miezen
 	SONGWRITER: Mutter Natur
 	COMPOSER: unbekannt
 	ARRANGER: Tom Cat
-	ISRC: XYBLG1100005
+	ISRC: XY-BLG-11-00005
 TRACK 03:
 	TITLE: Mie auu
 	PERFORMER: Mia Kätzchen
 	SONGWRITER: Mia Kätzchen
 	COMPOSER: Mia Kätzchen
 	ARRANGER: Mia Kätzchen
-	ISRC: XYBLG1100006
+	ISRC: XY-BLG-11-00006

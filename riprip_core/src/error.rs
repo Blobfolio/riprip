@@ -179,6 +179,9 @@ pub enum RipRipError {
 	/// # Unable to get first track number.
 	FirstTrackNum,
 
+	/// # Invalid ISRC.
+	Isrc,
+
 	/// # User Abort.
 	Killed,
 
@@ -274,6 +277,7 @@ impl fmt::Display for RipRipError {
 			Self::DriveModel => f.write_str("Invalid drive model."),
 			Self::DriveVendor => f.write_str("Invalid drive vendor."),
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
+			Self::Isrc => f.write_str("Invalid ISRC."),
 			Self::Killed => f.write_str("User abort."),
 			Self::Leadout => f.write_str("Unable to obtain leadout."),
 			Self::Noop => f.write_str("There's nothing to do!"),
