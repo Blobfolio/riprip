@@ -403,14 +403,32 @@ impl Encoding {
 	///
 	/// Parse a raw byte stream into a string, given the encoding.
 	fn decode(self, bytes: &[u8]) -> String {
+		use trimothy::TrimMut;
+
 		match self {
-			Self::Iso8859_1 | Self::Ascii => {
-				// Try to parse directly as UTF-8/ASCII first without looping.
-				std::str::from_utf8(bytes).map_or_else(
-					|_| bytes.iter().map(|&b| b as char).collect(),
-					ToOwned::to_owned,
-				)
-			}
+			Self::Ascii =>
+				// If this fails, the CD is a goddamn liar!
+				if
+					let Ok(out) = std::str::from_utf8(bytes) &&
+					out.is_ascii()
+				{
+					out.trim().to_owned()
+				}
+				// LIAR!
+				else { String::new() },
+
+			Self::Iso8859_1 => {
+				// This is a subset of UTF-8, but each byte is its own
+				// character. To avoid accidental "combining", we need to map
+				// each byte individually.
+				let mut out: String = bytes.iter()
+					.copied()
+					.map(|b| b as char)
+					.collect();
+				out.trim_mut();
+				out
+			},
+
 			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
 		}
 	}
