@@ -164,7 +164,7 @@ impl CDText {
 
 								// Skip freeform insertion if empty.
 								if v2.is_empty() { continue; }
-								v2.to_owned()
+								v2
 							},
 
 							// Everything else just needs to be decoded.
@@ -414,36 +414,56 @@ impl Encoding {
 	#[must_use]
 	/// # Decode.
 	///
-	/// Parse a raw byte stream into a string, given the encoding.
+	/// Parse a raw byte stream into a string, given the encoding type.
+	///
+	/// This method trims all results, normalizes inner whitespace to
+	/// horizontal spaces, and drops control characters.
 	fn decode(self, bytes: &[u8]) -> String {
 		use trimothy::TrimMut;
 
-		match self {
+		/// # Normalize Char.
+		///
+		/// Convert whitespace to a horizontal space, drop controls.
+		const fn normalize_char(c: char) -> Option<char> {
+			if c.is_whitespace() { Some(' ' ) }
+			else if c.is_control() { None }
+			else { Some(c) }
+		}
+
+		// Skip the trouble.
+		if bytes.is_empty() { return String::new(); }
+
+		// Convert to string, with normalized whitespace and no controls.
+		let mut out: String = match self {
 			Self::Ascii =>
-				// If this fails, the CD is a goddamn liar!
-				if
-					let Ok(out) = std::str::from_utf8(bytes) &&
-					out.is_ascii()
-				{
-					out.trim().to_owned()
+				if bytes.is_ascii() {
+					bytes.iter()
+						.copied()
+						.filter_map(|b| normalize_char(b as char))
+						.collect()
 				}
 				// LIAR!
-				else { String::new() },
+				else { return String::new(); },
 
-			Self::Iso8859_1 => {
-				// This is a subset of UTF-8, but each byte is its own
-				// character. To avoid accidental "combining", we need to map
-				// each byte individually.
-				let mut out: String = bytes.iter()
-					.copied()
-					.map(|b| b as char)
-					.collect();
-				out.trim_mut();
-				out
-			},
+			// Mapping works exactly the same as ASCII, minus the ASCII
+			// requirement.
+			Self::Iso8859_1 => bytes.iter()
+				.copied()
+				.filter_map(|b| normalize_char(b as char))
+				.collect(),
 
-			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
-		}
+			// This one requires specialized UTF-8 conversion prior to
+			// normalization.
+			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes)
+				.0
+				.chars()
+				.filter_map(normalize_char)
+				.collect(),
+		};
+
+		// Trim the edges and return.
+		out.trim_mut();
+		out
 	}
 }
 
@@ -535,5 +555,33 @@ mod test {
 			matches!(CDText::from_bytes(&[]), Err(CDTextError::Empty)),
 			"Empty CD-Text parsed Ok().",
 		);
+	}
+
+	#[test]
+	fn t_decode_normalize() {
+		assert_eq!(
+			Encoding::Ascii.decode(b"hello world"),
+			"hello world",
+		);
+		assert_eq!(
+			Encoding::Ascii.decode(b" \n\0hello\tworld \0\0 "),
+			"hello world",
+		);
+		assert_eq!(
+			Encoding::Ascii.decode("hello ♥".as_bytes()), // Not ASCII!
+			"",
+		);
+
+		// Latin probably shouldn't be for lovers.
+		let raw: &[u8] = &[
+			b'h', 233, b'l', b'l', 246,  b' ',
+			b'w', 246, b'r', b'l', b'd', b'!',
+		];
+		let dec = Encoding::Iso8859_1.decode(raw);
+		let exp = "héllö wörld!";
+
+		assert_eq!(dec, exp);                       // Looks right.
+		assert_eq!(raw.len(), dec.chars().count()); // Same char count.
+		assert!(raw.len() < dec.len());             // But different/more bytes!
 	}
 }
