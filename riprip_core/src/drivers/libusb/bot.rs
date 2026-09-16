@@ -19,7 +19,7 @@ pub(super) const OPTICAL_DRIVE_SUBCLASSES: [u8; 3] = [
 	SUBCLASS_SCSI_TRANSPARENT,
 ];
 
-pub(super) const CBW_LEN: usize = 31;
+const CBW_LEN: usize = 31;
 pub(super) const CSW_LEN: usize = 13;
 
 const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");

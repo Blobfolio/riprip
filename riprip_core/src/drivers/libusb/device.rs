@@ -12,6 +12,7 @@ use crate::RipRipError;
 #[cfg(target_os = "macos")]
 mod macos {
 	use super::{Path, RipRipError};
+	use crate::log;
 
 	use std::ffi::CString;
 	use std::os::unix::ffi::OsStrExt;
@@ -62,6 +63,7 @@ mod macos {
 		// Find the specific IOMedia service for this BSD name.
 		let matching_mut = unsafe { IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr()) };
 		if matching_mut.is_none() {
+			log!(@trace "Failed to create an IOKit matching dictionary.");
 			return Ok(None);
 		}
 
@@ -75,11 +77,11 @@ mod macos {
 		let res =
 			unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &raw mut iterator) };
 		if res != kIOReturnSuccess {
-			return Err(RipRipError::Internal(format!(
-				"IOServiceGetMatchingServices failed: 0x{res:08x}"
-			)));
+			log!(@trace "IOServiceGetMatchingServices failed: 0x{res:08x}.");
+			return Err(RipRipError::Bug("IOServiceGetMatchingServices"));
 		}
 		if iterator == 0 {
+			log!(@trace "No matching services found for {}.", bsd_name.to_string_lossy());
 			return Ok(None);
 		}
 
@@ -92,11 +94,14 @@ mod macos {
 
 		let vid_opt = get_numeric_property(media_service, "idVendor");
 		let pid_opt = get_numeric_property(media_service, "idProduct");
-		let result = Ok(vid_opt.zip(pid_opt));
+		let option = vid_opt.zip(pid_opt);
+		if option.is_none() {
+			log!(@trace "Missing USB device properties.");
+		}
 
 		IOObjectRelease(media_service);
 
-		result
+		Ok(option)
 	}
 }
 
