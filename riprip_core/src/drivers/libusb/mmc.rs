@@ -93,7 +93,7 @@ const fn copy_bytes<const N: usize, const M: usize>(
 
 pub(super) trait TransportExt {
 	/// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
-	fn submit<const N: usize>(&self, cdb: &[u8; N], data: &mut [u8]) -> Result<usize, RipRipError>;
+	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError>;
 }
 
 /// A low-level API for interacting with a physical CD drive specifically to read audio data.
@@ -399,6 +399,8 @@ pub(super) trait MmcDriverExt: TransportExt {
 		self.submit(&cdb, buf)
 	}
 }
+
+impl<T: TransportExt + ?Sized> MmcDriverExt for T {}
 
 impl<T: MmcDriverExt> CddaDriverExt for T {
 	fn first_track_num(&self) -> Result<u8, RipRipError> {

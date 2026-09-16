@@ -274,8 +274,6 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	}
 }
 
-impl<T: UsbContext> MmcDriverExt for LibusbInstance<T> {}
-
 impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
 	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where
