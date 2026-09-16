@@ -16,6 +16,7 @@ mod track;
 
 use crate::{
 	Barcode,
+	Isrc,
 	macros::log,
 };
 use dactyl::NoHash;
@@ -152,10 +153,13 @@ impl CDText {
 								v.to_string()
 							}
 
+							// Disc ID is always ASCII.
+							DiscField::DiscId => { Encoding::Ascii.decode(&buf) },
+
 							// Separate genre code and freeform representations.
+							// Both are always ASCII.
 							DiscField::Genre => {
-								let v = encoding.decode(&buf);
-								let (v1, v2) = GenreCode::split_raw(v.as_bytes());
+								let (v1, v2) = GenreCode::split_raw(&buf);
 								genre_code = v1;
 
 								// Skip freeform insertion if empty.
@@ -178,7 +182,18 @@ impl CDText {
 				}
 				// Track-level data.
 				else if let Some(field) = field.track_field() {
-					let v = encoding.decode(&buf);
+					let v = match field {
+						// Force proper ISRC formatting.
+						TrackField::Isrc => {
+							let Ok(v) = Isrc::try_from(buf.as_slice()) else {
+								continue;
+							};
+							v.to_string()
+						},
+
+						// Everything else just needs to be decoded.
+						_ => { encoding.decode(&buf) },
+					};
 					if ! v.is_empty() {
 						catalog.insert(
 							u16::from_le_bytes([field as u8, track]),
@@ -393,7 +408,7 @@ impl Encoding {
 				// Try to parse directly as UTF-8/ASCII first without looping.
 				std::str::from_utf8(bytes).map_or_else(
 					|_| bytes.iter().map(|&b| b as char).collect(),
-					std::borrow::ToOwned::to_owned,
+					ToOwned::to_owned,
 				)
 			}
 			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
