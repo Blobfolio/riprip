@@ -61,7 +61,7 @@ fn find_and_open_cd_drive<C: UsbContext>(
 		.find_map(|device| {
 			let config_desc = device.active_config_descriptor().ok()?;
 
-			let is_cd_drive = config_desc.interfaces().any(|interface| {
+			let is_optical = config_desc.interfaces().any(|interface| {
 				interface.descriptors().any(|desc| {
 					desc.class_code() == bot::CLASS_MASS_STORAGE
 						&& (bot::OPTICAL_DRIVE_SUBCLASSES.contains(&desc.sub_class_code()))
@@ -69,7 +69,8 @@ fn find_and_open_cd_drive<C: UsbContext>(
 				})
 			});
 
-			if is_cd_drive {
+			if is_optical {
+				log!(@debug "Found optical drive ({:?}).", device);
 				Some(
 					device
 						.open()
@@ -157,7 +158,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 			log!(@debug "Device path {device_path}.");
 
 			if let Some((vid, pid)) = device::get_desc(&path)? {
-				log!(@debug "Using USB device {vid:04x}:{pid:04x}.");
+				log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
 
 				find_and_open_device(&devices, vid, pid)?
 			} else {
