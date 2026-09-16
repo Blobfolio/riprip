@@ -129,14 +129,11 @@ pub(crate) struct LibusbInstance<C: UsbContext = GlobalContext> {
 impl<C: UsbContext> Drop for LibusbInstance<C> {
 	fn drop(&mut self) {
 		if let Err(e) = self.device_handle.release_interface(self.interface_id) {
-			eprintln!("Error releasing USB interface {}: {}", self.interface_id, e);
+			log!(@error "Releasing USB interface {}: {}.", self.interface_id, e);
 		}
 
 		if let Err(e) = self.device_handle.attach_kernel_driver(self.interface_id) {
-			eprintln!(
-				"Error reattaching kernel driver for interface {}: {}",
-				self.interface_id, e
-			);
+			log!(@error "Reattaching kernel driver for interface {}: {}.", self.interface_id, e);
 		}
 	}
 }
@@ -196,7 +193,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 			device_handle,
 			interface_id,
 			endpoints,
-			cbw_tag: AtomicU32::new(0x10000001),
+			cbw_tag: AtomicU32::default(),
 		};
 
 		out.check_disc_mode__()?;
