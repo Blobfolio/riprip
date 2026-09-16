@@ -7,7 +7,7 @@ use dactyl::traits::{
 	NiceInflection,
 };
 use riprip_core::{
-	CD_LEADOUT_LABEL,
+	CD_LEADOUT,
 	cdtoc::TocKind,
 	Disc,
 	DriveVendorModel,
@@ -389,8 +389,8 @@ impl fmt::Display for LoggableTracks<'_> {
 		// The leadout.
 		write!(
 			f,
-			"\n  {}  {:>6}                         LEAD-OUT",
-			CD_LEADOUT_LABEL,
+			"\n  {:02X}  {:>6}                         LEAD-OUT",
+			CD_LEADOUT,
 			toc.leadout_normalized(),
 		)
 	}
