@@ -324,7 +324,7 @@ impl fmt::Display for LoggableTracks<'_> {
 		let mut total = 0;
 		write!(
 			f,
-			"\n  NO   FIRST    LAST  LENGTH          {}",
+			"\n  NO   FIRST    LAST  LENGTH             {}",
 			if self.0.has_isrcs() { "ISRC" } else { "" },
 		)?;
 
@@ -334,7 +334,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			let len = rng.end - rng.start;
 			write!(
 				f,
-				"\n  00  {:>6}  {:>6}  {:>6}          HTOA",
+				"\n  00  {:>6}  {:>6}  {:>6}             HTOA",
 				rng.start,
 				rng.end - 1,
 				len,
@@ -345,7 +345,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			total += 1;
 			write!(
 				f,
-				"\n  {:02}  {:>6}                    DATA TRACK",
+				"\n  {:02}  {:>6}                       DATA TRACK",
 				total,
 				toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -360,7 +360,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			if let Some(isrc) = self.0.isrc(num) {
 				write!(
 					f,
-					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
+					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
 					rng.start,
 					rng.end - 1,
 				)?;
@@ -380,7 +380,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			total += 1;
 			write!(
 				f,
-				"\n  {:02}  {:>6}                    DATA TRACK",
+				"\n  {:02}  {:>6}                       DATA TRACK",
 				total,
 				toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -389,7 +389,7 @@ impl fmt::Display for LoggableTracks<'_> {
 		// The leadout.
 		write!(
 			f,
-			"\n  {}  {:>6}                      LEAD-OUT",
+			"\n  {}  {:>6}                         LEAD-OUT",
 			CD_LEADOUT_LABEL,
 			toc.leadout_normalized(),
 		)

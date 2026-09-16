@@ -81,7 +81,7 @@ impl fmt::Display for Disc {
 	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		/// # Divider.
-		const DIVIDER: &str = dim!("----------------------------------------\n");
+		const DIVIDER: &str = dim!("-------------------------------------------\n");
 
 		// A few key/value pairs.
 		let mut kv: Vec<(&str, &str, String)> = vec![
@@ -110,7 +110,7 @@ impl fmt::Display for Disc {
 		// Start the table of contents.
 		write!(
 			f,
-			dim!("\nNO   FIRST    LAST  LENGTH          {}\n"),
+			dim!("\nNO   FIRST    LAST  LENGTH             {}\n"),
 			if self.has_isrcs() { "ISRC" } else { "" },
 		)?;
 		f.write_str(DIVIDER)?;
@@ -123,7 +123,7 @@ impl fmt::Display for Disc {
 			let len = rng.end - rng.start;
 			writeln!(
 				f,
-				dim!("00  {:>6}  {:>6}  {:>6}          HTOA"),
+				dim!("00  {:>6}  {:>6}  {:>6}             HTOA"),
 				rng.start,
 				rng.end - 1,
 				len,
@@ -134,7 +134,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                    DATA TRACK"),
+				dim!("{:02}  {:>6}                       DATA TRACK"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -149,7 +149,7 @@ impl fmt::Display for Disc {
 			if let Some(isrc) = self.isrc(num) {
 				writeln!(
 					f,
-					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
+					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
 					rng.start,
 					rng.end - 1,
 				)?;
@@ -169,7 +169,7 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                    DATA TRACK"),
+				dim!("{:02}  {:>6}                       DATA TRACK"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
 			)?;
@@ -178,7 +178,7 @@ impl fmt::Display for Disc {
 		// The leadout.
 		writeln!(
 			f,
-			concat!(csi!(dim), "{}  {:>6}                      LEAD-OUT"),
+			concat!(csi!(dim), "{}  {:>6}                         LEAD-OUT"),
 			CD_LEADOUT_LABEL,
 			self.toc.leadout_normalized(),
 		)?;
