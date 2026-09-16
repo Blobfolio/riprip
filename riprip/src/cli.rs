@@ -2,17 +2,38 @@
 # Rip Rip Hooray: CLI
 */
 
-use dactyl::traits::{BytesToUnsigned, NiceInflection};
+use dactyl::traits::{
+	BytesToUnsigned,
+	NiceInflection,
+};
 use riprip_core::{
-	CD_LEADOUT, Disc, DriveVendorModel, LogLog, ReadOffset, RipOptions, RipRipError,
-	cdtoc::TocKind, macros::log,
+	CD_LEADOUT,
+	cdtoc::TocKind,
+	Disc,
+	DriveVendorModel,
+	LogLog,
+	macros::log,
+	ReadOffset,
+	RipOptions,
+	RipRipError,
 };
 use std::fmt;
+
+
 
 /// # Options Return Type.
 ///
 /// This is awful, but not quite awful enough to warrant a struct. Haha.
-pub(super) type Parsed = (RipOptions, Disc, Option<DriveVendorModel>, bool, bool, bool);
+pub(super) type Parsed = (
+	RipOptions,
+	Disc,
+	Option<DriveVendorModel>,
+	bool,
+	bool,
+	bool,
+);
+
+
 
 #[expect(clippy::too_many_lines, reason = "There's a lot to parse.")]
 /// # Parse Options.
@@ -54,81 +75,55 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	let mut verbosity = 0_u8;
 	for arg in Argument::args_os() {
 		match arg {
-			Argument::Backward => {
-				opts = opts.with_backwards(true);
-			}
-			Argument::FlipFlop => {
-				opts = opts.with_flip_flop(true);
-			}
-			Argument::NoCdText => {
-				no_cdtext = true;
-			}
-			Argument::NoResume => {
-				opts = opts.with_resume(false);
-			}
-			Argument::NoRip => {
-				no_rip = true;
-			}
-			Argument::NoSummary => {
-				no_summary = true;
-			}
-			Argument::Reset => {
-				opts = opts.with_reset(true);
-			}
-			Argument::Status => {
-				status = true;
-			}
-			Argument::Strict => {
-				opts = opts.with_strict(true);
-			}
-			Argument::Sync => {
-				opts = opts.with_sync(true);
-			}
-			Argument::Verbose => {
+			Argument::Backward =>  { opts = opts.with_backwards(true); },
+			Argument::FlipFlop =>  { opts = opts.with_flip_flop(true); },
+			Argument::NoCdText =>  { no_cdtext = true; },
+			Argument::NoResume =>  { opts = opts.with_resume(false); },
+			Argument::NoRip =>     { no_rip = true; },
+			Argument::NoSummary => { no_summary = true; },
+			Argument::Reset =>     { opts = opts.with_reset(true); },
+			Argument::Status =>    { status = true; },
+			Argument::Strict =>    { opts = opts.with_strict(true); },
+			Argument::Sync =>      { opts = opts.with_sync(true); },
+			Argument::Verbose =>   {
 				verbosity += 1;
 				opts = opts.with_verbose(true);
-			}
+			},
 
-			Argument::Help => return Err(RipRipError::PrintHelp),
+			Argument::Help =>    return Err(RipRipError::PrintHelp),
 			Argument::Version => return Err(RipRipError::PrintVersion),
 
 			Argument::Cache(s) => {
 				let s = parse_rip_option_cache(s)?;
 				cache.replace(s);
-			}
+			},
 			Argument::Confidence(s) => {
-				let s =
-					u8::btou(s.trim().as_bytes()).ok_or(RipRipError::CliParse("--confidence"))?;
+				let s = u8::btou(s.trim().as_bytes())
+					.ok_or(RipRipError::CliParse("--confidence"))?;
 				opts = opts.with_confidence(s);
-			}
-			Argument::Device(s) => {
-				dev.replace(s);
-			}
+			},
+			Argument::Device(s) => { dev.replace(s); },
 			Argument::Offset(s) => {
 				let s = ReadOffset::try_from(s.trim().as_bytes())
 					.map_err(|_| RipRipError::CliParse("-o/--offset"))?;
 				offset.replace(s);
-			}
+			},
 			Argument::Passes(s) => {
-				let s =
-					u8::btou(s.trim().as_bytes()).ok_or(RipRipError::CliParse("-p/--passes"))?;
+				let s = u8::btou(s.trim().as_bytes())
+					.ok_or(RipRipError::CliParse("-p/--passes"))?;
 				opts = opts.with_passes(s);
-			}
+			},
 			Argument::ReRead(s) => {
 				let (a, b) = parse_rip_option_reread(s.as_bytes())?;
 				opts = opts.with_rereads(a, b);
-			}
+			},
 			Argument::Tracks(s) => {
-				if !tracks.is_empty() {
-					tracks.push(',');
-				}
+				if ! tracks.is_empty() { tracks.push(','); }
 				tracks.push_str(&s);
-			}
+			},
 
 			Argument::Other(s) => return Err(RipRipError::CliArg(s)),
-			Argument::OtherOs(s) => {
-				return Err(RipRipError::CliArg(s.to_string_lossy().into_owned()));
-			}
+			Argument::OtherOs(s) => return Err(RipRipError::CliArg(s.to_string_lossy().into_owned())),
 		}
 	}
 
@@ -139,12 +134,10 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	}
 
 	// Figure out the disc and drive.
-	let disc = Disc::new(dev, !no_cdtext)?;
+	let disc = Disc::new(dev, ! no_cdtext)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if level.is_some() {
-		if let Some(v) = drivevendormodel {
-			log!(@info "{v}");
-		}
+		if let Some(v) = drivevendormodel { log!(@info "{v}"); }
 		log!(@info "{}", LoggableDisc(&disc));
 		log!(@info "{}", LoggableTracks(&disc));
 		if let Some(cdtext) = disc.cdtext() {
@@ -163,26 +156,28 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	// If we just want the status or didn't receive any -t, add everything.
 	if status || tracks.is_empty() {
 		let toc = disc.toc();
-		if toc.htoa().is_some() {
-			opts = opts.with_track(0);
-		}
-		for t in toc.audio_tracks() {
-			opts = opts.with_track(t.number());
-		}
+		if toc.htoa().is_some() { opts = opts.with_track(0); }
+		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 	// Otherwise parse what we gathered earlier.
-	else {
-		opts = parse_rip_option_tracks(&disc, opts, &tracks)?;
-	}
+	else { opts = parse_rip_option_tracks(&disc, opts, &tracks)?; }
 
-	Ok((opts, disc, drivevendormodel, no_rip, no_summary, status))
+	Ok((
+		opts,
+		disc,
+		drivevendormodel,
+		no_rip,
+		no_summary,
+		status,
+	))
 }
+
+
 
 /// # Parse Cache Size.
 fn parse_rip_option_cache(cache: String) -> Result<u16, RipRipError> {
 	let cache = cache.into_bytes();
-	cache
-		.iter()
+	cache.iter()
 		.position(|&b| matches!(b, b'm' | b'M'))
 		.map_or_else(
 			|| u16::btou(cache.trim_ascii()),
@@ -203,11 +198,11 @@ fn parse_rip_option_reread(v: &[u8]) -> Result<(u8, u8), RipRipError> {
 	// TODO: use split_once once stable.
 	if let Some(pos) = v.iter().position(|b| b','.eq(b)) {
 		let tmp = &v[..pos];
-		if !tmp.is_empty() {
+		if ! tmp.is_empty() {
 			a = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
 		}
 		let tmp = &v[pos + 1..];
-		if !tmp.is_empty() {
+		if ! tmp.is_empty() {
 			b = u8::btou(tmp).ok_or(RipRipError::CliParse("-r/--rereads"))?;
 		}
 	}
@@ -220,16 +215,11 @@ fn parse_rip_option_reread(v: &[u8]) -> Result<(u8, u8), RipRipError> {
 }
 
 /// # Parse Rip Tracks.
-fn parse_rip_option_tracks(
-	disc: &Disc,
-	mut opts: RipOptions,
-	tracks: &str,
-) -> Result<RipOptions, RipRipError> {
+fn parse_rip_option_tracks(disc: &Disc, mut opts: RipOptions, tracks: &str)
+-> Result<RipOptions, RipRipError> {
 	for v in tracks.split(',') {
 		let v = v.as_bytes().trim_ascii();
-		if v.is_empty() {
-			continue;
-		}
+		if v.is_empty() { continue; }
 
 		// It might be a range.
 		// TODO: use split_once once stable.
@@ -247,12 +237,9 @@ fn parse_rip_option_tracks(
 
 			// Add them all!
 			if a <= b {
-				for idx in a..=b {
-					opts = opts.with_track(idx);
-				}
-			} else {
-				return Err(RipRipError::CliParse("-t/--tracks"));
+				for idx in a..=b { opts = opts.with_track(idx); }
 			}
+			else { return Err(RipRipError::CliParse("-t/--tracks")); }
 		}
 		// Otherwise it should be a single index.
 		else {
@@ -266,28 +253,22 @@ fn parse_rip_option_tracks(
 	if opts.has_tracks() {
 		for idx in opts.tracks() {
 			// Make sure the track is valid.
-			let good = if idx == 0 {
-				toc.htoa().is_some()
-			} else {
-				toc.audio_track(usize::from(idx)).is_some()
-			};
-			if !good {
-				return Err(RipRipError::NoTrack(idx));
-			}
+			let good =
+				if idx == 0 { toc.htoa().is_some() }
+				else { toc.audio_track(usize::from(idx)).is_some() };
+			if ! good { return Err(RipRipError::NoTrack(idx)); }
 		}
 	}
 	// If no tracks were specified, DO IT ALL.
 	else {
-		if toc.htoa().is_some() {
-			opts = opts.with_track(0);
-		}
-		for t in toc.audio_tracks() {
-			opts = opts.with_track(t.number());
-		}
+		if toc.htoa().is_some() { opts = opts.with_track(0); }
+		for t in toc.audio_tracks() { opts = opts.with_track(t.number()); }
 	}
 
 	Ok(opts)
 }
+
+
 
 /// # Loggable CD-Text.
 ///
@@ -308,16 +289,17 @@ impl fmt::Display for LoggableDisc<'_> {
 		write!(
 			f,
 			"Found {kind}.\n  CDTOC:       {toc}\n  AccurateRip: {ar}\n  CDDB:        {cddb}\n  CUETools:    {ctdb}\n  MusicBrainz: {mb}",
-			ar = toc.accuraterip_id(),
-			cddb = toc.cddb_id(),
-			ctdb = toc.ctdb_id(),
-			mb = toc.musicbrainz_id(),
+			ar=toc.accuraterip_id(),
+			cddb=toc.cddb_id(),
+			ctdb=toc.ctdb_id(),
+			mb=toc.musicbrainz_id(),
 		)?;
 
 		// If we have a barcode, print that too.
-		self.0
-			.barcode()
-			.map_or(Ok(()), |barcode| write!(f, "\n  Barcode:     {barcode}"))
+		self.0.barcode().map_or(
+			Ok(()),
+			|barcode| write!(f, "\n  Barcode:     {barcode}")
+		)
 	}
 }
 
@@ -382,7 +364,8 @@ impl fmt::Display for LoggableTracks<'_> {
 					rng.start,
 					rng.end - 1,
 				)?;
-			} else {
+			}
+			else {
 				write!(
 					f,
 					"\n  {num:02}  {:>6}  {:>6}  {len:>6}",
