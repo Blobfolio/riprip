@@ -22,6 +22,7 @@ use crate::{
 		TrackField,
 	},
 	DriveVendorModel,
+	Isrc,
 	KillSwitch,
 	macros::log,
 	RipOptions,
@@ -70,7 +71,7 @@ pub struct Disc {
 	barcode: Option<Barcode>,
 
 	/// # Track ISRCs.
-	isrcs: HashMap<u8, String, NoHash>,
+	isrcs: HashMap<u8, Isrc, NoHash>,
 }
 
 impl fmt::Display for Disc {
@@ -145,13 +146,22 @@ impl fmt::Display for Disc {
 			let num = t.number();
 			let rng = t.sector_range_normalized();
 			let len = rng.end - rng.start;
-			let isrc = self.isrc(num).unwrap_or_default();
-			writeln!(
-				f,
-				"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
-				rng.start,
-				rng.end - 1,
-			)?;
+			if let Some(isrc) = self.isrc(num) {
+				writeln!(
+					f,
+					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			}
+			else {
+				writeln!(
+					f,
+					"{num:02}  {:>6}  {:>6}  {len:>6}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			}
 		}
 
 		// Trailing data track.
@@ -241,8 +251,11 @@ impl Disc {
 					// Pull the track ISRCs (if any).
 					for t in out.toc.audio_tracks() {
 						let idx = t.number();
-						if let Some(isrc) = cdtext.track(TrackField::Isrc, idx) {
-							out.isrcs.insert(idx, isrc.to_owned());
+						if
+							let Some(isrc) = cdtext.track(TrackField::Isrc, idx) &&
+							let Ok(isrc) = Isrc::try_from(isrc.as_bytes())
+						{
+							out.isrcs.insert(idx, isrc);
 						}
 					}
 
@@ -289,9 +302,7 @@ impl Disc {
 
 	#[must_use]
 	/// # ISRC.
-	pub fn isrc(&self, idx: u8) -> Option<&str> {
-		self.isrcs.get(&idx).map(String::as_str)
-	}
+	pub fn isrc(&self, idx: u8) -> Option<Isrc> { self.isrcs.get(&idx).copied() }
 
 	#[must_use]
 	/// # Table of Contents.

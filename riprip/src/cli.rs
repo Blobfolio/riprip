@@ -357,13 +357,22 @@ impl fmt::Display for LoggableTracks<'_> {
 			let num = t.number();
 			let rng = t.sector_range_normalized();
 			let len = rng.end - rng.start;
-			let isrc = self.0.isrc(num).unwrap_or_default();
-			write!(
-				f,
-				"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
-				rng.start,
-				rng.end - 1,
-			)?;
+			if let Some(isrc) = self.0.isrc(num) {
+				write!(
+					f,
+					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>12}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			}
+			else {
+				write!(
+					f,
+					"\n  {num:02}  {:>6}  {:>6}  {len:>6}",
+					rng.start,
+					rng.end - 1,
+				)?;
+			}
 		}
 
 		// Trailing data track.
