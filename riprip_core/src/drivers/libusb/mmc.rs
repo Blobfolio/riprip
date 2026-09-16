@@ -115,7 +115,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb
 		};
 
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			log!(@trace "Subchannel contains no MCN data.");
 			return Ok(None);
@@ -152,7 +152,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		// Asks only for enough bytes to discover how large the TOC is.
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
@@ -165,7 +165,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut cdb = CDB;
 		copy_bytes(&mut cdb, 7..9, toc_len.to_be_bytes());
 
-		let mut buf = vec![0u8; toc_len.into()];
+		let mut buf = vec![0_u8; toc_len.into()];
 		let len = self.submit(&cdb, &mut buf)?;
 		if len < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
@@ -217,7 +217,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb
 		};
 
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::C2Mode296);
 		}
@@ -250,7 +250,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		// Asks only for enough bytes to discover how large the CD-Text is.
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::CdText);
 		}
@@ -267,7 +267,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut cdb = CDB;
 		copy_bytes(&mut cdb, 7..9, cdtext_len.to_be_bytes());
 
-		let mut buf = vec![0u8; cdtext_len.into()];
+		let mut buf = vec![0_u8; cdtext_len.into()];
 		self.submit(&cdb, &mut buf)?;
 
 		Ok(Some(buf))
@@ -287,7 +287,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb
 		};
 
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::FirstTrackNum);
 		}
@@ -314,7 +314,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut cdb = CDB;
 		cdb[6] = idx;
 
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::TrackLba(idx));
 		}
@@ -349,7 +349,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb
 		};
 
-		let mut buf = [0u8; ALLOC_LEN];
+		let mut buf = [0_u8; ALLOC_LEN];
 		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
 			return Err(RipRipError::DriveModel);
 		}

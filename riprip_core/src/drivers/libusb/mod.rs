@@ -248,7 +248,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			0
 		};
 
-		let mut csw_raw = [0u8; CSW_LEN];
+		let mut csw_raw = [0_u8; CSW_LEN];
 		let len = self
 			.device_handle
 			.read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
