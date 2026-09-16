@@ -22,6 +22,17 @@ use super::{
 
 
 
+/// # Pack Counts (by Type).
+type PackCounts = [u8; PackKind::LEN];
+
+/// # Pack Payload.
+type PackPayload = [u8; Pack::PAYLOAD_LEN];
+
+/// # Raw Pack.
+type RawPack = [u8; Pack::RAW_LEN];
+
+
+
 /// # Helper: Block IDs.
 macro_rules! blockid {
 	( $( $k:ident $v:literal, )+ ) => (
@@ -42,10 +53,6 @@ macro_rules! blockid {
 		/// # Sanity Check.
 		const _: () = {
 			// Total is eight, starting at zero.
-			assert!(
-				BlockId::ALL.len() == BlockId::LEN,
-				"BUG: wrong `BlockId` count.",
-			);
 			assert!(
 				(BlockId::MASK as usize) + 1 == BlockId::LEN,
 				"BUG: `BlockId::MASK` is wrong.",
@@ -76,7 +83,7 @@ macro_rules! blockid {
 
 		impl BlockId {
 			/// # All Block IDs.
-			pub(super) const ALL: [Self; crate::count!($( $k )+)] = [ $( Self::$k, )+ ];
+			pub(super) const ALL: [Self; Self::LEN] = [ $( Self::$k, )+ ];
 
 			/// # Length.
 			pub(super) const LEN: usize = 8;
@@ -118,8 +125,8 @@ blockid! {
 /// a single language block, along with a running count of the number of packs
 /// contributing to it.
 pub(super) struct Block {
-	/// # Pack Count.
-	pack_count: usize,
+	/// # Pack Count by Kind.
+	pack_counts: PackCounts,
 
 	/// # Field Buffers.
 	buffers: HashMap<(PackKind, u8), Vec<u8>>,
@@ -150,8 +157,15 @@ impl Block {
 	#[must_use]
 	/// # Is Some?
 	///
-	/// Returns `true` if the pack count is at least one.
-	pub(super) const fn is_some(&self) -> bool { 0 != self.pack_count }
+	/// Returns `true` if any packs went into the making of the block.
+	pub(super) const fn is_some(&self) -> bool {
+		let mut i = 0;
+		while i < self.pack_counts.len() {
+			if self.pack_counts[i] != 0 { return true; }
+			i += 1;
+		}
+		false
+	}
 
 	/// # Size Info.
 	///
@@ -165,10 +179,10 @@ impl Block {
 		let out = self.buffers.get(&(PackKind::BlockInfo, 0))
 			.map(Vec::as_slice)
 			.ok_or(CDTextError::MissingBlockInfo)
-			.and_then(BlockInfo::from_bytes)?;
+			.and_then(BlockInfo::new)?;
 
 		// Double check the counts match before returning.
-		if self.pack_count == out.total_packs() { Ok(out) }
+		if self.pack_counts == out.pack_counts { Ok(out) }
 		else { Err(CDTextError::IncompleteData) }
 	}
 
@@ -199,10 +213,11 @@ pub(super) struct BlockInfo {
 	/// # First and Last Tracks.
 	tracks: TrackRange,
 
-	/// # Pack Count.
+	/// # Pack Counts by Kind.
 	///
-	/// Total number of expected packs contributing to the block.
-	total_packs: usize,
+	/// These totals are used to help verify that all expected packs were
+	/// actually received.
+	pack_counts: PackCounts,
 
 	/// # Language Codes (All Blocks).
 	///
@@ -220,7 +235,7 @@ impl BlockInfo {
 	///
 	/// This will return an error if the data has the wrong size, or the
 	/// encoded track range is invalid.
-	fn from_bytes(raw: &[u8]) -> Result<Self, CDTextError> {
+	fn new(raw: &[u8]) -> Result<Self, CDTextError> {
 		// This type of block has a fixed size.
 		if raw.len() != 36 {
 			return Err(CDTextError::InvalidBlockInfo);
@@ -238,12 +253,13 @@ impl BlockInfo {
 		let copyright = raw[3];
 		*/
 
-		// Pack counts are encoded per type, but for our purposes a single
-		// total is sufficient for verification.
-		let total_packs = raw[4..=19].iter()
-			.copied()
-			.map(usize::from)
-			.sum();
+		// Pack counts are encoded per type.
+		let pack_counts = [
+			raw[4],  raw[5],  raw[6],  raw[7],
+			raw[8],  raw[9],  raw[10], raw[11],
+			raw[12], raw[13], raw[14], raw[15],
+			raw[16], raw[17], raw[18], raw[19],
+		];
 
 		/*
 		// Sequences.
@@ -260,7 +276,7 @@ impl BlockInfo {
 		];
 
 		// Done!
-		Ok(Self { encoding_code, tracks, total_packs, language_codes })
+		Ok(Self { encoding_code, tracks, pack_counts, language_codes })
 	}
 
 	/// # Encoding.
@@ -286,14 +302,6 @@ impl BlockInfo {
 		};
 		Ok(language)
 	}
-
-	#[must_use]
-	/// # Total (Expected) Packs.
-	///
-	/// Return the total number of packs that should have gone into making
-	/// the associated block. (We'll check this number against our own tally
-	/// to make sure nothing was missed.)
-	const fn total_packs(&self) -> usize { self.total_packs }
 
 	#[must_use]
 	/// # Track Range.
@@ -372,12 +380,12 @@ impl Blocks {
 		let mut track_number = pack.track_number();
 		let block_id = pack.block_id();
 
-		// Increase the pack count accordingly.
-		self.blocks[block_id as usize].pack_count += 1;
-
 		// What kind of pack is this? Note that per the CD-Text specification,
 		// we can safely exit without an error if invalid.
 		let Some(field) = pack.pack_kind() else { return Ok(()); };
+
+		// Increase the pack count accordingly.
+		self.blocks[block_id as usize].bump_count(field);
 
 		// Internal data packs are simply chucked onto the associated block
 		// buffer without any intermediary figuring.
@@ -460,7 +468,7 @@ struct Pack {
 	header: [u8; Self::HEADER_LEN],
 
 	/// # Payload.
-	payload: [u8; Self::PAYLOAD_LEN],
+	payload: PackPayload,
 }
 
 impl Pack {
@@ -508,7 +516,7 @@ impl Pack {
 	///
 	/// This method will return an error if the pack data CRC does not match
 	/// the stored value.
-	const fn new(raw: &[u8; Self::RAW_LEN]) -> Result<Self, CDTextError> {
+	const fn new(raw: &RawPack) -> Result<Self, CDTextError> {
 		// Compute CRC of the header and payload data.
 		let mut crc = 0_u16;
 		let mut i = 0;
@@ -578,7 +586,7 @@ impl Pack {
 	/// # Payload.
 	///
 	/// Return the data payload.
-	const fn payload(&self) -> [u8; Self::PAYLOAD_LEN] { self.payload }
+	const fn payload(&self) -> PackPayload { self.payload }
 
 	#[must_use]
 	/// # Track Number.
@@ -596,7 +604,7 @@ const _: () = {
 	);
 	assert!(
 		16 == Pack::HEADER_LEN + Pack::PAYLOAD_LEN,
-		"BUG: fixed CRC tables requires 16-byte data.",
+		"BUG: fixed CRC tables require exactly 16 bytes of data.",
 	);
 };
 
@@ -604,7 +612,7 @@ const _: () = {
 
 /// # Helper: Pack Types.
 macro_rules! packkind {
-	( $( $k:ident $v:literal $( $disc:ident $( $track:ident )? )?, )+ ) => (
+	( $( $k:ident $v:literal $id:literal $( $disc:ident $( $track:ident )? )?, )+ ) => (
 		#[repr(u8)]
 		#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 		/// # Pack Types.
@@ -622,15 +630,40 @@ macro_rules! packkind {
 
 		/// # Sanity Checks.
 		const _: () = {
-			// Relevant data should be a subset of data.
-			let mut all: &[PackKind] = &[$( PackKind::$k, )+];
+			let mut all: &[PackKind] = PackKind::ALL.as_slice();
 			while let [ next, rest @ .. ] = all {
+				// Check sequence.
+				assert!(
+					rest.is_empty() || (*next as u8) + 1 == (rest[0] as u8),
+					"BUG: `PackKind`s are not sequential.",
+				);
+
+				// Relevant data should be a subset of data.
 				if next.is_relevant_data() {
 					assert!(
 						next.is_data(),
 						"BUG: `PackKind::is_relevant_data` requires `is_data`.",
 					);
 				}
+				all = rest;
+			}
+
+			// IDs should run 0..=15.
+			let mut all: &[u8] = &[ $( $id, )+];
+			assert!(all[0] == 0, "BUG: `PackKind` IDs must start at zero.");
+			while let [ next, rest @ .. ] = all {
+				assert!(
+					rest.is_empty() || *next + 1 == rest[0],
+					"BUG: `PackKind` IDs are not sequential.",
+				);
+				assert!(
+					! rest.is_empty() || (*next as usize + 1) == PackKind::LEN,
+					"BUG: last `PackKind` ID should be `PackKind::LEN - 1`.",
+				);
+				assert!(
+					(PackKind::ALL[*next as usize] as u8) == *next + 0x80,
+					"BUG: `PackKind` ID <=> VALUE mismatch.",
+				);
 				all = rest;
 			}
 		};
@@ -656,6 +689,12 @@ macro_rules! packkind {
 		}
 
 		impl PackKind {
+			/// # All Kinds.
+			const ALL: [Self; Self::LEN] = [ $( Self::$k, )+ ];
+
+			/// # Length.
+			const LEN: usize = 16;
+
 			#[must_use]
 			/// # From `u8`.
 			const fn from_u8(raw: u8) -> Option<Self> {
@@ -716,27 +755,41 @@ macro_rules! packkind {
 				matches!(self, Self::BlockInfo)
 			}
 		}
+
+		// Add a counting helper here where the IDs are literals that won't
+		// give the compiler any bounds-related concerns.
+		impl Block {
+			/// # Bump Count.
+			///
+			/// Increase the pack count for `kind` by one.
+			const fn bump_count(&mut self, kind: PackKind) {
+				let idx = match kind {
+					$( PackKind::$k => $id, )+
+				};
+				self.pack_counts[idx] += 1;
+			}
+		}
 	);
 }
 
 packkind! {
-//  -------------------------------------
-//  PackKind   Val  DiscField  TrackField
-//  -------------------------------------
-	Title      0x80 Title      Title,
-	Performer  0x81 Performer  Performer,
-	Songwriter 0x82 Songwriter Songwriter,
-	Composer   0x83 Composer   Composer,
-	Arranger   0x84 Arranger   Arranger,
-	Message    0x85 Message    Message,
-	DiscId     0x86 DiscId,
-	Genre      0x87 Genre,
-	TocInfo1   0x88,                      // Not used.
-	TocInfo2   0x89,                      // Not used.
-	Reserved1  0x8A,                      // Not used.
-	Reserved2  0x8B,                      // Not used.
-	Reserved3  0x8C,                      // Not used.
-	ClosedInfo 0x8D,                      // Not used.
-	UpcEanIsrc 0x8E Barcode    Isrc,
-	BlockInfo  0x8F,
+//  ----------------------------------------
+//  PackKind   Val  ID DiscField  TrackField
+//  ----------------------------------------
+	Title      0x80  0 Title      Title,
+	Performer  0x81  1 Performer  Performer,
+	Songwriter 0x82  2 Songwriter Songwriter,
+	Composer   0x83  3 Composer   Composer,
+	Arranger   0x84  4 Arranger   Arranger,
+	Message    0x85  5 Message    Message,
+	DiscId     0x86  6 DiscId,
+	Genre      0x87  7 Genre,
+	TocInfo1   0x88  8,                      // Not used.
+	TocInfo2   0x89  9,                      // Not used.
+	Reserved1  0x8A 10,                      // Not used.
+	Reserved2  0x8B 11,                      // Not used.
+	Reserved3  0x8C 12,                      // Not used.
+	ClosedInfo 0x8D 13,                      // Not used.
+	UpcEanIsrc 0x8E 14 Barcode    Isrc,
+	BlockInfo  0x8F 15,
 }

@@ -109,16 +109,17 @@ impl CDText {
 }
 
 impl CDText {
-	/// # Decode Raw Pack Data.
+	/// # From Pack Stream.
 	///
-	/// Decode and return a structured representation of the CD-Text.
+	/// Parse, decode, and return a structured representation of the CD-Text.
 	///
 	/// ## Errors
 	///
 	/// This method will return an error if the CD-Text is malformed,
 	/// contains unsupported features, or is empty.
 	pub(crate) fn from_bytes(pack_data: &[u8]) -> Result<Self, CDTextError> {
-		// Build up the inner data block-by-block.
+		// Build up the inner data block-by-block, skipping any unused
+		// placeholders.
 		let blocks = Block::from_stream(pack_data)?;
 		let mut inner = Vec::with_capacity(BlockId::LEN);
 		for (i, block) in BlockId::ALL.into_iter().zip(blocks.into_iter().filter(Block::is_some)) {
