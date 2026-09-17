@@ -1,0 +1,43 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Hit Reset
+	PERFORMER: The Julie Ruin
+TRACK 01:
+	TITLE: Hit Reset
+	PERFORMER: The Julie Ruin
+TRACK 02:
+	TITLE: I Decide
+	PERFORMER: The Julie Ruin
+TRACK 03:
+	TITLE: Be Nice
+	PERFORMER: The Julie Ruin
+TRACK 04:
+	TITLE: Rather Not
+	PERFORMER: The Julie Ruin
+TRACK 05:
+	TITLE: Planet You
+	PERFORMER: The Julie Ruin
+TRACK 06:
+	TITLE: Let Me Go
+	PERFORMER: The Julie Ruin
+TRACK 07:
+	TITLE: Mr. So and So
+	PERFORMER: The Julie Ruin
+TRACK 08:
+	TITLE: Record Breaker
+	PERFORMER: The Julie Ruin
+TRACK 09:
+	TITLE: Hello Trust No One
+	PERFORMER: The Julie Ruin
+TRACK 10:
+	TITLE: I'm Done
+	PERFORMER: The Julie Ruin
+TRACK 11:
+	TITLE: Roses More Than Water
+	PERFORMER: The Julie Ruin
+TRACK 12:
+	TITLE: Time Is Up
+	PERFORMER: The Julie Ruin
+TRACK 13:
+	TITLE: Calverton
+	PERFORMER: The Julie Ruin

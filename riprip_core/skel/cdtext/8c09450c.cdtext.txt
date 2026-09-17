@@ -1,0 +1,40 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Disco Outlaw
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 01:
+	TITLE: Ditch Road
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 02:
+	TITLE: Against The Wall
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 03:
+	TITLE: Switchblade Comb
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 04:
+	TITLE: Make Your Mind Up
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 05:
+	TITLE: Sweet Thang
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 06:
+	TITLE: Crook For Your Look
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 07:
+	TITLE: Let Me Go!
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 08:
+	TITLE: Scratchy
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 09:
+	TITLE: Homesick Gypsy
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 10:
+	TITLE: Blood Bank Blues
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 11:
+	TITLE: Stop Stalling
+	PERFORMER: Jack-O & The Tennessee Tearjerkers
+TRACK 12:
+	TITLE: Walk Of Shame
+	PERFORMER: Jack-O & The Tennessee Tearjerkers

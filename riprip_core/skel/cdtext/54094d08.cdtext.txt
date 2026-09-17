@@ -1,0 +1,46 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Goodbye Yellow Brick Road
+	PERFORMER: Elton John
+	BARCODE: 6-02498-65755-3
+	DISC ID: 9865755
+TRACK 01:
+	TITLE: Funeral For A Friend / Love Lies Bleeding
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00804
+TRACK 02:
+	TITLE: Candle In The Wind
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00798
+TRACK 03:
+	TITLE: Bennie And The Jets
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00796
+TRACK 04:
+	TITLE: Goodbye Yellow Brick Road
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00806
+TRACK 05:
+	TITLE: This Song Has No Title
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00832
+TRACK 06:
+	TITLE: Grey Seal
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00808
+TRACK 07:
+	TITLE: Jamaica Jerk Off
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00817
+TRACK 08:
+	TITLE: I've Seen That Movie Too
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00812

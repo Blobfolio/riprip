@@ -1,0 +1,40 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Bird Songs of a Killjoy
+	PERFORMER: Bedouine
+TRACK 01:
+	TITLE: Under the Night
+	PERFORMER: Bedouine
+TRACK 02:
+	TITLE: Sunshine Sometimes
+	PERFORMER: Bedouine
+TRACK 03:
+	TITLE: When You're Gone
+	PERFORMER: Bedouine
+TRACK 04:
+	TITLE: One More Time
+	PERFORMER: Bedouine
+TRACK 05:
+	TITLE: Dizzy
+	PERFORMER: Bedouine
+TRACK 06:
+	TITLE: Bird
+	PERFORMER: Bedouine
+TRACK 07:
+	TITLE: Bird Gone Wild
+	PERFORMER: Bedouine
+TRACK 08:
+	TITLE: Hummingbird
+	PERFORMER: Bedouine
+TRACK 09:
+	TITLE: Matters of the Heart
+	PERFORMER: Bedouine
+TRACK 10:
+	TITLE: Echo Park
+	PERFORMER: Bedouine
+TRACK 11:
+	TITLE: Reprise
+	PERFORMER: Bedouine
+TRACK 12:
+	TITLE: Tall Man
+	PERFORMER: Bedouine

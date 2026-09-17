@@ -1,0 +1,28 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: "Still Night, Still Light"
+	PERFORMER: Au Revoir Simone
+TRACK 01:
+	TITLE: Another Likely Story
+TRACK 02:
+	TITLE: Shadows
+TRACK 03:
+	TITLE: All or Nothing
+TRACK 04:
+	TITLE: Knight of Wands
+TRACK 05:
+	TITLE: The Last One
+TRACK 06:
+	TITLE: Trace a Line
+TRACK 07:
+	TITLE: Only You Can Make You Happy
+TRACK 08:
+	TITLE: Take Me as I Am
+TRACK 09:
+	TITLE: Anywhere You Looked
+TRACK 10:
+	TITLE: Organized Scenery
+TRACK 11:
+	TITLE: We Are Here
+TRACK 12:
+	TITLE: Tell Me

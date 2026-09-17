@@ -1,0 +1,26 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: VOLTA
+	PERFORMER: BJORK
+	BARCODE: 0-75678-99898-0
+	DISC ID: 2-1358688
+TRACK 01:
+	TITLE: Earth Intruders - BJORK
+TRACK 02:
+	TITLE: Wanderlust - BJORK
+TRACK 03:
+	TITLE: The Dull Flame Of Desire - BJORK
+TRACK 04:
+	TITLE: Innocence - BJORK
+TRACK 05:
+	TITLE: I See Who You Are - BJORK
+TRACK 06:
+	TITLE: Vertebrae By Vertebrae - BJORK
+TRACK 07:
+	TITLE: Pneumonia - BJORK
+TRACK 08:
+	TITLE: Hope - BJORK
+TRACK 09:
+	TITLE: Declare Independence - BJORK
+TRACK 10:
+	TITLE: My Juvenile - BJORK

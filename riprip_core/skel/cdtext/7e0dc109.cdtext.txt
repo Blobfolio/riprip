@@ -1,0 +1,31 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: VULNICURA
+	PERFORMER: Björk
+TRACK 01:
+	TITLE: stonemilker
+	PERFORMER: Björk
+TRACK 02:
+	TITLE: lionsong
+	PERFORMER: Björk
+TRACK 03:
+	TITLE: history of touches
+	PERFORMER: Björk
+TRACK 04:
+	TITLE: black lake
+	PERFORMER: Björk
+TRACK 05:
+	TITLE: family
+	PERFORMER: Björk
+TRACK 06:
+	TITLE: notget
+	PERFORMER: Björk
+TRACK 07:
+	TITLE: atom dance
+	PERFORMER: Björk
+TRACK 08:
+	TITLE: mouth mantra
+	PERFORMER: Björk
+TRACK 09:
+	TITLE: quicksand
+	PERFORMER: Björk

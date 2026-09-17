@@ -1,0 +1,37 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Mountain
+	PERFORMER: Heartless Bastards
+TRACK 01:
+	TITLE: The Mountain
+	PERFORMER: Heartless Bastards
+TRACK 02:
+	TITLE: Be So Happy
+	PERFORMER: Heartless Bastards
+TRACK 03:
+	TITLE: Early In The Morning
+	PERFORMER: Heartless Bastards
+TRACK 04:
+	TITLE: Hold Your Head High
+	PERFORMER: Heartless Bastards
+TRACK 05:
+	TITLE: Out At Sea
+	PERFORMER: Heartless Bastards
+TRACK 06:
+	TITLE: Nothing Seems The Same
+	PERFORMER: Heartless Bastards
+TRACK 07:
+	TITLE: Wide Awake
+	PERFORMER: Heartless Bastards
+TRACK 08:
+	TITLE: So Quiet
+	PERFORMER: Heartless Bastards
+TRACK 09:
+	TITLE: Had To Go
+	PERFORMER: Heartless Bastards
+TRACK 10:
+	TITLE: Witchypoo
+	PERFORMER: Heartless Bastards
+TRACK 11:
+	TITLE: Sway
+	PERFORMER: Heartless Bastards
