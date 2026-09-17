@@ -272,7 +272,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		// Verify protocol sync state against our local tag.
 		if !csw.is_valid(current_tag) {
-			log!(@trace "Invalid CSW (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}).");
+			log!(@trace "Invalid CSW (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}, csw: {csw:?}).");
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
 			));
