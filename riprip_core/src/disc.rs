@@ -73,9 +73,6 @@ impl fmt::Display for Disc {
 	/// This prints various disc identifiers and table of contents-type
 	/// information in a nice little table.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		/// # Divider.
-		const DIVIDER: &str = dim!("-------------------------------------------\n");
-
 		// A few key/value pairs.
 		let mut kv: Vec<(&str, &str, String)> = vec![
 			("CDTOC:", csi!(bold, 199), self.toc.to_string()),
@@ -101,13 +98,15 @@ impl fmt::Display for Disc {
 		}
 
 		// Start the table of contents.
+		let (col_max, divider) = self.summary_colsize();
 		let isrcs = self.isrcs();
-		write!(
+		writeln!(
 			f,
-			dim!("\nNO   FIRST    LAST  LENGTH             {}\n"),
+			dim!("\nNO   FIRST    LAST  LENGTH  {:>col_max$}"),
 			if isrcs.is_some() { "ISRC" } else { "" },
+			col_max=col_max,
 		)?;
-		f.write_str(DIVIDER)?;
+		f.write_str(divider)?;
 
 		let mut total = 0;
 
@@ -117,10 +116,12 @@ impl fmt::Display for Disc {
 			let len = rng.end - rng.start;
 			writeln!(
 				f,
-				dim!("00  {:>6}  {:>6}  {:>6}             HTOA"),
+				dim!("00  {:>6}  {:>6}  {:>6}  {:>col_max$}"),
 				rng.start,
 				rng.end - 1,
 				len,
+				"HTOA",
+				col_max=col_max,
 			)?;
 		}
 		// Leading data track.
@@ -128,9 +129,11 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                       DATA TRACK"),
+				dim!("{:02}  {:>6}                  {:>col_max$}"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
+				"DATA TRACK",
+				col_max=col_max,
 			)?;
 		}
 
@@ -143,7 +146,7 @@ impl fmt::Display for Disc {
 			if let Some(isrc) = isrcs.and_then(|v| v.get(&num).copied()) {
 				writeln!(
 					f,
-					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
+					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc}",
 					rng.start,
 					rng.end - 1,
 				)?;
@@ -163,22 +166,26 @@ impl fmt::Display for Disc {
 			total += 1;
 			writeln!(
 				f,
-				dim!("{:02}  {:>6}                       DATA TRACK"),
+				dim!("{:02}  {:>6}                  {:>col_max$}"),
 				total,
 				self.toc.data_sector_normalized().unwrap_or_default(),
+				"DATA TRACK",
+				col_max=col_max,
 			)?;
 		}
 
 		// The leadout.
 		writeln!(
 			f,
-			concat!(csi!(dim), "{:02X}  {:>6}                         LEAD-OUT"),
+			concat!(csi!(dim), "{:02X}  {:>6}                  {:>col_max$}"),
 			CD_LEADOUT,
 			self.toc.leadout_normalized(),
+			"LEAD-OUT",
+			col_max=col_max,
 		)?;
 
 		// Close it off!
-		f.write_str(DIVIDER)?;
+		f.write_str(divider)?;
 		writeln!(f)
 	}
 }
@@ -469,6 +476,25 @@ impl Disc {
 		rip.summarize_status();
 
 		Ok(())
+	}
+}
+
+impl Disc {
+	/// # Track Formatting Alignment.
+	///
+	/// The rightmost track summary column has either a width of fifteen if
+	/// there are ISRCs, ten if data, or eight. This method returns the size
+	/// along with an appropriate divider.
+	fn summary_colsize(&self) -> (usize, &'static str) {
+		if self.isrcs().is_some() {
+			(15, dim!("-------------------------------------------\n"))
+		}
+		else if matches!(self.toc.kind(), TocKind::Audio) {
+			(8,  dim!("------------------------------------\n"))
+		}
+		else {
+			(10, dim!("--------------------------------------\n"))
+		}
 	}
 }
 

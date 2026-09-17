@@ -361,7 +361,7 @@ impl fmt::Display for LoggableTracks<'_> {
 			if let Some(isrc) = isrcs.and_then(|v| v.get(&num).copied()) {
 				write!(
 					f,
-					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
+					"\n  {num:02}  {:>6}  {:>6}  {len:>6}  {isrc}",
 					rng.start,
 					rng.end - 1,
 				)?;
