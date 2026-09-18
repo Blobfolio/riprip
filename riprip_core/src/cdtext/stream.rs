@@ -284,7 +284,7 @@ impl BlockInfo {
 	/// Return the encoding type, or an error if unsupported.
 	pub(super) fn encoding(&self) -> Result<Encoding, CDTextError> {
 		let Some(encoding) = Encoding::from_u8(self.encoding_code) else {
-			log!(@trace "Invalid/unsupported CD-Text encoding code: {:02X}.", self.encoding_code);
+			log!(@trace "Invalid/unsupported CD-Text encoding code: 0x{:02X}.", self.encoding_code);
 			return Err(CDTextError::UnsupportedEncoding);
 		};
 		Ok(encoding)
@@ -297,7 +297,7 @@ impl BlockInfo {
 	pub(super) fn language(&self, idx: BlockId) -> Result<Language, CDTextError> {
 		let code = self.language_codes[idx as usize];
 		let Some(language) = Language::from_u8(code) else {
-			log!(@trace "Invalid CD-Text language code: {code:02X}.");
+			log!(@trace [idx, self.language_codes] "Invalid CD-Text language code: 0x{code:02X}.");
 			return Err(CDTextError::InvalidLanguage);
 		};
 		Ok(language)
