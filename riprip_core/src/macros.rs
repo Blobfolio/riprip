@@ -12,7 +12,7 @@ macro_rules! log {
 	// Argument muncher.
 	(@munch) => ( "" );
 	(@munch $next:expr, $( $rest:expr, )* ) => (
-		::std::concat!("\n  {}: {:?}", $crate::macros::log!(@munch $($rest,)*) )
+		::std::concat!("\n    `{}` = {:?}", $crate::macros::log!(@munch $($rest,)*) )
 	);
 
 	// Common logging (internal).
