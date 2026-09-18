@@ -123,7 +123,7 @@ impl CDText {
 			let size_info = match block.size_info() {
 				Ok(v) => v,
 				Err(e) => {
-					log!(@trace "{e}");
+					log!(@trace [i] "{e}");
 					return Err(e);
 				},
 			};

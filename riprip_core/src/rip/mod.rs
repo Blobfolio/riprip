@@ -253,7 +253,10 @@ impl<'a> Ripper<'a> {
 			if pass < self.opts.passes() {
 				// Flip the read order for next time?
 				if self.opts.flip_flop() {
-					log!(@trace "Flipping read order for next pass.");
+					let next =
+						if self.opts.backwards() { "forwards" }
+						else { "backwards" };
+					log!(@trace [next] "Flipping read order for next pass.");
 					self.opts = self.opts.with_backwards(! self.opts.backwards());
 				}
 				// After the first pass, always resume, never reset.

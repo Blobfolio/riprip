@@ -81,13 +81,13 @@ impl TryFrom<&[u8]> for Barcode {
 		}
 
 		// Copy the data to the end of an ASCII-zero-padded slice.
-		let mut maybe = [b'0'; 13];
-		maybe[13 - src.len()..].copy_from_slice(src);
+		let mut buf = [b'0'; 13];
+		buf[13 - src.len()..].copy_from_slice(src);
 
 		// Return it if valid!
-		if is_ean13(&maybe) { Ok(Self(maybe)) }
+		if is_ean13(&buf) { Ok(Self(buf)) }
 		else {
-			log!(@trace "Invalid barcode {:?}.", maybe);
+			log!(@trace [ buf ] "Invalid barcode {src:?}.");
 			Err(RipRipError::Barcode)
 		}
 	}
