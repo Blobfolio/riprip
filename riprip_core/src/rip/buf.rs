@@ -72,16 +72,17 @@ impl RipBuffer {
 			self.read_subchannel(cdio, lsn)?;
 
 			// Hash the data so we can compare it with the C2 version.
-			let hash = crc32fast::hash(self.data_slice());
+			let hash_sub = crc32fast::hash(self.data_slice());
 
 			// Read again with C2 details.
 			let good = self.read_c2(cdio, lsn, opts)?;
+			let hash_c2 = crc32fast::hash(self.data_slice());
 
 			// Make sure we got the same data both times.
-			if hash == crc32fast::hash(self.data_slice()) { Ok(good) }
+			if hash_sub == hash_c2 { Ok(good) }
 			// If not, treat it like a generic read error.
 			else {
-				log!(@trace "Subchannel and C2 reads of {lsn} returned different data.");
+				log!(@trace [hash_sub, hash_c2] "Subchannel and C2 reads of {lsn} returned different data.");
 				Err(RipRipError::CdRead)
 			}
 		}

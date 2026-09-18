@@ -1,0 +1,23 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Pint Of Blood
+TRACK 01:
+	TITLE: All Those Girls
+TRACK 02:
+	TITLE: Remember
+TRACK 03:
+	TITLE: Tender Mirror
+TRACK 04:
+	TITLE: Gold and Yellow
+TRACK 05:
+	TITLE: June
+TRACK 06:
+	TITLE: Wreckage
+TRACK 07:
+	TITLE: Little Birds
+TRACK 08:
+	TITLE: The Devil's Sake
+TRACK 09:
+	TITLE: Honey Girl
+TRACK 10:
+	TITLE: Rex's Blues

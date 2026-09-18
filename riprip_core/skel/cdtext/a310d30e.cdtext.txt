@@ -1,0 +1,46 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: utopia
+	PERFORMER: björk
+TRACK 01:
+	TITLE: arisen my senses
+	PERFORMER: björk
+TRACK 02:
+	TITLE: blissing me
+	PERFORMER: björk
+TRACK 03:
+	TITLE: the gate
+	PERFORMER: björk
+TRACK 04:
+	TITLE: utopia
+	PERFORMER: björk
+TRACK 05:
+	TITLE: body memory
+	PERFORMER: björk
+TRACK 06:
+	TITLE: features creatures
+	PERFORMER: björk
+TRACK 07:
+	TITLE: courtship
+	PERFORMER: björk
+TRACK 08:
+	TITLE: losss
+	PERFORMER: björk
+TRACK 09:
+	TITLE: sue me
+	PERFORMER: björk
+TRACK 10:
+	TITLE: tabula rasa
+	PERFORMER: björk
+TRACK 11:
+	TITLE: claimstaker
+	PERFORMER: björk
+TRACK 12:
+	TITLE: paradisia
+	PERFORMER: björk
+TRACK 13:
+	TITLE: saint
+	PERFORMER: björk
+TRACK 14:
+	TITLE: future forever
+	PERFORMER: björk

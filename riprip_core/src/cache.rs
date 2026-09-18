@@ -63,25 +63,25 @@ impl<'a> CacheWriter<'a> {
 	pub(super) fn new(dst: &'a Path) -> Result<Self, RipRipError> {
 		// The destination doesn't have to exist, but can't be a directory.
 		if dst.is_dir() {
-			log!(@trace "Cache path is a directory.\n  {}", dst.display());
+			log!(@trace [dst] "Output file path is a directory.");
 			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		}
 
 		// It must have a parent directory.
 		let Some(parent) = dst.parent() else {
-			log!(@trace "Cache path has no parent.\n  {}", dst.display());
+			log!(@trace [dst] "Output file path has no parent.");
 			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		};
 
 		// If that doesn't exist, try to create it.
 		if ! parent.is_dir() && std::fs::create_dir_all(parent).is_err() {
-			log!(@trace "Unable to create missing cache directory.\n  {}", parent.display());
+			log!(@trace [dst, parent] "Unable to create missing parent directory for output file.");
 			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		}
 
 		// Make a tempfile.
 		let Ok(tmp) = tempfile::Builder::new().tempfile_in(parent) else {
-			log!(@trace "Unable to create temporary file for {}.", dst.display());
+			log!(@trace "Unable to create tempfile for {}.", dst.display());
 			return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 		};
 
@@ -103,14 +103,14 @@ impl<'a> CacheWriter<'a> {
 
 		// Flush for good measure.
 		if self.tmp.flush().is_err() {
-			log!(@trace "Failed to flush cache write.\n  {}", self.dst.display());
+			log!(@trace [self.tmp, self.dst] "Failed to flush tempfile write.");
 			return Err(RipRipError::CachePath(self.dst.to_string_lossy().into_owned()));
 		}
 
 		// Make it so!
 		if self.tmp.persist(self.dst).is_ok() { Ok(()) }
 		else {
-			log!(@trace "Unable to persist cache file.\n  {}", self.dst.display());
+			log!(@trace [self.dst] "Unable to persist tempfile.");
 			Err(RipRipError::CachePath(self.dst.to_string_lossy().into_owned()))
 		}
 	}
@@ -125,7 +125,7 @@ impl<'a> CacheWriter<'a> {
 		{
 			let writer = tmp.writer();
 			if writer.write_all(data).is_err() {
-				log!(@trace "Failed to write data.\n  {}", dst.display());
+				log!(@trace [dst, data] "Failed to write data.");
 				return Err(RipRipError::CachePath(dst.to_string_lossy().into_owned()));
 			}
 		}
@@ -226,7 +226,7 @@ fn cache_root() -> Result<&'static Path, RipRipError> {
 	else {
 		Msg::warning(format!("The {CACHE_BASE} cache directory has vanished!")).eprint();
 		if std::fs::create_dir_all(out).is_err() || ! out.is_dir() {
-			log!(@trace "Unable to recreate missing cache directory.");
+			log!(@trace [CACHE_BASE] "Unable to recreate missing cache directory.");
 			Err(RipRipError::Cache)
 		}
 		else { Ok(out) }

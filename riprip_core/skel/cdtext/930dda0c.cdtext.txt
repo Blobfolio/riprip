@@ -1,0 +1,38 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Give
+	PERFORMER: The Bad Plus
+	DISC ID: CK90771
+TRACK 01:
+	TITLE: 1979 Semi-Finalist
+	ISRC: US-SM1-03-15188
+TRACK 02:
+	TITLE: Cheney Pinata
+	ISRC: US-SM1-03-15189
+TRACK 03:
+	TITLE: Street Woman
+	ISRC: US-SM1-03-15190
+TRACK 04:
+	TITLE: And Here We Test Our Powers Of Observation
+	ISRC: US-SM1-03-15191
+TRACK 05:
+	TITLE: Frog And Toad
+	ISRC: US-SM1-03-15192
+TRACK 06:
+	TITLE: Velouria
+	ISRC: US-SM1-03-15193
+TRACK 07:
+	TITLE: Layin' A Strip For The Higher-Self State Line
+	ISRC: US-SM1-03-15194
+TRACK 08:
+	TITLE: Do Your Sums-Die Like A Dog-Play For Home
+	ISRC: US-SM1-03-15195
+TRACK 09:
+	TITLE: Dirty Blonde
+	ISRC: US-SM1-03-15196
+TRACK 10:
+	TITLE: Neptune (The Planet)
+	ISRC: US-SM1-03-15197
+TRACK 11:
+	TITLE: Iron Man
+	ISRC: US-SM1-03-15198

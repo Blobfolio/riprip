@@ -1,0 +1,40 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Calculated
+	PERFORMER: Heavens To Betsy
+TRACK 01:
+	TITLE: Nothing Can Stop Me
+	PERFORMER: Heavens To Betsy
+TRACK 02:
+	TITLE: Decide
+	PERFORMER: Heavens To Betsy
+TRACK 03:
+	TITLE: Stay Away
+	PERFORMER: Heavens To Betsy
+TRACK 04:
+	TITLE: Calculated
+	PERFORMER: Heavens To Betsy
+TRACK 05:
+	TITLE: Waitress Hell
+	PERFORMER: Heavens To Betsy
+TRACK 06:
+	TITLE: Intermission 247
+	PERFORMER: Heavens To Betsy
+TRACK 07:
+	TITLE: Axemen
+	PERFORMER: Heavens To Betsy
+TRACK 08:
+	TITLE: Donating My Body To Science
+	PERFORMER: Heavens To Betsy
+TRACK 09:
+	TITLE: Terrorist
+	PERFORMER: Heavens To Betsy
+TRACK 10:
+	TITLE: Complicated
+	PERFORMER: Heavens To Betsy
+TRACK 11:
+	TITLE: White Girl
+	PERFORMER: Heavens To Betsy
+TRACK 12:
+	TITLE: Paralyzed
+	PERFORMER: Heavens To Betsy

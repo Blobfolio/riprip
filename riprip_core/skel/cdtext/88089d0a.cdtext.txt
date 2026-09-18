@@ -1,0 +1,35 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Bedouine
+	PERFORMER: Bedouine
+	DISC ID: SB-10
+TRACK 01:
+	TITLE: Nice & Quiet
+	PERFORMER: Bedouine
+TRACK 02:
+	TITLE: One of These Days
+	PERFORMER: Bedouine
+TRACK 03:
+	TITLE: Back to You
+	PERFORMER: Bedouine
+TRACK 04:
+	TITLE: Dusty Eyes
+	PERFORMER: Bedouine
+TRACK 05:
+	TITLE: Solitary Daughter
+	PERFORMER: Bedouine
+TRACK 06:
+	TITLE: Summer Cold
+	PERFORMER: Bedouine
+TRACK 07:
+	TITLE: Mind's Eye
+	PERFORMER: Bedouine
+TRACK 08:
+	TITLE: You Kill Me
+	PERFORMER: Bedouine
+TRACK 09:
+	TITLE: Heart Take Flight
+	PERFORMER: Bedouine
+TRACK 10:
+	TITLE: Skyline
+	PERFORMER: Bedouine

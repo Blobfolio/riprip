@@ -1,0 +1,38 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Amyl and The Sniffers
+	PERFORMER: Amyl and The Sniffers
+	DISC ID: RT0064CD
+TRACK 01:
+	TITLE: Starfire 500
+	PERFORMER: Amyl and The Sniffers
+TRACK 02:
+	TITLE: Gacked On Anger
+	PERFORMER: Amyl and The Sniffers
+TRACK 03:
+	TITLE: Cup Of Destiny
+	PERFORMER: Amyl and The Sniffers
+TRACK 04:
+	TITLE: GFY
+	PERFORMER: Amyl and The Sniffers
+TRACK 05:
+	TITLE: Angel
+	PERFORMER: Amyl and The Sniffers
+TRACK 06:
+	TITLE: Monsoon Rock
+	PERFORMER: Amyl and The Sniffers
+TRACK 07:
+	TITLE: Control
+	PERFORMER: Amyl and The Sniffers
+TRACK 08:
+	TITLE: Got You
+	PERFORMER: Amyl and The Sniffers
+TRACK 09:
+	TITLE: Punisha
+	PERFORMER: Amyl and The Sniffers
+TRACK 10:
+	TITLE: Shake Ya
+	PERFORMER: Amyl and The Sniffers
+TRACK 11:
+	TITLE: Some Mutts (Can't Be Muzzled)
+	PERFORMER: Amyl and The Sniffers

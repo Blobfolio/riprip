@@ -8,7 +8,7 @@
 
 Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
-It doesn't beat a drive senseless every time a read error is encountered; it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
+Rather than beat the drive senseless every time a read error is encountered, it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
 Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](https://cue.tools/wiki/CUETools_Database) to finish up for you.
 
@@ -34,6 +34,7 @@ Beyond that, it supports all the good things:
 * Backwards ripping
 * Good ol' WAV output
 * Cue sheet generation (when ripping the whole disc)
+* Dump CD-Text (if present)
 
 Rip Rip Hooray! **does not** aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
 
@@ -161,20 +162,49 @@ There are a number of different options that can come in handy for tricky situat
 
 Good luck!
 
+### Debugging and Troubleshooting.
+
+If a disc is giving you trouble or you simply want a record of the proceedings, set the `-v`/`--verbose` flag to have Rip Rip emit a log to STDOUT.
+
+```bash
+# The normal interface uses STDERR, so to keep the two from getting tangled,
+# redirect the log to e.g. a file:
+riprip -v > my-rip.log
+
+# For additional information, set -v twice.
+riprip -v -v > my-rip.log
+```
+
+If you're experiencing issues with the drive or Rip Rip itself, another `-v` or two can help with debugging:
+
+```bash
+# Trace-level reporting gives more information about what is failing
+# and where.
+riprip -v -v -v > my-rip.log
+
+# Trace-Premium-Plus™ gives context to the context, enumerating the
+# specific values, settings, etc., in play at the moment of failure.
+riprip -v -v -v -v > my-rip.log
+```
+
+Optical drives and drivers are weird, so please don't hesitate to open an [issue](https://github.com/Blobfolio/riprip/issues/new) if something's not working right!
+
 
 
 ## Installation
 
 Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can grab it from [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-While specifically written for x86-64 Linux systems, both [Rust](https://www.rust-lang.org/) and [libcdio](https://www.gnu.org/software/libcdio/) are cross-platform, so you may well be able to get Rip Rip running on other 64-bit Unix systems by building it from source.
+To use Rip Rip on other x86-64 unix systems, it'll need to built from source.
 
 > [!NOTE]
-> Apple users should check out — and contribute to — [this in-progress fork](https://github.com/elmattic/riprip/tree/libusb), which is working on a `libusb`-based alternative for OSX.
+> Support for Apple is coming soon. If you're interested, check out [this PR](https://github.com/Blobfolio/riprip/pull/10) (thanks @elmattic!).
+
+Thankfully, [Rust](https://www.rust-lang.org/)/[Cargo](https://github.com/rust-lang/cargo) make this pretty easy:
 
 ```bash
-# When building from source, you'll also need clang. Debian/Ubuntu users, for
-# example, can install it by running the following:
+# The only non-rust build dependency is clang. On Debian and Ubuntu,
+# for example, that can be installed by running:
 sudo apt-get install clang
 
 # See "cargo install --help" for more options.
@@ -189,7 +219,7 @@ By default, Rip Rip compiles and statically links to `libcdio`, but it can be ma
 # Install libcdio development headers in addition to clang, e.g.
 sudo apt-get install libcdio-dev clang
 
-# Tweak the build features.
+# Disable the default features, and enable `libcdio`.
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
     --bin riprip \

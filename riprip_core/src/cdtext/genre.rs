@@ -80,30 +80,23 @@ macro_rules! genre_code {
 			///
 			/// CD-Text GENRE values store the code in the first byte and
 			/// a freeform representation in the rest. Both parts are optional.
-			pub(super) fn split_raw(raw: &[u8]) -> (Self, &str) {
+			pub(super) fn split_raw(raw: &[u8]) -> (Self, String) {
 				if let [ code, rest @ .. ] = raw {
 					let code = Self::from_u8(*code).unwrap_or(Self::Unused);
-					let rest = std::str::from_utf8(rest).map_or(
-						"",
-						|rest| {
-							let rest = rest.trim();
+					let mut rest = super::Encoding::Ascii.decode(rest);
 
-							// Zero out if non-ASCII or literally "Not Used"
-							// or "Not Defined".
-							if
-								rest.eq_ignore_ascii_case("not defined") ||
-								rest.eq_ignore_ascii_case("not used") ||
-								! rest.is_ascii()
-							{
-								""
-							}
-							else { rest }
-						}
-					);
+					// Treat literal "not defined" and "not used" as empty.
+					if
+						rest.eq_ignore_ascii_case("not defined") ||
+						rest.eq_ignore_ascii_case("not used")
+					{
+						rest.clear();
+					}
 
+					// Done!
 					(code, rest)
 				}
-				else { (Self::Unused, "") }
+				else { (Self::Unused, String::new()) }
 			}
 		}
 	);

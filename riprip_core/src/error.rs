@@ -103,7 +103,8 @@ MISCELLANEOUS:
     -v, --verbose     Print a detailed log of the proceedings — including
                       which specific samples and sectors are having trouble —
                       to STDOUT so you can redirect it to a location of your
-                      choosing, e.g. `riprip -v > out.log`.
+                      choosing, e.g. `riprip -v > out.log`. May be specified up
+                      to four times for more detail.
     -V, --version     Print version information to STDOUT and exit.
         --no-cdtext   Do not try to read/parse CD-Text data from the disc. Can
                       speed things up if the disc is damaged in just the wrong

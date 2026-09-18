@@ -1,0 +1,43 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Cartoon Darkness
+	PERFORMER: Amyl and the Sniffers
+TRACK 01:
+	TITLE: Jerkin'
+	PERFORMER: Amyl and the Sniffers
+TRACK 02:
+	TITLE: Chewing Gum
+	PERFORMER: Amyl and the Sniffers
+TRACK 03:
+	TITLE: Tiny Bikini
+	PERFORMER: Amyl and the Sniffers
+TRACK 04:
+	TITLE: Big Dreams
+	PERFORMER: Amyl and the Sniffers
+TRACK 05:
+	TITLE: It's Mine
+	PERFORMER: Amyl and the Sniffers
+TRACK 06:
+	TITLE: Motorbike Song
+	PERFORMER: Amyl and the Sniffers
+TRACK 07:
+	TITLE: Doing In Me Head
+	PERFORMER: Amyl and the Sniffers
+TRACK 08:
+	TITLE: Pigs
+	PERFORMER: Amyl and the Sniffers
+TRACK 09:
+	TITLE: Bailing On Me
+	PERFORMER: Amyl and the Sniffers
+TRACK 10:
+	TITLE: U Should Not Be Doing That
+	PERFORMER: Amyl and the Sniffers
+TRACK 11:
+	TITLE: Do It Do It
+	PERFORMER: Amyl and the Sniffers
+TRACK 12:
+	TITLE: Going Somewhere
+	PERFORMER: Amyl and the Sniffers
+TRACK 13:
+	TITLE: Me And The Girls
+	PERFORMER: Amyl and the Sniffers

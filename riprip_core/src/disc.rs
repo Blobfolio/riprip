@@ -18,11 +18,10 @@ use crate::{
 	cdtext::{
 		CDText,
 		CDTextError,
-		DiscField,
-		TrackField,
 	},
 	DriveVendorModel,
 	Isrc,
+	IsrcMap,
 	KillSwitch,
 	macros::log,
 	RipOptions,
@@ -30,7 +29,7 @@ use crate::{
 	RipRipError,
 	SavedRips,
 };
-use dactyl::NoHash;
+use dactyl::traits::NiceInflection;
 use fyi_msg::{
 	fyi_ansi::{
 		ansi,
@@ -42,7 +41,6 @@ use fyi_msg::{
 };
 use std::{
 	borrow::Cow,
-	collections::HashMap,
 	ffi::OsStr,
 	fmt,
 	io::StderrLock,
@@ -69,74 +67,127 @@ pub struct Disc {
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
-
-	/// # Track ISRCs.
-	isrcs: HashMap<u8, Isrc, NoHash>,
 }
 
-impl fmt::Display for Disc {
+impl fmt::Debug for Disc {
 	/// # Summarize the Disc.
 	///
-	/// This prints various disc identifiers and table of contents-type
-	/// information in a nice little table.
+	/// This prints the various disc identifiers.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		/// # Divider.
-		const DIVIDER: &str = dim!("-------------------------------------------\n");
-
-		// A few key/value pairs.
-		let mut kv: Vec<(&str, &str, String)> = vec![
-			("CDTOC:", csi!(bold, 199), self.toc.to_string()),
-			("AccurateRip:", csi!(bold, blue), self.toc.accuraterip_id().to_string()),
-			("CDDB:", csi!(bold, blue), cache_prefix(&self.toc).to_owned()),
-			("CUETools:", csi!(bold, blue), self.toc.ctdb_id().to_string()),
-			("MusicBrainz:", csi!(bold, blue), self.toc.musicbrainz_id().to_string()),
-		];
-		if let Some(barcode) = self.barcode.as_ref() {
-			kv.push(("Barcode:", csi!(bold, 199), barcode.to_string()));
+		/// # Helper: Writing.
+		///
+		/// The on-screen and log summaries have (mostly) identical details,
+		/// the formatting is just a little different.
+		macro_rules! wrt {
+			( $color:tt $k:literal $v:expr ) => (
+				if f.alternate() {
+					write!(
+						f,
+						"\n  {k:<12} {v}",
+						k=$k,
+						v=$v,
+					)
+				}
+				else {
+					writeln!(
+						f,
+						concat!(csi!(bold, $color), "{k:<12}", csi!(), " {v}"),
+						k=$k,
+						v=$v,
+					)
+				}
+			);
 		}
 
-		let col_max: usize = kv.iter().map(|(k, _, _)| k.len()).max().unwrap_or(0);
-		for (k, color, v) in kv {
-			writeln!(
+		// When logging, start with a count.
+		if f.alternate() {
+			write!(
 				f,
-				concat!("{color}{k:col_max$}", csi!(), " {v}"),
-				color=color,
-				k=k,
-				col_max=col_max,
-				v=v,
+				"Found {}.",
+				match self.toc.kind() {
+					TocKind::Audio => "audio CD",
+					TocKind::CDExtra => "CD-Extra",
+					TocKind::DataFirst => "mixed data/audio CD",
+				},
 			)?;
 		}
 
-		// Start the table of contents.
-		write!(
-			f,
-			dim!("\nNO   FIRST    LAST  LENGTH             {}\n"),
-			if self.has_isrcs() { "ISRC" } else { "" },
-		)?;
-		f.write_str(DIVIDER)?;
+		wrt!(199  "CDTOC:"       self.toc.to_string())?;
+		wrt!(blue "AccurateRip:" self.toc.accuraterip_id())?;
+		wrt!(blue "CDDB:"        cache_prefix(&self.toc))?;
+		wrt!(blue "CUETools:"    self.toc.ctdb_id())?;
+		wrt!(blue "MusicBrainz:" self.toc.musicbrainz_id())?;
 
+		self.barcode().map_or(
+			Ok(()),
+			|barcode| wrt!(199 "Barcode:" barcode)
+		)
+	}
+}
+
+impl fmt::Display for Disc {
+	/// # Summarize the Tracks.
+	///
+	/// This prints a table of contents summary of the disc.
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Helper: Writing.
+		///
+		/// The on-screen and log summaries have (mostly) identical details,
+		/// the formatting is just a little different.
+		macro_rules! wrt {
+			( @dim $fmt:expr, $($tt:tt )+ ) => (
+				if f.alternate() { write!(f, concat!("\n  ", $fmt), $( $tt )+) }
+				else             { writeln!(f, dim!($fmt), $( $tt )+) }
+			);
+			( $fmt:expr, $($tt:tt )+ ) => (
+				if f.alternate() { write!(f, concat!("\n  ", $fmt), $( $tt )+) }
+				else             { writeln!(f, $fmt, $( $tt )+) }
+			);
+		}
+
+		// When logging, start with a count.
+		if f.alternate() {
+			write!(
+				f,
+				"Found {}.",
+				self.toc().audio_len().nice_inflect("audio track", "audio tracks")
+			)?;
+		}
+
+		// Header.
+		let (col_max, divider) = self.summary_colsize();
+		let isrcs = self.isrcs();
+		wrt!(
+			@dim "NO   FIRST    LAST  LENGTH  {label:>col_max$}",
+			label=if isrcs.is_some() { "ISRC" } else { "" },
+			col_max=col_max,
+		)?;
+		wrt!(@dim "{divider}", divider=divider)?;
+
+		// Keep track of the tracks.
 		let mut total = 0;
 
 		// HTOA.
 		if let Some(t) = self.toc.htoa() {
 			let rng = t.sector_range_normalized();
-			let len = rng.end - rng.start;
-			writeln!(
-				f,
-				dim!("00  {:>6}  {:>6}  {:>6}             HTOA"),
-				rng.start,
-				rng.end - 1,
-				len,
+			wrt!(
+				@dim "00  {start:>6}  {end:>6}  {len:>6}  {label:>col_max$}",
+				start=rng.start,
+				end=rng.end - 1,
+				len=rng.end - rng.start,
+				label="HTOA",
+				col_max=col_max,
 			)?;
 		}
 		// Leading data track.
 		else if matches!(self.toc.kind(), TocKind::DataFirst) {
 			total += 1;
-			writeln!(
-				f,
-				dim!("{:02}  {:>6}                       DATA TRACK"),
-				total,
-				self.toc.data_sector_normalized().unwrap_or_default(),
+			wrt!(
+				@dim "{track:02}  {start:>6}                  {label:>col_max$}",
+				track=total,
+				start=self.toc.data_sector_normalized().unwrap_or_default(),
+				label="DATA TRACK",
+				col_max=col_max,
 			)?;
 		}
 
@@ -145,47 +196,40 @@ impl fmt::Display for Disc {
 			total += 1;
 			let num = t.number();
 			let rng = t.sector_range_normalized();
-			let len = rng.end - rng.start;
-			if let Some(isrc) = self.isrc(num) {
-				writeln!(
-					f,
-					"{num:02}  {:>6}  {:>6}  {len:>6}  {isrc:>15}",
-					rng.start,
-					rng.end - 1,
-				)?;
-			}
-			else {
-				writeln!(
-					f,
-					"{num:02}  {:>6}  {:>6}  {len:>6}",
-					rng.start,
-					rng.end - 1,
-				)?;
-			}
+			wrt!(
+				"{track:02}  {start:>6}  {end:>6}  {len:>6}  {isrc}",
+				track=num,
+				start=rng.start,
+				end=rng.end - 1,
+				len=rng.end - rng.start,
+				isrc=MaybeIsrc(isrcs.and_then(|v| v.get(&num).copied())),
+			)?;
 		}
 
 		// Trailing data track.
 		if matches!(self.toc.kind(), TocKind::CDExtra) {
 			total += 1;
-			writeln!(
-				f,
-				dim!("{:02}  {:>6}                       DATA TRACK"),
-				total,
-				self.toc.data_sector_normalized().unwrap_or_default(),
+			wrt!(
+				@dim "{track:02}  {start:>6}                  {label:>col_max$}",
+				track=total,
+				start=self.toc.data_sector_normalized().unwrap_or_default(),
+				label="DATA TRACK",
+				col_max=col_max,
 			)?;
 		}
 
 		// The leadout.
-		writeln!(
-			f,
-			concat!(csi!(dim), "{:02X}  {:>6}                         LEAD-OUT"),
-			CD_LEADOUT,
-			self.toc.leadout_normalized(),
+		wrt!(
+			@dim "{track:02X}  {start:>6}                  {label:>col_max$}",
+			track=CD_LEADOUT,
+			start=self.toc.leadout_normalized(),
+			label="LEAD-OUT",
+			col_max=col_max,
 		)?;
 
 		// Close it off!
-		f.write_str(DIVIDER)?;
-		writeln!(f)
+		if f.alternate() { Ok(()) }
+		else { writeln!(f, dim!("{divider}\n"), divider=divider) }
 	}
 }
 
@@ -236,7 +280,6 @@ impl Disc {
 			toc,
 			cdtext: None,
 			barcode: None,
-			isrcs: HashMap::with_hasher(NoHash::default()),
 		};
 
 		// Unless the user opted out of CD-Text parsing, let's handle that
@@ -244,21 +287,7 @@ impl Disc {
 		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
 			match CDText::from_bytes(&raw_cdtext) {
 				Ok(cdtext) => {
-					// Set the barcode.
-					out.barcode = cdtext.disc(DiscField::Barcode)
-						.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
-
-					// Pull the track ISRCs (if any).
-					for t in out.toc.audio_tracks() {
-						let idx = t.number();
-						if
-							let Some(isrc) = cdtext.track(TrackField::Isrc, idx) &&
-							let Ok(isrc) = Isrc::try_from(isrc.as_bytes())
-						{
-							out.isrcs.insert(idx, isrc);
-						}
-					}
-
+					out.barcode = cdtext.barcode();
 					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
 				},
 				Err(e) => {
@@ -297,12 +326,10 @@ impl Disc {
 	}
 
 	#[must_use]
-	/// # Has ISRC Data?
-	pub fn has_isrcs(&self) -> bool { ! self.isrcs.is_empty() }
-
-	#[must_use]
-	/// # ISRC.
-	pub fn isrc(&self, idx: u8) -> Option<Isrc> { self.isrcs.get(&idx).copied() }
+	/// # Track ISRCs.
+	pub fn isrcs(&self) -> Option<&IsrcMap> {
+		self.cdtext().and_then(CDText::isrcs)
+	}
 
 	#[must_use]
 	/// # Table of Contents.
@@ -495,6 +522,28 @@ impl Disc {
 	}
 }
 
+impl Disc {
+	/// # Track Formatting Alignment.
+	///
+	/// The rightmost track summary column has a variable width depending on
+	/// the disc. This method returns an appropriate column size and divider
+	/// to use for it.
+	fn summary_colsize(&self) -> (usize, &'static str) {
+		// ISRCs have fifteen characters.
+		if self.isrcs().is_some() {
+			(15, "-------------------------------------------")
+		}
+		// Without a data track, the longest label is "LEAD-OUT".
+		else if matches!(self.toc.kind(), TocKind::Audio) {
+			(8,  "------------------------------------")
+		}
+		// Otherwise "DATA TRACK".
+		else {
+			(10, "--------------------------------------")
+		}
+	}
+}
+
 
 
 /// # Format AccurateRip.
@@ -566,6 +615,7 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 		let Some(dst) = dst.file_name().and_then(OsStr::to_str) else {
 			log!(
 				@trace
+				[dst]
 				"Unable to obtain output file name for track {}; skipping cuesheet.",
 				track.number(),
 			);
@@ -708,5 +758,19 @@ impl fmt::Display for LoggableFruits<'_> {
 			}
 		}
 		Ok(())
+	}
+}
+
+/// # Maybe ISRC?
+///
+/// Print it if it exists, print nothing if not.
+struct MaybeIsrc(Option<Isrc>);
+
+impl fmt::Display for MaybeIsrc {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		self.0.map_or(
+			Ok(()),
+			|v| <Isrc as fmt::Display>::fmt(&v, f)
+		)
 	}
 }

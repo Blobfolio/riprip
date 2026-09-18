@@ -83,7 +83,10 @@ pub use drive::{
 	ReadOffset,
 };
 pub use error::RipRipError;
-pub use isrc::Isrc;
+pub use isrc::{
+	Isrc,
+	IsrcMap,
+};
 pub use loglog::{
 	LogLog,
 	LogLevel,

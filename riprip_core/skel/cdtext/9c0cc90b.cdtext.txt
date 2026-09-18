@@ -1,0 +1,37 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Wine Dark Sea
+	PERFORMER: Jolie Holland
+TRACK 01:
+	TITLE: On And On
+	PERFORMER: Jolie Holland
+TRACK 02:
+	TITLE: First Sign Of Spring
+	PERFORMER: Jolie Holland
+TRACK 03:
+	TITLE: Dark Days
+	PERFORMER: Jolie Holland
+TRACK 04:
+	TITLE: Route 30
+	PERFORMER: Jolie Holland
+TRACK 05:
+	TITLE: I Thought It Was The Moon
+	PERFORMER: Jolie Holland
+TRACK 06:
+	TITLE: The Love You Save
+	PERFORMER: Jolie Holland
+TRACK 07:
+	TITLE: All The Love
+	PERFORMER: Jolie Holland
+TRACK 08:
+	TITLE: Saint Dymphna
+	PERFORMER: Jolie Holland
+TRACK 09:
+	TITLE: Palm Wine Drunkard
+	PERFORMER: Jolie Holland
+TRACK 10:
+	TITLE: Out On The Wine Dark Sea
+	PERFORMER: Jolie Holland
+TRACK 11:
+	TITLE: Waiting For The Sun
+	PERFORMER: Jolie Holland

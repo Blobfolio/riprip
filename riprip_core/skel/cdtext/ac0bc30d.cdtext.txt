@@ -1,0 +1,71 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Goodbye Yellow Brick Road
+	PERFORMER: Elton John
+	BARCODE: 6-02498-61087-9
+	DISC ID: 9865755
+TRACK 01:
+	TITLE: Sweet Painted Lady
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00828
+TRACK 02:
+	TITLE: The Ballad Of Danny Bailey (1909-34)
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00830
+TRACK 03:
+	TITLE: Dirty Little Girl
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00802
+TRACK 04:
+	TITLE: All The Girls Love Alice
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00794
+TRACK 05:
+	TITLE: Your Sister Can't Twist (But She Can Rock 'n Roll)
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00837
+TRACK 06:
+	TITLE: Saturday Night's Alright For Fighting
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00821
+TRACK 07:
+	TITLE: Roy Rogers
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00819
+TRACK 08:
+	TITLE: Social Disease
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00826
+TRACK 09:
+	TITLE: Harmony
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00810
+TRACK 10:
+	TITLE: Whenever You're Ready (We'll Go Steady Again)
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00835
+TRACK 11:
+	TITLE: Jack Rabbit
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00815
+TRACK 12:
+	TITLE: Screw You (Young Man's Blues)
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00824
+TRACK 13:
+	TITLE: Candle In The Wind (Acoustic Mix)
+	PERFORMER: Elton John
+	SONGWRITER: (John/Taupin)
+	ISRC: GB-F08-03-00800

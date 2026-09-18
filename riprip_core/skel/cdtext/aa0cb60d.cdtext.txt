@@ -1,0 +1,44 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Fossora
+	PERFORMER: Bjork
+	BARCODE: 5-016958-101480
+TRACK 01:
+	TITLE: Atopos
+	PERFORMER: Bjork
+TRACK 02:
+	TITLE: Ovule
+	PERFORMER: Bjork
+TRACK 03:
+	TITLE: Mycelia
+	PERFORMER: Bjork
+TRACK 04:
+	TITLE: Sorrowful Soil
+	PERFORMER: Bjork
+TRACK 05:
+	TITLE: Ancestress
+	PERFORMER: Bjork
+TRACK 06:
+	TITLE: Fagurt Er i Fjordum
+	PERFORMER: Bjork
+TRACK 07:
+	TITLE: Victimhood
+	PERFORMER: Bjork
+TRACK 08:
+	TITLE: Allow
+	PERFORMER: Bjork
+TRACK 09:
+	TITLE: Fungal City
+	PERFORMER: Bjork
+TRACK 10:
+	TITLE: Trolla Gabba
+	PERFORMER: Bjork
+TRACK 11:
+	TITLE: Freefall
+	PERFORMER: Bjork
+TRACK 12:
+	TITLE: Fossora
+	PERFORMER: Bjork
+TRACK 13:
+	TITLE: Her Mothers House
+	PERFORMER: Bjork
