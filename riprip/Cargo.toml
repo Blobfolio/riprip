@@ -151,3 +151,6 @@ libcdio = [ "riprip_core/libcdio" ]
 
 # Build and link libcdio statically.
 libcdio-static = [ "riprip_core/libcdio-static" ]
+
+# Use libusb driver.
+libusb = [ "riprip_core/libusb" ]
