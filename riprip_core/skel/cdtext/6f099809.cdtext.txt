@@ -1,0 +1,31 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Haunted Mountain
+	PERFORMER: Jolie Holland
+TRACK 01:
+	TITLE: 2000 Miles
+	PERFORMER: Jolie Holland
+TRACK 02:
+	TITLE: Feet On The Ground
+	PERFORMER: Jolie Holland
+TRACK 03:
+	TITLE: Highway 72
+	PERFORMER: Jolie Holland
+TRACK 04:
+	TITLE: Won't Find Me
+	PERFORMER: Jolie Holland
+TRACK 05:
+	TITLE: One OF You
+	PERFORMER: Jolie Holland
+TRACK 06:
+	TITLE: Haunted Mountain
+	PERFORMER: Jolie Holland
+TRACK 07:
+	TITLE: Me and My Dream
+	PERFORMER: Jolie Holland
+TRACK 08:
+	TITLE: Orange Blossoms
+	PERFORMER: Jolie Holland
+TRACK 09:
+	TITLE: What It's Worth
+	PERFORMER: Jolie Holland

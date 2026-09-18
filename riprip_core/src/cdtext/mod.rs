@@ -17,6 +17,7 @@ mod track;
 use crate::{
 	Barcode,
 	Isrc,
+	IsrcMap,
 	macros::log,
 };
 use dactyl::NoHash;
@@ -42,13 +43,22 @@ use track::TrackRange;
 /// # CD-Text!
 ///
 /// This struct holds CD-Text in all available languages.
-pub struct CDText(Vec<CDTextInner>);
+pub struct CDText {
+	/// # Barcode.
+	barcode: Option<Barcode>,
+
+	/// # Track ISRCs.
+	isrcs: IsrcMap,
+
+	/// # Blocks.
+	blocks: Vec<CDTextInner>,
+}
 
 impl fmt::Display for CDText {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let mut any = false;
-		for (k, v) in self.0.iter().enumerate() {
+		for (k, v) in self.blocks.iter().enumerate() {
 			if any { writeln!(f)?; }
 			else { any = true; }
 
@@ -77,35 +87,18 @@ impl fmt::Display for CDText {
 
 impl CDText {
 	#[must_use]
-	/// # Disc Value.
+	/// # Barcode.
 	///
-	/// Return the matching disc field value from the first block, if any.
-	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
-		// Inner shouldn't ever be empty.
-		if self.0.is_empty() {
-			std::hint::cold_path();
-			None
-		}
-		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, 0])) {
-			Some(v.as_str())
-		}
-		else { None }
-	}
+	/// Return the barcode defined by the first block, if any.
+	pub(crate) const fn barcode(&self) -> Option<Barcode> { self.barcode }
 
 	#[must_use]
-	/// # Search Track Value(s).
+	/// # ISRCs.
 	///
-	/// Return the matching track field value from the first block, if any.
-	pub(crate) fn track(&self, field: TrackField, track: u8) -> Option<&str> {
-		// Inner shouldn't ever be empty.
-		if self.0.is_empty() {
-			std::hint::cold_path();
-			None
-		}
-		else if let Some(v) = self.0[0].catalog.get(&u16::from_le_bytes([field as u8, track])) {
-			Some(v.as_str())
-		}
-		else { None }
+	/// Return the track ISRCs defined by the first block, if any.
+	pub(crate) fn isrcs(&self) -> Option<&IsrcMap> {
+		if self.isrcs.is_empty() { None }
+		else { Some(&self.isrcs) }
 	}
 }
 
@@ -122,13 +115,15 @@ impl CDText {
 		// Build up the inner data block-by-block, skipping any unused
 		// placeholders.
 		let blocks = Block::from_stream(pack_data)?;
+		let mut barcode = None;
+		let mut isrcs = IsrcMap::with_hasher(NoHash::default());
 		let mut inner = Vec::with_capacity(BlockId::LEN);
 		for (i, block) in BlockId::ALL.into_iter().zip(blocks.into_iter().filter(Block::is_some)) {
 			// Parse the size info.
 			let size_info = match block.size_info() {
 				Ok(v) => v,
 				Err(e) => {
-					log!(@trace "{e}");
+					log!(@trace [i] "{e}");
 					return Err(e);
 				},
 			};
@@ -150,6 +145,11 @@ impl CDText {
 								let Ok(v) = Barcode::try_from(buf.as_slice()) else {
 									continue;
 								};
+
+								// If the first block, copy the value to a
+								// position of honor.
+								if inner.is_empty() { barcode.replace(v); }
+
 								v.to_string()
 							}
 
@@ -164,7 +164,7 @@ impl CDText {
 
 								// Skip freeform insertion if empty.
 								if v2.is_empty() { continue; }
-								v2.to_owned()
+								v2
 							},
 
 							// Everything else just needs to be decoded.
@@ -188,6 +188,11 @@ impl CDText {
 							let Ok(v) = Isrc::try_from(buf.as_slice()) else {
 								continue;
 							};
+
+							// If the first block, copy the value to a
+							// position of honor.
+							if inner.is_empty() { isrcs.insert(track, v); }
+
 							v.to_string()
 						},
 
@@ -204,6 +209,7 @@ impl CDText {
 			}
 
 			// Save it!
+			catalog.shrink_to_fit(); // This won't change.
 			inner.push(CDTextInner { tracks, language, genre_code, catalog });
 		}
 
@@ -212,7 +218,14 @@ impl CDText {
 			std::hint::cold_path();
 			Err(CDTextError::Empty)
 		}
-		else { Ok(Self(inner)) }
+		else {
+			isrcs.shrink_to_fit(); // This won't change.
+			Ok(Self {
+				barcode,
+				isrcs,
+				blocks: inner,
+			})
+		}
 	}
 }
 
@@ -401,36 +414,56 @@ impl Encoding {
 	#[must_use]
 	/// # Decode.
 	///
-	/// Parse a raw byte stream into a string, given the encoding.
+	/// Parse a raw byte stream into a string, given the encoding type.
+	///
+	/// This method trims all results, normalizes inner whitespace to
+	/// horizontal spaces, and drops control characters.
 	fn decode(self, bytes: &[u8]) -> String {
 		use trimothy::TrimMut;
 
-		match self {
+		/// # Normalize Char.
+		///
+		/// Convert whitespace to a horizontal space, drop controls.
+		const fn normalize_char(c: char) -> Option<char> {
+			if c.is_whitespace() { Some(' ' ) }
+			else if c.is_control() { None }
+			else { Some(c) }
+		}
+
+		// Skip the trouble.
+		if bytes.is_empty() { return String::new(); }
+
+		// Convert to string, with normalized whitespace and no controls.
+		let mut out: String = match self {
 			Self::Ascii =>
-				// If this fails, the CD is a goddamn liar!
-				if
-					let Ok(out) = std::str::from_utf8(bytes) &&
-					out.is_ascii()
-				{
-					out.trim().to_owned()
+				if bytes.is_ascii() {
+					bytes.iter()
+						.copied()
+						.filter_map(|b| normalize_char(b as char))
+						.collect()
 				}
 				// LIAR!
-				else { String::new() },
+				else { return String::new(); },
 
-			Self::Iso8859_1 => {
-				// This is a subset of UTF-8, but each byte is its own
-				// character. To avoid accidental "combining", we need to map
-				// each byte individually.
-				let mut out: String = bytes.iter()
-					.copied()
-					.map(|b| b as char)
-					.collect();
-				out.trim_mut();
-				out
-			},
+			// Mapping works exactly the same as ASCII, minus the ASCII
+			// requirement.
+			Self::Iso8859_1 => bytes.iter()
+				.copied()
+				.filter_map(|b| normalize_char(b as char))
+				.collect(),
 
-			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned(),
-		}
+			// This one requires specialized UTF-8 conversion prior to
+			// normalization.
+			Self::ShiftJis => encoding_rs::SHIFT_JIS.decode(bytes)
+				.0
+				.chars()
+				.filter_map(normalize_char)
+				.collect(),
+		};
+
+		// Trim the edges and return.
+		out.trim_mut();
+		out
 	}
 }
 
@@ -522,5 +555,33 @@ mod test {
 			matches!(CDText::from_bytes(&[]), Err(CDTextError::Empty)),
 			"Empty CD-Text parsed Ok().",
 		);
+	}
+
+	#[test]
+	fn t_decode_normalize() {
+		assert_eq!(
+			Encoding::Ascii.decode(b"hello world"),
+			"hello world",
+		);
+		assert_eq!(
+			Encoding::Ascii.decode(b" \n\0hello\tworld \0\0 "),
+			"hello world",
+		);
+		assert_eq!(
+			Encoding::Ascii.decode("hello ♥".as_bytes()), // Not ASCII!
+			"",
+		);
+
+		// Latin probably shouldn't be for lovers.
+		let raw: &[u8] = &[
+			b'h', 233, b'l', b'l', 246,  b' ',
+			b'w', 246, b'r', b'l', b'd', b'!',
+		];
+		let dec = Encoding::Iso8859_1.decode(raw);
+		let exp = "héllö wörld!";
+
+		assert_eq!(dec, exp);                       // Looks right.
+		assert_eq!(raw.len(), dec.chars().count()); // Same char count.
+		assert!(raw.len() < dec.len());             // But different/more bytes!
 	}
 }

@@ -1,0 +1,49 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: To The 5 Boroughs
+	PERFORMER: Beastie Boys
+TRACK 01:
+	TITLE: Ch-Check It Out
+	PERFORMER: Beastie Boys
+TRACK 02:
+	TITLE: Right Right Now Now
+	PERFORMER: Beastie Boys
+TRACK 03:
+	TITLE: 3 The Hard Way
+	PERFORMER: Beastie Boys
+TRACK 04:
+	TITLE: Time To Build
+	PERFORMER: Beastie Boys
+TRACK 05:
+	TITLE: Rhyme The Rhyme well
+	PERFORMER: Beastie Boys
+TRACK 06:
+	TITLE: Triple Trouble
+	PERFORMER: Beastie Boys
+TRACK 07:
+	TITLE: Hey Fuck You
+	PERFORMER: Beastie Boys
+TRACK 08:
+	TITLE: Oh Word?
+	PERFORMER: Beastie Boys
+TRACK 09:
+	TITLE: That's It That's All
+	PERFORMER: Beastie Boys
+TRACK 10:
+	TITLE: All Lifstyles
+	PERFORMER: Beastie Boys
+TRACK 11:
+	TITLE: Shazam!
+	PERFORMER: Beastie Boys
+TRACK 12:
+	TITLE: An Open Letter To NYC
+	PERFORMER: Beastie Boys
+TRACK 13:
+	TITLE: Crawlspace
+	PERFORMER: Beastie Boys
+TRACK 14:
+	TITLE: The Brouhaha
+	PERFORMER: Beastie Boys
+TRACK 15:
+	TITLE: We Got The
+	PERFORMER: Beastie Boys

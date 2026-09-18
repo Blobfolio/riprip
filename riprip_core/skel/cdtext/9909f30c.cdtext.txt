@@ -1,0 +1,40 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Invisible Girl
+	PERFORMER: The King Khan & BBQ Show
+TRACK 01:
+	TITLE: Anala
+	PERFORMER: The King Khan & BBQ Show
+TRACK 02:
+	TITLE: Invisible Girl
+	PERFORMER: The King Khan & BBQ Show
+TRACK 03:
+	TITLE: Chinee (I'll Be Lovin You)
+	PERFORMER: The King Khan & BBQ Show
+TRACK 04:
+	TITLE: Animal Party
+	PERFORMER: The King Khan & BBQ Show
+TRACK 05:
+	TITLE: Spin The Bottle
+	PERFORMER: The King Khan & BBQ Show
+TRACK 06:
+	TITLE: Third Ave
+	PERFORMER: The King Khan & BBQ Show
+TRACK 07:
+	TITLE: Tastebuds
+	PERFORMER: The King Khan & BBQ Show
+TRACK 08:
+	TITLE: Truth Or Dare
+	PERFORMER: The King Khan & BBQ Show
+TRACK 09:
+	TITLE: Crystal Ball
+	PERFORMER: The King Khan & BBQ Show
+TRACK 10:
+	TITLE: Lonely Boy
+	PERFORMER: The King Khan & BBQ Show
+TRACK 11:
+	TITLE: Tryin
+	PERFORMER: The King Khan & BBQ Show
+TRACK 12:
+	TITLE: Do The Chop
+	PERFORMER: The King Khan & BBQ Show

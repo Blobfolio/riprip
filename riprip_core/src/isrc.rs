@@ -6,7 +6,16 @@ use crate::{
 	macros::log,
 	RipRipError,
 };
-use std::fmt;
+use dactyl::NoHash;
+use std::{
+	collections::HashMap,
+	fmt,
+};
+
+
+
+/// # ISRC by Track.
+pub type IsrcMap = HashMap<u8, Isrc, NoHash>;
 
 
 

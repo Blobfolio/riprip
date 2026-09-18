@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.8.1
+    Version:   0.8.2
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2026-09-16 07:14:12 UTC
+    Generated: 2026-09-18 05:06:38 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -13,7 +13,7 @@
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.4.6 |  | MIT OR Apache-2.0 |
 | [**cdtoc**](https://github.com/Blobfolio/cdtoc) | 0.14.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
-| [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.4 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
+| [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.5 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [cmake](https://github.com/rust-lang/cmake-rs) ⚒️ | 0.1.58 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [const-oid](https://github.com/RustCrypto/formats) | 0.10.2 | RustCrypto Developers | Apache-2.0 OR MIT |
 | [core_detect](https://github.com/thomcc/core_detect) | 1.0.0 | [Thom Chiovoloni](mailto:chiovolonit@gmail.com) | MIT OR Apache-2.0 |
@@ -41,8 +41,8 @@
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
 | [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.7.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [pkg-config](https://github.com/rust-lang/pkg-config-rs) ⚒️ | 0.3.34 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.8.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
-| [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.8.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [rustix](https://github.com/bytecodealliance/rustix) | 1.1.5 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.45 |  | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 |  | MIT OR Apache-2.0 |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 |  | ISC |
@@ -92,7 +92,7 @@
 | [_toml_](https://github.com/toml-rs/toml) ⚒️ | 1.1.6+spec-1.1.0 |  | MIT OR Apache-2.0 |
 | [_toml_datetime_](https://github.com/toml-rs/toml) ⚒️ | 1.1.1+spec-1.1.0 |  | MIT OR Apache-2.0 |
 | [_toml_parser_](https://github.com/toml-rs/toml) ⚒️ | 1.1.3+spec-1.1.0 |  | MIT OR Apache-2.0 |
-| [_unicode-ident_](https://github.com/dtolnay/unicode-ident) ⚒️ | 1.0.24 | [David Tolnay](mailto:dtolnay@gmail.com) | (MIT OR Apache-2.0) AND Unicode-3.0 |
+| [_unicode-ident_](https://github.com/dtolnay/unicode-ident) ⚒️ | 1.0.26 | [David Tolnay](mailto:dtolnay@gmail.com) | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | [_version-compare_](https://gitlab.com/timvisee/version-compare) ⚒️ | 0.2.1 | [Tim Visee](mailto:3a4fb3964f@sinenomine.email) | MIT |
 | [_winnow_](https://github.com/winnow-rs/winnow) ⚒️ | 1.0.4 |  | MIT |
 

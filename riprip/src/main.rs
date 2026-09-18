@@ -141,7 +141,7 @@ fn main__() -> Result<(), RipRipError> {
 			}
 		}
 
-		eprintln!("{disc}");
+		eprintln!("{disc:?}\n{disc}");
 	}
 
 	// Go ahead and leave if there's no ripping to do.

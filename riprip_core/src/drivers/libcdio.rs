@@ -274,11 +274,11 @@ impl CddaDriverExt for LibcdioInstance {
 			let model_u8 = raw.psz_model.map(u8::saturating_from);
 
 			let Some(vendor) = to_str(&vendor_u8) else {
-				log!(@trace "Invalid drive vendor {vendor_u8:?}.");
+				log!(@trace [vendor_u8] "Invalid drive vendor.");
 				return None;
 			};
 			let Some(model) = to_str(&model_u8) else {
-				log!(@trace "Invalid drive model {model_u8:?}.");
+				log!(@trace [model_u8] "Invalid drive model.");
 				return None;
 			};
 			DriveVendorModel::new(vendor, model).ok()

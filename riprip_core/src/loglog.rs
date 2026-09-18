@@ -37,16 +37,27 @@ impl LogLog {
 	pub fn log(
 		level: LogLevel,
 		args: Arguments<'_>,
+		trace: Option<Arguments<'_>>,
 		location: Option<(&'static str, u32)>,
 	) {
 		#[cfg(not(any(test, miri)))]
 		if let Some(v) = LOG_LEVEL.get().copied() && level <= v {
-			println!(
-				"{date} {level} {args}{location}",
-				date=FmtUtc2k::now().to_rfc3339(),
-				level=level.as_str(),
-				location=LogLocation(location),
-			);
+			if let Some(trace) = trace && matches!(v, LogLevel::TraceArgs) {
+				println!(
+					"{date} {level} {args}{location}{trace}",
+					date=FmtUtc2k::now().to_rfc3339(),
+					level=level.as_str(),
+					location=LogLocation(location),
+				);
+			}
+			else {
+				println!(
+					"{date} {level} {args}{location}",
+					date=FmtUtc2k::now().to_rfc3339(),
+					level=level.as_str(),
+					location=LogLocation(location),
+				);
+			}
 		}
 	}
 
@@ -97,18 +108,20 @@ macro_rules! level {
 					0 => None,
 					1 => Some(Self::Info),
 					2 => Some(Self::Debug),
-					_ => Some(Self::Trace),
+					3 => Some(Self::Trace),
+					_ => Some(Self::TraceArgs),
 				}
 			}
 		}
 	);
 }
 level! {
-	Error 1 "[error]",
-	Warn  2 "[warn] ",
-	Info  3 "[info] ",
-	Debug 4 "[debug]",
-	Trace 5 "[trace]",
+	Error     1 "[error]",
+	Warn      2 "[warn] ",
+	Info      3 "[info] ",
+	Debug     4 "[debug]",
+	Trace     5 "[trace]",
+	TraceArgs 6 "[trace]",
 }
 
 

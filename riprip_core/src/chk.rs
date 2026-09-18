@@ -84,7 +84,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 		.and_then(|chk|
 			if let Ok(v) = ar.parse_checksums(&chk) { Some(v) }
 			else {
-				log!(@trace "Failed to parse AccurateRip reference checksums.");
+				log!(@trace [chk] "Failed to parse AccurateRip reference checksums.");
 				None
 			}
 		)
@@ -92,7 +92,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 			let idx = usize::from(track.number() - 1);
 			if idx < chk.len() { Some(chk.remove(idx)) }
 			else {
-				log!(@trace "AccurateRip checksums do not contain track {idx}.");
+				log!(@trace [chk] "AccurateRip checksums do not contain track {idx}.");
 				None
 			}
 		})?;
@@ -108,6 +108,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	if end <= start {
 		log!(
 			@trace
+			[start, end]
 			"Track {} is not long enough for AccurateRip checksumming.",
 			track.number(),
 		);
@@ -209,13 +210,13 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 		})
 		.and_then(|chk| {
 			if
-				let Ok(chk) = String::from_utf8(chk) &&
-				let Ok(v) = toc.ctdb_parse_checksums(&chk)
+				let Ok(chk2) = std::str::from_utf8(&chk) &&
+				let Ok(v) = toc.ctdb_parse_checksums(chk2)
 			{
 				Some(v)
 			}
 			else {
-				log!(@trace "Unable to parse CUETools reference checksums.");
+				log!(@trace [chk] "Unable to parse CUETools reference checksums.");
 				None
 			}
 		})
@@ -223,7 +224,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 			let idx = usize::from(track.number() - 1);
 			if idx < chk.len() { Some(chk.remove(idx)) }
 			else {
-				log!(@trace "CUETools checksums do not contain track {idx}.");
+				log!(@trace [chk] "CUETools checksums do not contain track {idx}.");
 				None
 			}
 		})?;
@@ -257,6 +258,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	if data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) {
 		log!(
 			@trace
+			[data.len()]
 			"Track {} is not long enough for CUETools checksumming.",
 			track.number(),
 		);
@@ -438,7 +440,7 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	{
 		Ok(v) => v,
 		Err(e) => {
-			log!(@trace "Download failed.\n  {e}");
+			log!(@trace [url] "Download failed.\n  {e}");
 			return None;
 		},
 	};
@@ -447,7 +449,7 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	if (200..=399).contains(&res.status_code) {
 		let out = res.into_bytes();
 		if out.is_empty() {
-			log!(@trace "Received empty response.");
+			log!(@trace [url] "Received empty response.");
 		}
 		else {
 			// Cache the contents for next time.
@@ -459,7 +461,7 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 			return Some(out);
 		}
 	}
-	else { log!(@trace "Download failed with status {}.", res.status_code); }
+	else { log!(@trace [url] "Download failed with status {}.", res.status_code); }
 
 	// However we got here, there's nothing for it.
 	None

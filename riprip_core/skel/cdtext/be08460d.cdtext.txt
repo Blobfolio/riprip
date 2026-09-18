@@ -1,0 +1,43 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Comfort To Me
+	PERFORMER: Amyl and The Sniffers
+TRACK 01:
+	TITLE: Guided By Angels
+	PERFORMER: Amyl and The Sniffers
+TRACK 02:
+	TITLE: Freaks to the Front
+	PERFORMER: Amyl and The Sniffers
+TRACK 03:
+	TITLE: Choices
+	PERFORMER: Amyl and The Sniffers
+TRACK 04:
+	TITLE: Security
+	PERFORMER: Amyl and The Sniffers
+TRACK 05:
+	TITLE: Hertz
+	PERFORMER: Amyl and The Sniffers
+TRACK 06:
+	TITLE: No More Tears
+	PERFORMER: Amyl and The Sniffers
+TRACK 07:
+	TITLE: Maggot
+	PERFORMER: Amyl and The Sniffers
+TRACK 08:
+	TITLE: Capital
+	PERFORMER: Amyl and The Sniffers
+TRACK 09:
+	TITLE: Don't Fence Me In
+	PERFORMER: Amyl and The Sniffers
+TRACK 10:
+	TITLE: Knifey
+	PERFORMER: Amyl and The Sniffers
+TRACK 11:
+	TITLE: Don't Need A Cunt (Like You To Love Me)
+	PERFORMER: Amyl and The Sniffers
+TRACK 12:
+	TITLE: Laughing
+	PERFORMER: Amyl and The Sniffers
+TRACK 13:
+	TITLE: Snakes
+	PERFORMER: Amyl and The Sniffers
