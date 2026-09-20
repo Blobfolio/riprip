@@ -50,8 +50,9 @@ mod macos {
 	fn get_numeric_property(media_service: u32, key: &str) -> Option<u16> {
 		let cf_key = CFString::from_str(key);
 
-		/// # Safety: this is an FFI call.
+		// Safety: this is an FFI call.
 		let prop = unsafe {
+			#[expect(clippy::as_ptr_cast_mut, reason = "Unsatisfiable.")]
 			IORegistryEntrySearchCFProperty(
 				media_service,
 				kIOServicePlane.as_ptr() as *mut _,
@@ -159,7 +160,11 @@ mod linux {
 	}
 }
 
-#[expect(clippy::unnecessary_wraps, reason = "For consistency across targets.")]
+#[allow(
+	clippy::allow_attributes,
+	clippy::unnecessary_wraps,
+	reason = "For consistency across targets.",
+)]
 /// # Retrieves Vendor/Product IDs.
 ///
 /// Retrieve the vendor and product ID for the given device path, or `None`
