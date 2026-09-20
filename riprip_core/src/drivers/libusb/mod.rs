@@ -9,16 +9,39 @@ mod bot;
 mod device;
 mod mmc;
 
-use crate::{CddaDriverNewExt, RipRipError, macros::log};
+use crate::{
+	CddaDriverNewExt,
+	RipRipError,
+	macros::log,
+};
+use mmc::{
+	MmcDriverExt,
+	TransportExt,
+};
+use nix::unistd::{
+	Uid,
+	setuid,
+};
+use rusb::{
+	Device,
+	DeviceHandle,
+	DeviceList,
+	Direction,
+	GlobalContext,
+	TransferType,
+	UsbContext,
+};
+use std::{
+	env,
+	sync::atomic::{
+		AtomicU32,
+		Ordering,
+	},
+	path::Path,
+	time::Duration,
+};
 
-use mmc::{MmcDriverExt, TransportExt};
 
-use nix::unistd::{Uid, setuid};
-use rusb::{Device, DeviceHandle, DeviceList, Direction, GlobalContext, TransferType, UsbContext};
-
-use std::env;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::{path::Path, time::Duration};
 
 /// # Write Bulk Timeout.
 const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
@@ -29,11 +52,9 @@ const READ_BULK_TIMEOUT: Duration = Duration::from_secs(5);
 /// # Status Read Timeout.
 const STATUS_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
-fn find_and_open_device<C: UsbContext>(
-	devices: &DeviceList<C>,
-	vid: u16,
-	pid: u16,
-) -> Result<DeviceHandle<C>, RipRipError> {
+/// # Find and Open Device.
+fn find_and_open_device<C: UsbContext>(devices: &DeviceList<C>, vid: u16, pid: u16)
+-> Result<DeviceHandle<C>, RipRipError> {
 	devices
 		.iter()
 		.find_map(|device| {
@@ -46,16 +67,15 @@ fn find_and_open_device<C: UsbContext>(
 						.open()
 						.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
 				)
-			} else {
-				None
 			}
+			else { None }
 		})
 		.unwrap_or(Err(RipRipError::DeviceOpen(Some(format!("{pid}:{vid}")))))
 }
 
-fn find_and_open_cd_drive<C: UsbContext>(
-	devices: &DeviceList<C>,
-) -> Result<DeviceHandle<C>, RipRipError> {
+/// # Find and Open CD Drive.
+fn find_and_open_cd_drive<C: UsbContext>(devices: &DeviceList<C>)
+-> Result<DeviceHandle<C>, RipRipError> {
 	devices
 		.iter()
 		.find_map(|device| {
@@ -76,13 +96,13 @@ fn find_and_open_cd_drive<C: UsbContext>(
 						.open()
 						.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
 				)
-			} else {
-				None
 			}
+			else { None }
 		})
 		.unwrap_or(Err(RipRipError::DeviceOpen(None)))
 }
 
+/// # Detect Bulk Endpoints.
 fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, RipRipError> {
 	let config_desc = device
 		.active_config_descriptor()
@@ -108,8 +128,12 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints,
 }
 
 #[derive(Debug, Default)]
+/// # Bulk Endpoints.
 struct Endpoints {
+	/// # Input.
 	bulk_in: u8,
+
+	/// # Output.
 	bulk_out: u8,
 }
 
@@ -121,10 +145,13 @@ pub(crate) struct LibusbInstance<C: UsbContext = GlobalContext> {
 	/// # USB Device.
 	device_handle: DeviceHandle<C>,
 
+	/// # Interface ID.
 	interface_id: u8,
 
+	/// # Bulk Endpoints.
 	endpoints: Endpoints,
 
+	/// # Command Block Wrapper Tag.
 	cbw_tag: AtomicU32,
 }
 
@@ -141,10 +168,14 @@ impl<C: UsbContext> Drop for LibusbInstance<C> {
 }
 
 impl<C: UsbContext> LibusbInstance<C> {
-	pub(super) fn with_context<P>(context: &C, dev: Option<P>) -> Result<Self, RipRipError>
-	where
-		P: AsRef<Path>,
-	{
+	/// # With Context.
+	///
+	/// Probe the device for more specific information about itself and the
+	/// loaded disc, if any, returning `Self` (with those details) if
+	/// successful.
+	pub(super) fn with_context<P>(context: &C, dev: Option<P>)
+	-> Result<Self, RipRipError>
+	where P: AsRef<Path> {
 		log!(@debug "Initializing `libusb` driver.");
 
 		let devices = context
@@ -158,30 +189,30 @@ impl<C: UsbContext> LibusbInstance<C> {
 
 			if let Some((vid, pid)) = device::get_desc(&path)? {
 				log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
-
 				find_and_open_device(&devices, vid, pid)?
-			} else {
+			}
+			else {
 				return Err(RipRipError::DeviceOpen(Some(device_path.into_owned())));
 			}
-		} else {
-			find_and_open_cd_drive(&devices)?
-		};
+		}
+		else { find_and_open_cd_drive(&devices)? };
 
 		let endpoints = detect_bulk_endpoints(&device_handle.device())?;
-
 		let interface_id = 0;
 
-		// Check if kernel driver is owning our device and detach it if so
+		// Check if kernel driver is owning our device and detach it if so.
 		if device_handle.kernel_driver_active(interface_id) == Ok(true) {
 			device_handle
 				.detach_kernel_driver(interface_id)
 				.map_err(|e| RipRipError::Device(e.to_string()))?;
 		}
 
+		// Claim it!
 		device_handle
 			.claim_interface(interface_id)
 			.map_err(|_| RipRipError::Bug("Failed to claim iface."))?;
 
+		// SUDO isn't needed anymore; try to reset to the original user.
 		if let Ok(sudo_uid) = env::var("SUDO_UID") {
 			let original_uid: u32 = sudo_uid
 				.parse()
@@ -207,7 +238,9 @@ impl<C: UsbContext> LibusbInstance<C> {
 }
 
 impl<T: UsbContext> TransportExt for LibusbInstance<T> {
-	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError> {
+	/// # Submit.
+	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8])
+	-> Result<usize, RipRipError> {
 		use bot::{CSW_LEN, CommandBlockWrapper, CommandStatusWrapper};
 
 		const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
@@ -251,9 +284,8 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 					return Err(RipRipError::Internal(e.to_string()))
 				},
 			}
-		} else {
-			0
-		};
+		}
+		else { 0 };
 
 		let mut csw_raw = [0_u8; CSW_LEN];
 		let len = self
@@ -271,7 +303,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		let csw = CommandStatusWrapper::from_bytes(&csw_raw);
 
 		// Verify protocol sync state against our local tag.
-		if !csw.is_valid(current_tag) {
+		if ! csw.is_valid(current_tag) {
 			log!(@trace "Invalid CSW (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}, csw: {csw:?}).");
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
@@ -292,10 +324,9 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 }
 
 impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
+	/// # New Instance.
 	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where
-		P: AsRef<Path>,
-	{
+	where P: AsRef<Path> {
 		Self::with_context(&GlobalContext::default(), dev)
 	}
 }

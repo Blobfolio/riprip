@@ -5,31 +5,52 @@ Provides cross-platform lookup to get a USB drive descriptor (Vendor and Product
 from an OS device path.
 */
 
+use crate::RipRipError;
 use std::path::Path;
 
-use crate::RipRipError;
+
 
 #[cfg(target_os = "macos")]
+/// # Apple.
 mod macos {
-	use super::{Path, RipRipError};
 	use crate::log;
-
-	use std::ffi::CString;
-	use std::os::unix::ffi::OsStrExt;
-
+	use super::{
+		Path,
+		RipRipError,
+	};
 	use objc2_core_foundation::{
-		CFDictionary, CFNumber, CFRetained, CFString, CFType, kCFAllocatorDefault,
+		CFDictionary,
+		CFNumber,
+		CFRetained,
+		CFString,
+		CFType,
+		kCFAllocatorDefault,
 	};
 	use objc2_io_kit::{
-		IOBSDNameMatching, IOIteratorNext, IOObjectRelease, IORegistryEntrySearchCFProperty,
-		IOServiceGetMatchingServices, kIOMainPortDefault, kIORegistryIterateParents,
-		kIORegistryIterateRecursively, kIOReturnSuccess, kIOServicePlane,
+		IOBSDNameMatching,
+		IOIteratorNext,
+		IOObjectRelease,
+		IORegistryEntrySearchCFProperty,
+		IOServiceGetMatchingServices,
+		kIOMainPortDefault,
+		kIORegistryIterateParents,
+		kIORegistryIterateRecursively,
+		kIOReturnSuccess,
+		kIOServicePlane,
+	};
+	use std::{
+		ffi::CString,
+		os::unix::ffi::OsStrExt,
 	};
 
+
+
 	#[expect(unsafe_code, reason = "For FFI.")]
+	/// # Get Numeric Property.
 	fn get_numeric_property(media_service: u32, key: &str) -> Option<u16> {
 		let cf_key = CFString::from_str(key);
 
+		/// # Safety: this is an FFI call.
 		let prop = unsafe {
 			IORegistryEntrySearchCFProperty(
 				media_service,
@@ -48,34 +69,36 @@ mod macos {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
-	pub(super) fn get_desc<P>(dev_path: &P) -> Result<Option<(u16, u16)>, RipRipError>
-	where
-		P: AsRef<Path>,
-	{
-		let Some(bsd_name) = dev_path
-			.as_ref()
-			.file_name()
+	/// # Get Description.
+	pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
+		let Some(bsd_name) = dev.file_name()
 			.and_then(|name| CString::new(name.as_bytes()).ok())
 		else {
 			return Ok(None);
 		};
 
 		// Find the specific IOMedia service for this BSD name.
-		let matching_mut = unsafe { IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr()) };
+		// Safety: this is an FFI call.
+		let matching_mut = unsafe {
+			IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr())
+		};
 		if matching_mut.is_none() {
 			log!(@trace "Failed to create an IOKit matching dictionary.");
 			return Ok(None);
 		}
 
 		let matching = matching_mut.map(|dict| {
-			// `CFMutableDictionary` structurally inherits from `CFDictionary`, so reinterpreting it
-			// as its base type is entirely valid.
+			// Safety: `CFMutableDictionary` structurally inherits from
+			// `CFDictionary`, so reinterpreting it as its base type is
+			// entirely valid.
 			unsafe { CFRetained::cast_unchecked::<CFDictionary>(dict) }
 		});
 
 		let mut iterator = 0;
-		let res =
-			unsafe { IOServiceGetMatchingServices(kIOMainPortDefault, matching, &raw mut iterator) };
+		// Safety: this is an FFI call.
+		let res = unsafe {
+			IOServiceGetMatchingServices(kIOMainPortDefault, matching, &raw mut iterator)
+		};
 		if res != kIOReturnSuccess {
 			log!(@trace "IOServiceGetMatchingServices failed: 0x{res:08x}.");
 			return Err(RipRipError::Bug("IOServiceGetMatchingServices"));
@@ -88,15 +111,13 @@ mod macos {
 		let media_service = IOIteratorNext(iterator);
 		IOObjectRelease(iterator);
 
-		if media_service == 0 {
-			return Ok(None);
-		}
+		if media_service == 0 { return Ok(None); }
 
 		let vid_opt = get_numeric_property(media_service, "idVendor");
 		let pid_opt = get_numeric_property(media_service, "idProduct");
 		let option = vid_opt.zip(pid_opt);
 		if option.is_none() {
-			log!(@trace "Missing USB device properties.");
+			log!(@trace [media_service] "Missing USB device properties.");
 		}
 
 		IOObjectRelease(media_service);
@@ -106,63 +127,53 @@ mod macos {
 }
 
 #[cfg(target_os = "linux")]
+/// # Linux.
 mod linux {
-	use super::*;
+	use std::path::Path;
 
-	use std::fs;
-
-	pub(super) fn get_desc<P>(dev: P) -> Option<(u16, u16)>
-	where
-		P: AsRef<Path>,
-	{
-		let name = dev.as_ref().file_name()?.to_str()?;
-
-		let mut path = fs::canonicalize(format!("/sys/class/block/{name}/device")).ok()?;
+	/// # Get Description.
+	pub(super) fn get_desc(dev: &Path) -> Option<(u16, u16)> {
+		let name = dev.file_name()?;
+		let mut path = std::fs::canonicalize(format!(
+			"/sys/class/block/{name}/device",
+			name=name.display(),
+		)).ok()?;
 
 		loop {
-			if !path.starts_with("/sys") {
-				return None;
+			// Don't traverse above /sys.
+			if ! path.starts_with("/sys") { return None; }
+
+			// If there are vendor and product IDs, decode and return.
+			if
+				let Ok(vid) = std::fs::read_to_string(path.join("idVendor")) &&
+				let Ok(vid) = u16::from_str_radix(vid.trim(), 16) &&
+				let Ok(pid) = std::fs::read_to_string(path.join("idProduct")) &&
+				let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
+			{
+				return Some((vid, pid));
 			}
 
-			let vid = fs::read_to_string(path.join("idVendor")).ok();
-			let pid = fs::read_to_string(path.join("idProduct")).ok();
-
-			if let (Some(vid), Some(pid)) = (vid, pid) {
-				let ids = u16::from_str_radix(vid.trim(), 16)
-					.ok()
-					.zip(u16::from_str_radix(pid.trim(), 16).ok());
-
-				if ids.is_some() {
-					return ids;
-				}
-			}
-
-			if !path.pop() {
-				return None;
-			}
+			// We're out of parts!
+			if ! path.pop() { return None; }
 		}
 	}
 }
 
-/// Retrieves the `(Vendor ID, Product ID)` for a device path (e.g. on macOS, `"/dev/disk4"`).
+#[expect(clippy::unnecessary_wraps, reason = "For consistency across targets.")]
+/// # Retrieves Vendor/Product IDs.
 ///
-/// Returns `Ok(None)` if the path is invalid or not a USB device.
+/// Retrieve the vendor and product ID for the given device path, or `None`
+/// if the path is invalid, not a USB device, or the target OS is unsupported.
+///
+/// ## Errors
+///
+/// This will return an error if `IOServiceGetMatchingServices` fails for a
+/// Mac target.
 pub(super) fn get_desc<P>(dev: &P) -> Result<Option<(u16, u16)>, RipRipError>
-where
-	P: AsRef<Path>,
-{
-	#[cfg(target_os = "macos")]
-	{
-		macos::get_desc(dev)
-	}
-
-	#[cfg(target_os = "linux")]
-	{
-		Ok(linux::get_desc(dev))
-	}
-
-	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-	{
-		Ok(None)
+where P: AsRef<Path> {
+	cfg_select! {
+		target_os = "macos" => macos::get_desc(dev.as_ref()),
+		target_os = "linux" => Ok(linux::get_desc(dev.as_ref())),
+		_ => Ok(None),
 	}
 }

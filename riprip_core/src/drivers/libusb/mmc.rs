@@ -6,112 +6,137 @@ used to inspect and read audio CDs.
 */
 
 use crate::{
-	Barcode, CD_LEADIN, CD_LEADOUT, CddaDriverExt, DriveVendorModel, RipRipError, macros::log,
+	Barcode,
+	CD_LEADIN,
+	CD_LEADOUT,
+	CddaDriverExt,
+	DriveVendorModel,
+	macros::log,
+	RipRipError,
 };
+use std::range::legacy::Range;
 
-// Opcodes
+/// # Opcode: Read Subchannel.
 const READ_SUB_CHANNEL: u8 = 0x42;
+
+/// # Opcode: Read Table of Contents.
 const READ_TOC: u8 = 0x43;
+
+/// # Opcode: Get Configuration.
 const GET_CONFIGURATION: u8 = 0x46;
+
+/// # Opcode: Read CD.
 const READ_CD: u8 = 0xBE;
 
-// Architectural Constraints
+/// # Architectural Constraint: First Track.
 const FIRST_TRACK: u8 = 0x01;
+
+/// # Architectural Constraint: Max Track Number.
 const MAX_TRACK_NUMBER: u8 = 99;
 
-// READ_SUB_CHANNEL Data Formats
+/// # `READ_SUB_CHANNEL` Barcode Data Format.
 const SUB_FORMAT_MCN: u8 = 0x02;
 
+/// # Subchannel Header Length.
 const SUB_CHANNEL_HEADER_LEN: usize = 4;
+
+/// # Subchannel Barcode Data Length.
 const SUB_CHANNEL_MCN_DATA_LEN: usize = 22;
 
-// READ_TOC Time/Address Format
+/// # `READ_TOC` LBA Format.
 const FORMAT_LBA: u8 = 0x00;
+
+/// # `READ_TOC` MSF Format.
 const FORMAT_MSF: u8 = 0x02;
 
-// READ_TOC Format Codes
+/// # `READ_TOC` TOC Code.
 const TOC_FORMAT_TOC: u8 = 0x00;
+
+/// # `READ_TOC` CD-Text Code.
 const TOC_FORMAT_CDTEXT: u8 = 0x05;
 
+/// # Table of Contents Header Length.
 pub(super) const TOC_HEADER_LEN: usize = 4;
+
+/// # Table of Contents Track Descriptor Length.
 const TOC_TRACK_DESCRIPTOR_LEN: usize = 8;
 
-pub(super) const CTRL_DATA_TRACK: u8 = 0x04; // Bitmask for track type: set = Data, cleared = Audio.
+/// # Track Type Mask.
+///
+/// If set the type is data, otherwise audio.
+pub(super) const CTRL_DATA_TRACK: u8 = 0x04;
 
-// GET_CONFIGURATION Features
+/// # `GET_CONFIGURATION` C2 Feature.
 const FEATURE_CD_AUDIO_C2: u16 = 0x001E;
 
+/// # Configuration Header Length.
 const CONFIGURATION_HEADER_LEN: usize = 8;
+
+/// # Configuration Feature Descriptor Length.
 const CONFIGURATION_FEATURE_DESCRIPTOR_LEN: usize = 8;
 
-// READ_CD Sector Types
+/// # `READ_CD` Sector Type.
 const SECTOR_TYPE_CDDA: u8 = 0x04;
 
-/// `spc` (SCSI Primary Commands) covers baseline commands that every SCSI device must understand,
-/// regardless of what it is (like INQUIRY or TEST_UNIT_READY).
+/// # SCSI Primary Commands.
+///
+/// This covers baseline commands that every SCSI device must understand,
+/// regardless of what it is (like `INQUIRY` or `TEST_UNIT_READY`).
 mod spc {
+	/// # Inquiry.
 	pub(super) const INQUIRY: u8 = 0x12;
 
+	/// # Inquiry Header Length.
 	pub(super) const INQUIRY_HEADER_LEN: usize = 8;
+
+	/// # Inquiry Vendor ID Length.
 	pub(super) const INQUIRY_VENDOR_ID_LEN: usize = 8;
+
+	/// # Inquiry Product ID Length.
 	pub(super) const INQUIRY_PRODUCT_ID_LEN: usize = 16;
+
+	/// # Inquiry Revision Level Length.
 	pub(super) const INQUIRY_REVISION_LEVEL_LEN: usize = 4;
 }
 
-const fn to_be_u8(value: usize) -> [u8; 1] {
-	assert!(value <= u8::MAX as usize, "value does not fit in u8");
-
-	let bytes = value.to_be_bytes();
-	[bytes[bytes.len() - 1]]
-}
-
-const fn to_be_u16(value: usize) -> [u8; 2] {
-	assert!(value <= u16::MAX as usize, "value does not fit in u16");
-
-	let bytes = value.to_be_bytes();
-	[bytes[bytes.len() - 2], bytes[bytes.len() - 1]]
-}
-
-const fn copy_bytes<const N: usize, const M: usize>(
-	dst: &mut [u8; N],
-	range: std::ops::Range<usize>,
-	src: [u8; M],
-) {
-	let start = range.start;
-	let end = range.end;
-
-	assert!(start <= end, "invalid byte range");
-	assert!(end <= N, "range exceeds destination");
-	assert!(end - start == M, "byte range does not match value size");
-
-	let mut i = 0;
-	while i < M {
-		dst[start + i] = src[i];
-		i += 1;
-	}
-}
-
-pub(super) trait TransportExt {
-	/// Sends a SCSI Command Descriptor Block (CDB) and transfers data from the device.
-	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8]) -> Result<usize, RipRipError>;
-}
-
-/// A low-level API for interacting with a physical CD drive specifically to read audio data.
+/// # Transport Trait.
 ///
-/// Relies on the underlying `TransportExt` trait to handle the hardware bus communication
-/// (e.g. USB BOT or `/dev/sg`).
+/// This trait provides a single method, `submit`, for sending an SCSI Command
+/// Descriptor Block (CDB) to the device and reading its response.
+pub(super) trait TransportExt {
+	/// # Submit Command Descriptor Block.
+	///
+	/// Submit the CDB to the device and read the response into `buf`,
+	/// returning the length written.
+	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8])
+	-> Result<usize, RipRipError>;
+}
+
+/// # MMC CD Drive Operations.
+///
+/// This is a low-level API for interacting with a physical CD drive,
+/// specifically to read audio data.
+///
+/// Relies on the underlying `TransportExt` trait to handle the hardware bus
+/// communication (e.g. USB BOT or `/dev/sg`).
 pub(super) trait MmcDriverExt: TransportExt {
+	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
 		const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
-			let mut cdb = [0; _];
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
+			let mut cdb = [0; 10];
 			cdb[0] = READ_SUB_CHANNEL;
 			cdb[1] = FORMAT_MSF;
 			cdb[2] = 0x40; // Sub-Q Channel tracking bit
 			cdb[3] = SUB_FORMAT_MCN;
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -137,17 +162,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 		Ok(None)
 	}
 
+	/// # Check Disc Mode.
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
 			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
 			cdb[6] = FIRST_TRACK; // Starting track.
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -163,7 +194,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		// Patch the CDB with the expected allocation length.
 		let mut cdb = CDB;
-		copy_bytes(&mut cdb, 7..9, toc_len.to_be_bytes());
+		[cdb[7], cdb[8]] = toc_len.to_be_bytes();
 
 		let mut buf = vec![0_u8; toc_len.into()];
 		let len = self.submit(&cdb, &mut buf)?;
@@ -197,23 +228,26 @@ pub(super) trait MmcDriverExt: TransportExt {
 			.take(track_count)
 			.any(|desc| (desc[1] & CTRL_DATA_TRACK) == 0);
 
-		if has_audio {
-			Ok(())
-		} else {
-			Err(RipRipError::DiscMode)
-		}
+		if has_audio { Ok(()) }
+		else { Err(RipRipError::DiscMode) }
 	}
 
+	/// # Check C2.
 	fn check_c2__(&self) -> Result<(), RipRipError> {
 		const ALLOC_LEN: usize = CONFIGURATION_HEADER_LEN + CONFIGURATION_FEATURE_DESCRIPTOR_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
 			let mut cdb = [0; _];
 			cdb[0] = GET_CONFIGURATION;
 			cdb[1] = 0x02; // RT field = 0x02: Request only the specific feature specified in bytes 2-3.
-			copy_bytes(&mut cdb, 2..4, FEATURE_CD_AUDIO_C2.to_be_bytes());
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[2], cdb[3]] = FEATURE_CD_AUDIO_C2.to_be_bytes();
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -235,17 +269,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 		Err(RipRipError::C2Mode296)
 	}
 
+	/// # CD-Text (Raw).
 	fn read_cdtext(&self) -> Result<Option<Vec<u8>>, RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
 			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_CDTEXT;
 			cdb[6] = 0; // Track number to start reading from (0 = entire disc).
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -265,7 +305,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		// Patch the CDB with the expected allocation length.
 		let mut cdb = CDB;
-		copy_bytes(&mut cdb, 7..9, cdtext_len.to_be_bytes());
+		[cdb[7], cdb[8]] = cdtext_len.to_be_bytes();
 
 		let mut buf = vec![0_u8; cdtext_len.into()];
 		self.submit(&cdb, &mut buf)?;
@@ -273,17 +313,23 @@ pub(super) trait MmcDriverExt: TransportExt {
 		Ok(Some(buf))
 	}
 
+	/// # Get Table of Contents Header.
 	fn get_toc_header(&self) -> Result<(u8, u8), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
 			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
 			cdb[6] = 0;
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -298,16 +344,22 @@ pub(super) trait MmcDriverExt: TransportExt {
 		Ok((first_track, last_track))
 	}
 
+	/// # Get Track Descriptor.
 	fn get_track_descriptor(&self, idx: u8) -> Result<(u8, u32), RipRipError> {
 		const ALLOC_LEN: usize = TOC_HEADER_LEN + TOC_TRACK_DESCRIPTOR_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+
 			let mut cdb = [0; _];
 			cdb[0] = READ_TOC;
 			cdb[1] = FORMAT_LBA;
 			cdb[2] = TOC_FORMAT_TOC; // Format 0: Standard Table of Contents.
-
-			copy_bytes(&mut cdb, 7..9, to_be_u16(ALLOC_LEN));
+			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
 
@@ -325,16 +377,19 @@ pub(super) trait MmcDriverExt: TransportExt {
 		Ok((control_adr, lba))
 	}
 
+	/// # Drive Vendor/Model.
 	fn drive_vendor_model__(&self) -> Result<DriveVendorModel, RipRipError> {
 		use spc::{
-			INQUIRY_HEADER_LEN, INQUIRY_PRODUCT_ID_LEN, INQUIRY_REVISION_LEVEL_LEN,
+			INQUIRY_HEADER_LEN,
+			INQUIRY_PRODUCT_ID_LEN,
+			INQUIRY_REVISION_LEVEL_LEN,
 			INQUIRY_VENDOR_ID_LEN,
 		};
 
-		const VENDOR_ID_RANGE: std::ops::Range<usize> =
+		const VENDOR_ID_RANGE: Range<usize> =
 			INQUIRY_HEADER_LEN..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN);
 
-		const PRODUCT_ID_RANGE: std::ops::Range<usize> =
+		const PRODUCT_ID_RANGE: Range<usize> =
 			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN;
 
 		const ALLOC_LEN: usize = INQUIRY_HEADER_LEN
@@ -342,10 +397,15 @@ pub(super) trait MmcDriverExt: TransportExt {
 			+ INQUIRY_PRODUCT_ID_LEN
 			+ INQUIRY_REVISION_LEVEL_LEN;
 
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 6] = {
-			let mut cdb = [0; _];
+			assert!(
+				ALLOC_LEN <= (u8::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+			let mut cdb = [0; 6];
 			cdb[0] = spc::INQUIRY;
-			copy_bytes(&mut cdb, 4..5, to_be_u8(ALLOC_LEN));
+			cdb[4] = ALLOC_LEN as u8;
 			cdb
 		};
 
@@ -369,6 +429,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		DriveVendorModel::new(vendor_id, model_id)
 	}
 
+	/// # Execute Read Command.
 	fn read_cd__(&self, buf: &mut [u8], lsn: i32, c2: bool, sub: u8) -> Result<usize, RipRipError> {
 		const CDB: [u8; 12] = {
 			let mut cdb = [0; _];
@@ -376,14 +437,16 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb[1] = SECTOR_TYPE_CDDA;
 
 			// Transfer Length (24-bit BE integer): one sector.
-			copy_bytes(&mut cdb, 6..9, [0, 0, 1]);
+			// cdb[6] = 0;
+			// cdb[7] = 0;
+			cdb[8] = 1;
 			cdb
 		};
 
 		let mut cdb = CDB;
 		// Rip Rip's addressing parameters are already absolute LBAs.
 		let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
-		copy_bytes(&mut cdb, 2..6, lba.to_be_bytes());
+		[cdb[2], cdb[3], cdb[4], cdb[5]] = lba.to_be_bytes();
 
 		// Byte 9 is the Selection Field flag byte:
 		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
@@ -403,33 +466,33 @@ pub(super) trait MmcDriverExt: TransportExt {
 impl<T: TransportExt + ?Sized> MmcDriverExt for T {}
 
 impl<T: MmcDriverExt> CddaDriverExt for T {
+	/// # First Track Number.
 	fn first_track_num(&self) -> Result<u8, RipRipError> {
 		let (first, _) = self.get_toc_header()?;
 
-		if first == 0 {
-			Err(RipRipError::FirstTrackNum)
-		} else {
-			Ok(first)
-		}
+		if first == 0 { Err(RipRipError::FirstTrackNum) }
+		else { Ok(first) }
 	}
 
+	/// # Leadout.
 	fn leadout_lba(&self) -> Result<u32, RipRipError> {
 		// In the SCSI MMC specification, the leadout track information is
 		// explicitly queried using the standard magic track index 0xAA.
 		self.track_lba_start(CD_LEADOUT)
 	}
 
+	/// # Get the Number of Tracks.
 	fn num_tracks(&self) -> Result<u8, RipRipError> {
 		let (first, last) = self.get_toc_header()?;
 
-		if last == 0 {
-			Err(RipRipError::NumTracks)
-		} else {
-			// Handles discs that might not explicitly start at track 1
+		if last == 0 { Err(RipRipError::NumTracks) }
+		else {
+			// Handles discs that might not explicitly start at track 1.
 			Ok(last - first + 1)
 		}
 	}
 
+	/// # Track Format.
 	fn track_format(&self, idx: u8) -> Result<bool, RipRipError> {
 		let (control_adr, _) = self
 			.get_track_descriptor(idx)
@@ -439,13 +502,12 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		// Bit 2 (0x04) is set if the track is a data track, and clear if it's audio.
 		let is_data = (control_adr & CTRL_DATA_TRACK) > 0;
 
-		Ok(!is_data)
+		Ok(! is_data)
 	}
 
+	/// # Track LBA Start.
 	fn track_lba_start(&self, idx: u8) -> Result<u32, RipRipError> {
-		if idx == 0 {
-			return Err(RipRipError::TrackNumber(0));
-		}
+		if idx == 0 { return Err(RipRipError::TrackNumber(0)); }
 
 		let (_, lba) = self
 			.get_track_descriptor(idx)
@@ -454,6 +516,7 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		Ok(lba + u32::from(CD_LEADIN))
 	}
 
+	/// # CD-Text (Raw).
 	fn cdtext(&self) -> Option<Vec<u8>> {
 		if let Some(mut buf) = self.read_cdtext().ok()? {
 			// Skip the header.
@@ -464,14 +527,17 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		None
 	}
 
+	/// # Drive Vendor/Model.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		self.drive_vendor_model__().ok()
 	}
 
+	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		self.mcn_subchannel__().ok().flatten()
 	}
 
+	/// # Execute Read Command.
 	fn read_cd(
 		&self,
 		buf: &mut [u8],
@@ -480,9 +546,8 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		sub: u8,
 		_block_size: u16,
 	) -> Result<(), RipRipError> {
-		if self.read_cd__(buf, lsn, c2, sub).is_ok() {
-			Ok(())
-		} else {
+		if self.read_cd__(buf, lsn, c2, sub).is_ok() { Ok(()) }
+		else {
 			crate::drivers::set_bad_sector(lsn);
 			Err(RipRipError::CdRead)
 		}
