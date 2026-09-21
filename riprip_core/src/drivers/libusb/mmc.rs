@@ -34,14 +34,8 @@ const FIRST_TRACK: u8 = 0x01;
 /// # Architectural Constraint: Max Track Number.
 const MAX_TRACK_NUMBER: u8 = 99;
 
-/// # `READ_SUB_CHANNEL` Barcode Data Format.
-const SUB_FORMAT_MCN: u8 = 0x02;
-
 /// # Subchannel Header Length.
 const SUB_CHANNEL_HEADER_LEN: usize = 4;
-
-/// # Subchannel Barcode Data Length.
-const SUB_CHANNEL_MCN_DATA_LEN: usize = 22;
 
 /// # `READ_TOC` LBA Format.
 const FORMAT_LBA: u8 = 0x00;
@@ -122,7 +116,9 @@ pub(super) trait TransportExt {
 pub(super) trait MmcDriverExt: TransportExt {
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel__(&self) -> Result<Option<Barcode>, RipRipError> {
-		const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + SUB_CHANNEL_MCN_DATA_LEN;
+		const FORMAT: u8 = 0x02;
+		const DATA_LEN: usize = 20;
+		const ALLOC_LEN: usize = SUB_CHANNEL_HEADER_LEN + DATA_LEN;
 
 		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 10] = {
@@ -135,7 +131,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb[0] = READ_SUB_CHANNEL;
 			cdb[1] = FORMAT_MSF;
 			cdb[2] = 0x40; // Sub-Q Channel tracking bit
-			cdb[3] = SUB_FORMAT_MCN;
+			cdb[3] = FORMAT;
 			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 			cdb
 		};
@@ -146,16 +142,12 @@ pub(super) trait MmcDriverExt: TransportExt {
 			return Ok(None);
 		}
 
-		let data_format = buf[3];
-		let subq_element_valid = buf[4];
-
-		if data_format == SUB_FORMAT_MCN && subq_element_valid == 0x01 {
-			// Bit 7 tracks string validation rules (MCVAL flag in MMC spec).
-			let is_mcn_valid = (buf[12] & 0x80) != 0;
-			if is_mcn_valid {
-				let raw_ascii = &buf[13..26];
-				return Barcode::try_from(raw_ascii).map(Some);
-			}
+		if
+			buf[3] == FORMAT &&  // Expected format.
+			buf[4] == 0x01 &&    // Sub-Q valid.
+			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
+		{
+			return Barcode::try_from(&buf[9..]).map(Some);
 		}
 
 		log!(@trace "Subchannel contains no MCN data.");

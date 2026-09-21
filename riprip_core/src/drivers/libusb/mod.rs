@@ -278,26 +278,27 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			})?;
 
 		// Skip the read phase entirely if no data transfer is expected.
-		let transferred = if data_len > 0 {
-			match self
-				.device_handle
-				.read_bulk(self.endpoints.bulk_in, buf, READ_BULK_TIMEOUT)
-			{
-				Ok(n) => n,
-				Err(rusb::Error::Pipe) => {
-					log!(@trace [ctx, cbw, buf] "CBW read pipe failed.");
-					self.device_handle
-						.clear_halt(self.endpoints.bulk_in)
-						.map_err(|e| RipRipError::Internal(e.to_string()))?;
-					0
+		let transferred =
+			if data_len == 0 { 0 }
+			else {
+				match self
+					.device_handle
+					.read_bulk(self.endpoints.bulk_in, buf, READ_BULK_TIMEOUT)
+				{
+					Ok(n) => n,
+					Err(rusb::Error::Pipe) => {
+						log!(@trace [ctx, cbw, buf] "CBW read pipe failed.");
+						self.device_handle
+							.clear_halt(self.endpoints.bulk_in)
+							.map_err(|e| RipRipError::Internal(e.to_string()))?;
+						0
+					}
+					Err(e) => {
+						log!(@trace [ctx, cbw, buf] "CBW read failed.");
+						return Err(RipRipError::Internal(e.to_string()))
+					},
 				}
-				Err(e) => {
-					log!(@trace [ctx, cbw, buf] "CBW read failed.");
-					return Err(RipRipError::Internal(e.to_string()))
-				},
-			}
-		}
-		else { 0 };
+			};
 
 		let mut csw_raw = [0_u8; CSW_LEN];
 		let len = self
