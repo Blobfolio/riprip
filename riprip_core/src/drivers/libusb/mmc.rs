@@ -108,7 +108,7 @@ pub(super) trait TransportExt {
 	///
 	/// Submit the CDB to the device and read the response into `buf`,
 	/// returning the length written.
-	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8])
+	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8], ctx: &'static str)
 	-> Result<usize, RipRipError>;
 }
 
@@ -141,7 +141,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
+		if self.submit(&CDB, &mut buf, "mcn_subchannel__").ok().is_none_or(|len| len < ALLOC_LEN) {
 			log!(@trace "Subchannel contains no MCN data.");
 			return Ok(None);
 		}
@@ -184,7 +184,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		// Asks only for enough bytes to discover how large the TOC is.
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < TOC_HEADER_LEN {
+		if self.submit(&CDB, &mut buf, "check_disc_mode__")? < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
 
@@ -197,7 +197,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		[cdb[7], cdb[8]] = toc_len.to_be_bytes();
 
 		let mut buf = vec![0_u8; toc_len.into()];
-		let len = self.submit(&cdb, &mut buf)?;
+		let len = self.submit(&cdb, &mut buf, "check_disc_mode__")?;
 		if len < TOC_HEADER_LEN {
 			return Err(RipRipError::DiscMode);
 		}
@@ -252,7 +252,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
+		if self.submit(&CDB, &mut buf, "check_c2__")? < ALLOC_LEN {
 			return Err(RipRipError::C2Mode296);
 		}
 
@@ -291,7 +291,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		// Asks only for enough bytes to discover how large the CD-Text is.
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
+		if self.submit(&CDB, &mut buf, "read_cdtext")? < ALLOC_LEN {
 			return Err(RipRipError::CdText);
 		}
 
@@ -308,7 +308,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		[cdb[7], cdb[8]] = cdtext_len.to_be_bytes();
 
 		let mut buf = vec![0_u8; cdtext_len.into()];
-		self.submit(&cdb, &mut buf)?;
+		self.submit(&cdb, &mut buf, "read_cdtext")?;
 
 		Ok(Some(buf))
 	}
@@ -334,7 +334,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
+		if self.submit(&CDB, &mut buf, "get_toc_header")? < ALLOC_LEN {
 			return Err(RipRipError::FirstTrackNum);
 		}
 
@@ -367,7 +367,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		cdb[6] = idx;
 
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&cdb, &mut buf)? < ALLOC_LEN {
+		if self.submit(&cdb, &mut buf, "get_track_descriptor")? < ALLOC_LEN {
 			return Err(RipRipError::TrackLba(idx));
 		}
 
@@ -410,7 +410,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		};
 
 		let mut buf = [0_u8; ALLOC_LEN];
-		if self.submit(&CDB, &mut buf)? < ALLOC_LEN {
+		if self.submit(&CDB, &mut buf, "drive_vendor_model__")? < ALLOC_LEN {
 			return Err(RipRipError::DriveModel);
 		}
 
@@ -459,7 +459,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		// 0 = none, 1 = raw P-W, 2 = formatted Q, 4 = corrected R-W.
 		cdb[10] = sub;
 
-		self.submit(&cdb, buf)
+		self.submit(&cdb, buf, "read_cd__")
 	}
 }
 

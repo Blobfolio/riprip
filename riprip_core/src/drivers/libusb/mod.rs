@@ -245,7 +245,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 
 impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	/// # Submit.
-	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8])
+	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8], ctx: &'static str)
 	-> Result<usize, RipRipError> {
 		use bot::{
 			CSW_LEN,
@@ -273,7 +273,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		self.device_handle
 			.write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace [cbw, buf] "CBW write failed.");
+				log!(@trace [ctx, cbw, buf] "CBW write failed.");
 				RipRipError::Internal(e.to_string())
 			})?;
 
@@ -285,14 +285,14 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			{
 				Ok(n) => n,
 				Err(rusb::Error::Pipe) => {
-					log!(@trace [cbw, buf] "CBW read pipe failed.");
+					log!(@trace [ctx, cbw, buf] "CBW read pipe failed.");
 					self.device_handle
 						.clear_halt(self.endpoints.bulk_in)
 						.map_err(|e| RipRipError::Internal(e.to_string()))?;
 					0
 				}
 				Err(e) => {
-					log!(@trace [cbw, buf] "CBW read failed.");
+					log!(@trace [ctx, cbw, buf] "CBW read failed.");
 					return Err(RipRipError::Internal(e.to_string()))
 				},
 			}
@@ -304,7 +304,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			.device_handle
 			.read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace [cbw, buf, transferred] "CSW read failed.");
+				log!(@trace [ctx, cbw, buf, transferred] "CSW read failed.");
 				RipRipError::Internal(e.to_string())
 			})?;
 
@@ -316,17 +316,16 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		// Verify protocol sync state against our local tag.
 		if ! csw.is_valid(current_tag) {
-			log!(@trace [cbw, buf, transferred, csw] "Invalid CSW.");
+			log!(@trace [ctx, cbw, buf, transferred, csw] "Invalid CSW.");
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
 			));
 		}
 
-		if csw.status() == 0 {
-			return Ok(transferred);
-		}
+		// Happy!
+		if csw.status() == 0 { return Ok(transferred); }
 
-		log!(@trace [cbw, buf, transferred, csw] "CSW did not pass.");
+		log!(@trace [ctx, cbw, buf, transferred, csw] "CSW did not pass.");
 		match csw.status() {
 			1 => Err(RipRipError::CdRead),
 			2 => Err(RipRipError::Bug("USB BOT phase error.")),
