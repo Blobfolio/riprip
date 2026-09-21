@@ -325,10 +325,21 @@ fn cache_bust<D: CddaDriverExt>(
 ///
 /// Convert minutes, seconds, and frames to a logical sector number.
 const fn msf_to_lsn(m: u8, s: u8, f: u8) -> i32 {
-	((m as i32) * 60 * (FRAMES_PER_SECOND as i32)) +
-	((s as i32) * (FRAMES_PER_SECOND as i32)) +
-	(f as i32) -
-	(CD_LEADIN as i32)
+	/// # Binary-Coded Decimal Conversion.
+	const fn from_bcd8(v: u8) -> i32 {
+		let v = v as i32;
+		(v & 0x0F) + ((v >> 4) * 10)
+	}
+
+	// Convert to LBA.
+	let mut lba = from_bcd8(m);
+	lba *= 60;                       // Minutes to seconds.
+	lba += from_bcd8(s);
+	lba *= FRAMES_PER_SECOND as i32; // Seconds to frames.
+	lba += from_bcd8(f);
+
+	// Convert to LSN.
+	lba - (CD_LEADIN as i32)
 }
 
 /// # Set Bad Sector.
