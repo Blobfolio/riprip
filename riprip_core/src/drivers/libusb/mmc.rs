@@ -392,10 +392,10 @@ pub(super) trait MmcDriverExt: TransportExt {
 		const PRODUCT_ID_RANGE: Range<usize> =
 			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN;
 
-		const ALLOC_LEN: usize = INQUIRY_HEADER_LEN
-			+ INQUIRY_VENDOR_ID_LEN
-			+ INQUIRY_PRODUCT_ID_LEN
-			+ INQUIRY_REVISION_LEVEL_LEN;
+		const ALLOC_LEN: usize = INQUIRY_HEADER_LEN +
+			INQUIRY_VENDOR_ID_LEN +
+			INQUIRY_PRODUCT_ID_LEN +
+			INQUIRY_REVISION_LEVEL_LEN;
 
 		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 6] = {

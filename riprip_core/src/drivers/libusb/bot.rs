@@ -5,30 +5,15 @@ Provides the `CommandBlockWrapper` and `CommandStatusWrapper` structures
 required to transport SCSI MMC commands over USB.
 */
 
+use std::fmt;
+
+
+
 /// # Mass Storage Class.
 pub(super) const CLASS_MASS_STORAGE: u8 = 0x08;
 
 /// # Bulk-Only Protocol.
 pub(super) const PROTOCOL_BULK_ONLY: u8 = 0x50;
-
-/// # Device Subclass: CD-ROM.
-const SUBCLASS_CD_ROM: u8 = 0x02;
-
-/// # Device Subclass: Legacy/ATAPI CD-Rom.
-const SUBCLASS_SFF_8070I: u8 = 0x05;
-
-/// # Device Subclass: Modern USB-SATA Bridges.
-const SUBCLASS_SCSI_TRANSPARENT: u8 = 0x06;
-
-/// # Device Subclasses of Interest.
-///
-/// Interfaces with these sublcasses are worth a deeper look as they might
-/// be CD-ROMs to rip from.
-pub(super) const OPTICAL_DRIVE_SUBCLASSES: [u8; 3] = [
-	SUBCLASS_CD_ROM,
-	SUBCLASS_SFF_8070I,
-	SUBCLASS_SCSI_TRANSPARENT,
-];
 
 /// # Command Block Wrapper Length.
 const CBW_LEN: usize = 31;
@@ -41,6 +26,8 @@ const CBW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBC");
 
 /// # Command Status Wrapper Signature.
 const CSW_SIGNATURE: u32 = u32::from_le_bytes(*b"USBS");
+
+
 
 #[derive(Debug, Default)]
 /// # Command Block.
@@ -57,7 +44,7 @@ pub(super) struct CommandBlockWrapper {
 	/// # Flags.
 	flags: u8,
 
-	/// # TODO.
+	/// # Logical Unit Number.
 	lun: u8,
 
 	/// # Command Block Length.
@@ -79,7 +66,7 @@ impl CommandBlockWrapper {
 		cdb: &[u8; N],
 	) -> Self {
 		const {
-			assert!(N <= 16, "BUG: CDB cannot exceed 16 bytes.");
+			assert!(N != 0 && N <= 16, "BUG: CDB must have length of 1..=16.");
 		}
 
 		Self {
@@ -141,6 +128,8 @@ impl CommandStatusWrapper {
 
 	#[must_use]
 	/// # Is Valid?
+	///
+	/// Returns `true` if the signature is valid and the tag matches `tag`.
 	pub(super) const fn is_valid(&self, tag: u32) -> bool {
 		self.signature == CSW_SIGNATURE && self.tag == tag
 	}
@@ -153,4 +142,50 @@ impl CommandStatusWrapper {
 	#[must_use]
 	/// # Data Residue.
 	pub(super) const fn data_residue(&self) -> u32 { self.data_residue }
+}
+
+
+
+/// # Helper: Optical Drive Subclasses.
+macro_rules! subclass {
+	( $( $k:ident $v:literal $str:literal, )+ ) => (
+		#[repr(u8)]
+		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+		/// # Device Subclass.
+		///
+		/// This enum holds the subclass codes associated with optical media
+		/// devices.
+		pub(super) enum OpticalDriveSubclass {
+			$(
+				#[doc = concat!("# ", $str, ".")]
+				$k = $v,
+			)+
+		}
+
+		impl fmt::Display for OpticalDriveSubclass {
+			#[inline]
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				f.write_str(match self {
+					$( Self::$k => $str, )+
+				})
+			}
+		}
+
+		impl OpticalDriveSubclass {
+			#[must_use]
+			/// # From Subclass Code.
+			pub(super) const fn from_u8(raw: u8) -> Option<Self> {
+				match raw {
+					$( $v => Some(Self::$k), )+
+					_ => None,
+				}
+			}
+		}
+	);
+}
+
+subclass! {
+	CDRom           0x02 "CD-ROM",
+	Sff8070i        0x05 "SFF-8070i (ATAPI)",
+	ScsiTransparent 0x06 "Transparent SCSI",
 }

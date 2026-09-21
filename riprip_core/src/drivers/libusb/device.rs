@@ -46,7 +46,11 @@ mod macos {
 
 
 	#[expect(unsafe_code, reason = "For FFI.")]
+	#[must_use]
 	/// # Get Numeric Property.
+	///
+	/// Query the media service for `key`, returning the code if found and
+	/// valid.
 	fn get_numeric_property(media_service: u32, key: &str) -> Option<u16> {
 		let cf_key = CFString::from_str(key);
 
@@ -70,30 +74,28 @@ mod macos {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # Get Description.
+	#[must_use]
+	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
 		let Some(bsd_name) = dev.file_name()
 			.and_then(|name| CString::new(name.as_bytes()).ok())
 		else {
+			log!(@trace [dev] "Failed to get device name.");
 			return Ok(None);
 		};
 
 		// Find the specific IOMedia service for this BSD name.
-		// Safety: this is an FFI call.
+		// Safety: this is an FFI call. Note `CFMutableDictionary` structurally
+		// inherits from `CFDictionary`, so reinterpreting it as its base type
+		// is entirely valid.
 		let matching_mut = unsafe {
 			IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr())
+				.map(|v| CFRetained::cast_unchecked::<CFDictionary>(v))
 		};
 		if matching_mut.is_none() {
-			log!(@trace "Failed to create an IOKit matching dictionary.");
+			log!(@trace [dev] "Failed to create an IOKit matching dictionary.");
 			return Ok(None);
 		}
-
-		let matching = matching_mut.map(|dict| {
-			// Safety: `CFMutableDictionary` structurally inherits from
-			// `CFDictionary`, so reinterpreting it as its base type is
-			// entirely valid.
-			unsafe { CFRetained::cast_unchecked::<CFDictionary>(dict) }
-		});
 
 		let mut iterator = 0;
 		// Safety: this is an FFI call.
@@ -101,11 +103,16 @@ mod macos {
 			IOServiceGetMatchingServices(kIOMainPortDefault, matching, &raw mut iterator)
 		};
 		if res != kIOReturnSuccess {
-			log!(@trace "IOServiceGetMatchingServices failed: 0x{res:08x}.");
+			log!(@trace [dev] "IOServiceGetMatchingServices failed: 0x{res:08x}.");
 			return Err(RipRipError::Bug("IOServiceGetMatchingServices"));
 		}
 		if iterator == 0 {
-			log!(@trace "No matching services found for {}.", bsd_name.to_string_lossy());
+			log!(
+				@trace
+				[dev]
+				"No matching services found for {}.",
+				bsd_name.to_string_lossy(),
+			);
 			return Ok(None);
 		}
 
@@ -118,11 +125,13 @@ mod macos {
 		let pid_opt = get_numeric_property(media_service, "idProduct");
 		let option = vid_opt.zip(pid_opt);
 		if option.is_none() {
-			log!(@trace [media_service] "Missing USB device properties.");
+			log!(@trace [dev, media_service] "Missing USB device properties.");
 		}
 
+		// Clean up.
 		IOObjectRelease(media_service);
 
+		// Done!
 		Ok(option)
 	}
 }
@@ -130,16 +139,32 @@ mod macos {
 #[cfg(target_os = "linux")]
 /// # Linux.
 mod linux {
+	use crate::macros::log;
 	use std::path::Path;
 
-	/// # Get Description.
+	#[must_use]
+	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Option<(u16, u16)> {
-		let name = dev.file_name()?;
-		let mut path = std::fs::canonicalize(format!(
+		// Resolve the block path.
+		let Some(name) = dev.file_name() else {
+			log!(@trace [dev] "Failed to get device name.");
+			return None;
+		};
+		let Ok(mut path) = std::fs::canonicalize(format!(
 			"/sys/class/block/{name}/device",
 			name=name.display(),
-		)).ok()?;
+		)) else {
+			log!(
+				@trace
+				[dev]
+				"Missing \"/sys/class/block/{name}/device\".",
+				name=name.display(),
+			);
+			return None;
+		};
 
+		// Block device symlinks point to obscure trees requiring a bit of
+		// manual traversal to locate the `idVendor` and `idProduct` files.
 		loop {
 			// Don't traverse above /sys.
 			if ! path.starts_with("/sys") { return None; }
@@ -151,6 +176,8 @@ mod linux {
 				let Ok(pid) = std::fs::read_to_string(path.join("idProduct")) &&
 				let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
 			{
+				let sys = path;
+				log!(@trace [dev, sys] "Found device descriptors.");
 				return Some((vid, pid));
 			}
 
@@ -165,7 +192,7 @@ mod linux {
 	clippy::unnecessary_wraps,
 	reason = "For consistency across targets.",
 )]
-/// # Retrieves Vendor/Product IDs.
+/// # Get Vendor and Product Descriptors.
 ///
 /// Retrieve the vendor and product ID for the given device path, or `None`
 /// if the path is invalid, not a USB device, or the target OS is unsupported.

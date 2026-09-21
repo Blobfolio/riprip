@@ -52,6 +52,8 @@ const READ_BULK_TIMEOUT: Duration = Duration::from_secs(5);
 /// # Status Read Timeout.
 const STATUS_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
+
+
 /// # Find and Open Device.
 fn find_and_open_device<C: UsbContext>(devices: &DeviceList<C>, vid: u16, pid: u16)
 -> Result<DeviceHandle<C>, RipRipError> {
@@ -81,13 +83,13 @@ fn find_and_open_cd_drive<C: UsbContext>(devices: &DeviceList<C>)
 		.find_map(|device| {
 			let config_desc = device.active_config_descriptor().ok()?;
 
-			let is_optical = config_desc.interfaces().any(|interface| {
-				interface.descriptors().any(|desc| {
-					desc.class_code() == bot::CLASS_MASS_STORAGE
-						&& (bot::OPTICAL_DRIVE_SUBCLASSES.contains(&desc.sub_class_code()))
-						&& desc.protocol_code() == bot::PROTOCOL_BULK_ONLY
-				})
-			});
+			let is_optical = config_desc.interfaces().any(|interface|
+				interface.descriptors().any(|desc|
+					desc.class_code() == bot::CLASS_MASS_STORAGE &&
+					bot::OpticalDriveSubclass::from_u8(desc.sub_class_code()).is_some() &&
+					desc.protocol_code() == bot::PROTOCOL_BULK_ONLY
+				)
+			);
 
 			if is_optical {
 				log!(@debug "Found optical drive ({:?}).", device);
@@ -122,7 +124,12 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints,
 			acc
 		});
 
-	log!(@trace "Endpoints detected (in: {:#04x}, out: {:#04x}).", endpoints.bulk_in, endpoints.bulk_out);
+	log!(
+		@trace
+		"Endpoints detected (in: {:#04x}, out: {:#04x}).",
+		endpoints.bulk_in,
+		endpoints.bulk_out,
+	);
 
 	Ok(endpoints)
 }
@@ -230,7 +237,6 @@ impl<C: UsbContext> LibusbInstance<C> {
 		};
 
 		out.check_disc_mode__()?;
-
 		out.check_c2__()?;
 
 		Ok(out)
@@ -241,9 +247,15 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	/// # Submit.
 	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8])
 	-> Result<usize, RipRipError> {
-		use bot::{CSW_LEN, CommandBlockWrapper, CommandStatusWrapper};
+		use bot::{
+			CSW_LEN,
+			CommandBlockWrapper,
+			CommandStatusWrapper,
+		};
 
-		const { assert!(N <= 16, "CDB cannot exceed 16 bytes.") };
+		const {
+			assert!(N != 0 && N <= 16, "BUG: CDB must have length of 1..=16.");
+		}
 
 		// Read and increment the local counter attached directly to this specific drive.
 		let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
@@ -261,7 +273,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		self.device_handle
 			.write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace "Write failed (cbw: {cbw:?}, buf: {buf:?}).");
+				log!(@trace [cbw, buf] "CBW write failed.");
 				RipRipError::Internal(e.to_string())
 			})?;
 
@@ -273,14 +285,14 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			{
 				Ok(n) => n,
 				Err(rusb::Error::Pipe) => {
-					log!(@trace "Read failed (cbw: {cbw:?}, buf: {buf:?}).");
+					log!(@trace [cbw, buf] "CBW read pipe failed.");
 					self.device_handle
 						.clear_halt(self.endpoints.bulk_in)
 						.map_err(|e| RipRipError::Internal(e.to_string()))?;
 					0
 				}
 				Err(e) => {
-					log!(@trace "Read failed (cbw: {cbw:?}, buf: {buf:?}).");
+					log!(@trace [cbw, buf] "CBW read failed.");
 					return Err(RipRipError::Internal(e.to_string()))
 				},
 			}
@@ -292,7 +304,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			.device_handle
 			.read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace "Read failed (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}).");
+				log!(@trace [cbw, buf, transferred] "CSW read failed.");
 				RipRipError::Internal(e.to_string())
 			})?;
 
@@ -304,7 +316,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		// Verify protocol sync state against our local tag.
 		if ! csw.is_valid(current_tag) {
-			log!(@trace "Invalid CSW (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}, csw: {csw:?}).");
+			log!(@trace [cbw, buf, transferred, csw] "Invalid CSW.");
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
 			));
@@ -314,7 +326,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			return Ok(transferred);
 		}
 
-		log!(@trace "CSW did not pass (cbw: {cbw:?}, buf: {buf:?}, transferred: {transferred}, csw: {csw:?}).");
+		log!(@trace [cbw, buf, transferred, csw] "CSW did not pass.");
 		match csw.status() {
 			1 => Err(RipRipError::CdRead),
 			2 => Err(RipRipError::Bug("USB BOT phase error.")),

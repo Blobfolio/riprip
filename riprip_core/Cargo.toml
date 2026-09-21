@@ -36,10 +36,6 @@ version = "0.31.3"
 features = ["user"]
 optional = true
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-io-kit = { version = "0.3.2", optional = true }
-objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
-
 [dependencies.minreq]
 version = "3.0.*"
 default-features = false
@@ -48,6 +44,10 @@ features = [ "https" ]
 [dependencies.oxford_join]
 version = "0.7.*"
 optional = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-io-kit = { version = "0.3.2", optional = true }
+objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
 
 [build-dependencies]
 dactyl = "0.13.*"
