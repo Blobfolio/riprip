@@ -74,7 +74,6 @@ mod macos {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
-	#[must_use]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
 		let Some(bsd_name) = dev.file_name()
@@ -88,11 +87,11 @@ mod macos {
 		// Safety: this is an FFI call. Note `CFMutableDictionary` structurally
 		// inherits from `CFDictionary`, so reinterpreting it as its base type
 		// is entirely valid.
-		let matching_mut = unsafe {
+		let matching = unsafe {
 			IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr())
 				.map(|v| CFRetained::cast_unchecked::<CFDictionary>(v))
 		};
-		if matching_mut.is_none() {
+		if matching.is_none() {
 			log!(@trace [dev] "Failed to create an IOKit matching dictionary.");
 			return Ok(None);
 		}
