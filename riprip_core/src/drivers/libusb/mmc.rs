@@ -415,8 +415,14 @@ pub(super) trait MmcDriverExt: TransportExt {
 		}
 
 		// Convert the raw bytes into UTF-8 strings.
-		let vendor_id = std::str::from_utf8(vendor_id).map_err(|_| RipRipError::DriveVendor)?;
-		let model_id = std::str::from_utf8(model_id).map_err(|_| RipRipError::DriveModel)?;
+		let Ok(vendor_id) = std::str::from_utf8(vendor_id) else {
+			log!(@trace [vendor_id] "Invalid drive vendor.");
+			return Err(RipRipError::DriveVendor);
+		};
+		let Ok(model_id) = std::str::from_utf8(model_id) else {
+			log!(@trace [model_id] "Invalid drive model.");
+			return Err(RipRipError::DriveVendor);
+		};
 
 		DriveVendorModel::new(vendor_id, model_id)
 	}

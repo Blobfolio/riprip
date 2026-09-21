@@ -270,15 +270,15 @@ impl CddaDriverExt for LibcdioInstance {
 		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &raw mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
-			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
-			let model_u8 = raw.psz_model.map(u8::saturating_from);
+			let vendor_id = raw.psz_vendor.map(u8::saturating_from);
+			let model_id = raw.psz_model.map(u8::saturating_from);
 
-			let Some(vendor) = to_str(&vendor_u8) else {
-				log!(@trace [vendor_u8] "Invalid drive vendor.");
+			let Some(vendor) = to_str(&vendor_id) else {
+				log!(@trace [vendor_id] "Invalid drive vendor.");
 				return None;
 			};
-			let Some(model) = to_str(&model_u8) else {
-				log!(@trace [model_u8] "Invalid drive model.");
+			let Some(model) = to_str(&model_id) else {
+				log!(@trace [model_id] "Invalid drive model.");
 				return None;
 			};
 			DriveVendorModel::new(vendor, model).ok()
