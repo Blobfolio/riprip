@@ -66,7 +66,10 @@ impl CommandBlockWrapper {
 		cdb: &[u8; N],
 	) -> Self {
 		const {
-			assert!(N != 0 && N <= 16, "BUG: CDB must have length of 1..=16.");
+			assert!(
+				N == 6 || N == 10 || N == 12,
+				"BUG: CDB must have length of 6, 10, or 12.",
+			);
 		}
 
 		Self {

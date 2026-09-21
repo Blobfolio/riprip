@@ -254,7 +254,10 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		};
 
 		const {
-			assert!(N != 0 && N <= 16, "BUG: CDB must have length of 1..=16.");
+			assert!(
+				N == 6 || N == 10 || N == 12,
+				"BUG: CDB must have length of 6, 10, or 12.",
+			);
 		}
 
 		// Read and increment the local counter attached directly to this specific drive.
