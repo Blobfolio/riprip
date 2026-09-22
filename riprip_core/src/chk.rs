@@ -72,13 +72,15 @@ const UA: &str = concat!(
 /// compared to CUETools.
 pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 -> Option<(u8, u8)> {
+	// Short-circuit: does not apply to HTOA.
+	if track.is_htoa() { return None; }
+
 	// Fetch/cache the checksums.
 	let ar = toc.accuraterip_id();
 	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", cache_prefix(toc))).ok()?;
 	let chk = std::fs::read(&dst).ok()
 		.or_else(|| {
-			let url = ar.checksum_url();
-			let chk = download(&url, &dst)?;
+			let chk = download(&ar.checksum_url(), &dst)?;
 			Some(chk)
 		})
 		.and_then(|chk|
@@ -200,12 +202,14 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// and require no second opinion, so this method will return `0` for any value
 /// less than `2` to avoid confusion.
 pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
+	// Short-circuit: does not apply to HTOA.
+	if track.is_htoa() { return None; }
+
 	// Fetch/cache the checksums.
 	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", cache_prefix(toc))).ok()?;
 	let mut chk = std::fs::read(&dst).ok()
 		.or_else(|| {
-			let url = toc.ctdb_checksum_url();
-			let chk = download(&url, &dst)?;
+			let chk = download(&toc.ctdb_checksum_url(), &dst)?;
 			Some(chk)
 		})
 		.and_then(|chk| {
