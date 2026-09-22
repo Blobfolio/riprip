@@ -116,8 +116,7 @@ fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Option<Endpoints>
 		Ok(v) => v,
 		Err(err) => {
 			log!(
-				@trace
-				[err]
+				@trace [err]
 				"Failed to get active configuration descriptor for device.",
 			);
 			return None;
@@ -362,8 +361,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		if len != CSW_LEN {
 			log!(
-				@trace
-				[ctx, CSW_LEN, len, cbw, buf]
+				@trace [ctx, CSW_LEN, len, cbw, buf]
 				"Short read during CSW status phase.",
 			);
 			return Err(RipRipError::Bug("Short read during CSW status phase."));
@@ -374,8 +372,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		// Verify protocol sync state against our local tag.
 		if ! csw.is_valid(current_tag) {
 			log!(
-				@trace
-				[ctx, cbw, buf, transferred, csw]
+				@trace [ctx, cbw, buf, transferred, csw]
 				"Fatal Protocol Desync: CSW validation error.",
 			);
 			return Err(RipRipError::Bug(
@@ -387,8 +384,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		let residual = csw.data_residue();
 		if residual != 0 {
 			log!(
-				@trace
-				[ctx, csw, len, residual]
+				@trace [ctx, csw, len, residual]
 				"Drive reported {residual} residual bytes of data.",
 				residual=NiceU32::from(residual),
 			);
@@ -398,8 +394,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		if csw.status() == 0 { return Ok(transferred); }
 
 		log!(
-			@trace
-			[ctx, cbw, buf, transferred, csw]
+			@trace [ctx, cbw, buf, transferred, csw]
 			"Command status ({}) did not pass.",
 			csw.status(),
 		);

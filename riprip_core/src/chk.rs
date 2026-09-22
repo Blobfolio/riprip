@@ -109,8 +109,7 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 		else { data.len() };
 	if end <= start {
 		log!(
-			@trace
-			[start, end]
+			@trace [start, end]
 			"Track {} is not long enough for AccurateRip checksumming.",
 			track.number(),
 		);
@@ -261,8 +260,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	// of data to shove in the middle, or it's too short to bother with.
 	if data.len() < prefix + suffix + usize::from(SAMPLES_PER_SECTOR) {
 		log!(
-			@trace
-			[data.len()]
+			@trace [data.len()]
 			"Track {} is not long enough for CUETools checksumming.",
 			track.number(),
 		);

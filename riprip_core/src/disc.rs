@@ -617,8 +617,7 @@ fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
 		};
 		let Some(dst) = dst.file_name().and_then(OsStr::to_str) else {
 			log!(
-				@trace
-				[dst]
+				@trace [dst]
 				"Unable to obtain output file name for track {}; skipping cuesheet.",
 				track.number(),
 			);

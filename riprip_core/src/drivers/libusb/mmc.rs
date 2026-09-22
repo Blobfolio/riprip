@@ -59,8 +59,7 @@ pub(super) trait TransportExt {
 		let transferred = self.submit(cdb, buf, ctx).ok()?;
 		if transferred < MIN_TRANSFERRED {
 			log!(
-				@trace
-				[ctx, cdb, buf]
+				@trace [ctx, cdb, buf]
 				"CDB expected at least {MIN_TRANSFERRED} bytes, received {transferred}.",
 			);
 			None

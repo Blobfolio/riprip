@@ -107,8 +107,7 @@ mod macos {
 		}
 		if iterator == 0 {
 			log!(
-				@trace
-				[dev]
+				@trace [dev]
 				"No matching services found for {}.",
 				bsd_name.to_string_lossy(),
 			);
@@ -191,16 +190,14 @@ mod linux {
 			Ok(Some(v)) => v,
 			Ok(None) => {
 				log!(
-					@trace
-					[dev, dev_type, dev_num]
+					@trace [dev, dev_type, dev_num]
 					"Failed to open USB subsystem parent of device (udev).",
 				);
 				return None;
 			},
 			Err(e) => {
 				log!(
-					@trace
-					[dev, dev_type, dev_num]
+					@trace [dev, dev_type, dev_num]
 					"Failed to open USB subsystem parent of device (udev): {e}.",
 				);
 				return None;
