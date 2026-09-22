@@ -167,7 +167,7 @@ mod linux {
 		// Figure out what kind of device this is, and if valid, pull its
 		// (real) device number.
 		let kind = meta.file_type();
-		let (kind, device_type) =
+		let (kind, dev_type) =
 			if kind.is_block_device()     { (DeviceType::Block,     "block"    ) }
 			else if kind.is_char_device() { (DeviceType::Character, "character") }
 			else {
@@ -180,7 +180,7 @@ mod linux {
 		let drive = match Device::from_devnum(kind, dev_num) {
 			Ok(v) => v,
 			Err(e) => {
-				log!(@trace [dev, device_type, dev_num] "Failed to open device (udev): {e}");
+				log!(@trace [dev, dev_type, dev_num] "Failed to open device (udev): {e}");
 				return None;
 			},
 		};
@@ -192,7 +192,7 @@ mod linux {
 			Ok(None) => {
 				log!(
 					@trace
-					[dev, device_type, dev_num]
+					[dev, dev_type, dev_num]
 					"Failed to open USB subsystem parent of device (udev).",
 				);
 				return None;
@@ -200,7 +200,7 @@ mod linux {
 			Err(e) => {
 				log!(
 					@trace
-					[dev, device_type, dev_num]
+					[dev, dev_type, dev_num]
 					"Failed to open USB subsystem parent of device (udev): {e}.",
 				);
 				return None;
