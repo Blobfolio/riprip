@@ -45,6 +45,9 @@ features = [ "https" ]
 version = "0.7.*"
 optional = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+udev = { version = "0.9.3", optional = true }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-io-kit = { version = "0.3.2", optional = true }
 objc2-core-foundation = { version = "0.3.2", optional = true, features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
@@ -75,8 +78,9 @@ libcdio = [ "libcdio-sys" ]
 libcdio-static = [ "libcdio", "libcdio-sys/vendored" ]
 
 libusb = [
-    "rusb",
     "nix",
+    "rusb",
     "objc2-io-kit",
     "objc2-core-foundation",
+    "udev",
 ]

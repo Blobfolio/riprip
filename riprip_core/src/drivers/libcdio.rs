@@ -92,8 +92,6 @@ impl CddaDriverNewExt for LibcdioInstance {
 				}
 				let dev = CString::new(dev.as_os_str().as_bytes())
 					.map_err(|_| RipRipError::Device(original))?;
-
-				log!(@debug "Device path {}.", dev.to_string_lossy());
 				Some(dev)
 			}
 			else { None };

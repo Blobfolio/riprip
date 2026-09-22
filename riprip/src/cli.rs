@@ -96,7 +96,11 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 					.ok_or(RipRipError::CliParse("--confidence"))?;
 				opts = opts.with_confidence(s);
 			},
-			Argument::Device(s) => { dev.replace(s); },
+			Argument::Device(s) =>
+				if let Ok(s) = std::fs::canonicalize(&s) {
+					dev.replace(s);
+				}
+				else { return Err(RipRipError::Device(s)); },
 			Argument::Offset(s) => {
 				let s = ReadOffset::try_from(s.trim().as_bytes())
 					.map_err(|_| RipRipError::CliParse("-o/--offset"))?;

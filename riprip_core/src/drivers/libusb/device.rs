@@ -13,9 +13,8 @@ use std::path::Path;
 #[cfg(target_os = "macos")]
 /// # Apple.
 mod macos {
-	use crate::log;
-	use super::{
-		Path,
+	use crate::{
+		macros::log,
 		RipRipError,
 	};
 	use objc2_core_foundation::{
@@ -41,6 +40,7 @@ mod macos {
 	use std::{
 		ffi::CString,
 		os::unix::ffi::OsStrExt,
+		path::Path,
 	};
 
 
@@ -135,54 +135,89 @@ mod macos {
 	}
 }
 
+
+
 #[cfg(target_os = "linux")]
 /// # Linux.
 mod linux {
 	use crate::macros::log;
-	use std::path::Path;
+	use std::{
+		ffi::OsStr,
+		os::unix::fs::{
+			MetadataExt,
+			FileTypeExt,
+		},
+		path::Path,
+	};
+	use udev::{
+		Device,
+		DeviceType,
+	};
 
 	#[must_use]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Option<(u16, u16)> {
-		// Resolve the block path.
-		let Some(name) = dev.file_name() else {
-			log!(@trace [dev] "Failed to get device name.");
-			return None;
-		};
-		let Ok(mut path) = std::fs::canonicalize(format!(
-			"/sys/class/block/{name}/device",
-			name=name.display(),
-		)) else {
-			log!(
-				@trace
-				[dev]
-				"Missing \"/sys/class/block/{name}/device\".",
-				name=name.display(),
-			);
+		// The path was canonicalized during argument parsing so we should be
+		// able to pull its metadata…
+		let Ok(meta) = std::fs::metadata(dev) else {
+			log!(@trace [dev] "Unable to read device metadata.");
 			return None;
 		};
 
-		// Block device symlinks point to obscure trees requiring a bit of
-		// manual traversal to locate the `idVendor` and `idProduct` files.
-		loop {
-			// Don't traverse above /sys.
-			if ! path.starts_with("/sys") { return None; }
+		// Figure out what kind of device this is, and if valid, pull its
+		// (real) device number.
+		let kind = meta.file_type();
+		let (kind, device_type) =
+			if kind.is_block_device()     { (DeviceType::Block,     "block"    ) }
+			else if kind.is_char_device() { (DeviceType::Character, "character") }
+			else {
+				log!(@trace [dev] "Path is not for block or character device.");
+				return None;
+			};
+		let dev_num = meta.rdev();
 
-			// If there are vendor and product IDs, decode and return.
-			if
-				let Ok(vid) = std::fs::read_to_string(path.join("idVendor")) &&
-				let Ok(vid) = u16::from_str_radix(vid.trim(), 16) &&
-				let Ok(pid) = std::fs::read_to_string(path.join("idProduct")) &&
-				let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
-			{
-				let sys = path;
-				log!(@trace [dev, sys] "Found device descriptors.");
-				return Some((vid, pid));
-			}
+		// Send it to udev and see what happens!
+		let drive = match Device::from_devnum(kind, dev_num) {
+			Ok(v) => v,
+			Err(e) => {
+				log!(@trace [dev, device_type, dev_num] "Failed to open device (udev): {e}");
+				return None;
+			},
+		};
 
-			// We're out of parts!
-			if ! path.pop() { return None; }
+		// The descriptors come from the underlying USB subsystem, so let's
+		// try to pull that.
+		let usb = match drive.parent_with_subsystem_devtype("usb", "usb_device") {
+			Ok(Some(v)) => v,
+			Ok(None) => {
+				log!(
+					@trace
+					[dev, device_type, dev_num]
+					"Failed to open USB subsystem parent of device (udev).",
+				);
+				return None;
+			},
+			Err(e) => {
+				log!(
+					@trace
+					[dev, device_type, dev_num]
+					"Failed to open USB subsystem parent of device (udev): {e}.",
+				);
+				return None;
+			},
+		};
+
+		// Pull and return the descriptors.
+		if
+			let Some(vid) = usb.attribute_value("idVendor").and_then(OsStr::to_str) &&
+			let Ok(vid) = u16::from_str_radix(vid.trim(), 16) &&
+			let Some(pid) = usb.attribute_value("idProduct").and_then(OsStr::to_str) &&
+			let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
+		{
+			Some((vid, pid))
 		}
+		// Boo.
+		else { None }
 	}
 }
 

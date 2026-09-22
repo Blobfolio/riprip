@@ -245,6 +245,9 @@ impl Disc {
 	pub fn new<P>(dev: Option<P>, cdtext: bool)
 	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
+		if let Some(v) = dev.as_ref() {
+			log!(@debug "Device path {}.", v.as_ref().display());
+		}
 		let cdda = CddaDriver::new(dev)?;
 
 		// Parse the table of contents into the pieces needed for `Toc`.

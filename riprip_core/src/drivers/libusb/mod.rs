@@ -220,8 +220,6 @@ impl<C: UsbContext> LibusbInstance<C> {
 
 		let device_handle =
 			if let Option::<&Path>::Some(path) = dev.as_deref() {
-				log!(@debug "Device path {}.", path.display());
-
 				if let Some((vid, pid)) = device::get_desc(&path)? {
 					log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
 					find_and_open_device(&devices, vid, pid)?

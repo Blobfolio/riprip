@@ -45,7 +45,7 @@ jobs:
     
     - name: Apt Dependencies
       run: |
-        sudo apt-get install -y libcdio-dev
+        sudo apt-get install -y libcdio-dev libudev-dev
 
     - name: Build
       run: |
