@@ -259,8 +259,8 @@ impl CddaDriverExt for LibcdioInstance {
 		}
 
 		let mut raw = cdio_hwinfo {
-			psz_vendor: [0; 9],
-			psz_model: [0; 17],
+			psz_vendor:   [0; 9],
+			psz_model:    [0; 17],
 			psz_revision: [0; 5],
 		};
 
@@ -272,6 +272,12 @@ impl CddaDriverExt for LibcdioInstance {
 			// the signs since we have everything right here.
 			let vendor_id = raw.psz_vendor.map(u8::saturating_from);
 			let model_id = raw.psz_model.map(u8::saturating_from);
+			let revision = raw.psz_revision.map(u8::saturating_from);
+
+			// If we have a revision, debug it.
+			if let Some(revision) = to_str(&revision) {
+				log!(@debug "Drive revision: {revision}.");
+			}
 
 			let Some(vendor) = to_str(&vendor_id) else {
 				log!(@trace [vendor_id] "Invalid drive vendor.");
