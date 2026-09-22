@@ -37,7 +37,10 @@ use std::{
 		AtomicU32,
 		Ordering,
 	},
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	},
 	time::Duration,
 };
 
@@ -65,14 +68,15 @@ fn find_and_open_device<C: UsbContext>(devices: &DeviceList<C>, vid: u16, pid: u
 
 			if desc.vendor_id() == vid && desc.product_id() == pid {
 				Some(
-					device
-						.open()
-						.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
+					device.open().map_err(|e| {
+						log!(@trace [vid, pid] "{e}");
+						RipRipError::Internal("Device open", e.to_string())
+					}),
 				)
 			}
 			else { None }
 		})
-		.unwrap_or(Err(RipRipError::DeviceOpen(Some(format!("{pid}:{vid}")))))
+		.unwrap_or_else(|| Err(RipRipError::DeviceOpen(Some(format!("{pid}:{vid}")))))
 }
 
 /// # Find and Open CD Drive.
@@ -94,44 +98,59 @@ fn find_and_open_cd_drive<C: UsbContext>(devices: &DeviceList<C>)
 			if is_optical {
 				log!(@debug "Found optical drive ({:?}).", device);
 				Some(
-					device
-						.open()
-						.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string()))),
+					device.open().map_err(|e| {
+						log!(@trace [device] "{e}");
+						RipRipError::Internal("Device open", e.to_string())
+					}),
 				)
 			}
 			else { None }
 		})
-		.unwrap_or(Err(RipRipError::DeviceOpen(None)))
+		.unwrap_or_else(|| Err(RipRipError::DeviceOpen(None)))
 }
 
 /// # Detect Bulk Endpoints.
-fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Result<Endpoints, RipRipError> {
-	let config_desc = device
-		.active_config_descriptor()
-		.map_err(|e| RipRipError::Device(e.to_string()))?;
+fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Option<Endpoints> {
+	let config_desc = match device.active_config_descriptor() {
+		Ok(v) => v,
+		Err(err) => {
+			log!(
+				@trace
+				[err]
+				"Failed to get active configuration descriptor for device.",
+			);
+			return None;
+		},
+	};
 
-	let endpoints = config_desc
+	let (bulk_in, bulk_out) = config_desc
 		.interfaces()
 		.flat_map(|iface| iface.descriptors())
 		.filter(|iface_desc| iface_desc.class_code() == bot::CLASS_MASS_STORAGE)
 		.flat_map(|iface_desc| iface_desc.endpoint_descriptors())
 		.filter(|ep_desc| ep_desc.transfer_type() == TransferType::Bulk)
-		.fold(Endpoints::default(), |mut acc, ep_desc| {
-			match ep_desc.direction() {
-				Direction::In => acc.bulk_in = ep_desc.address(),
-				Direction::Out => acc.bulk_out = ep_desc.address(),
-			}
-			acc
+		.fold((None, None), |acc, ep| match ep.direction() {
+			Direction::In => (Some(ep.address()), acc.1),
+			Direction::Out => (acc.0, Some(ep.address())),
 		});
 
-	log!(
-		@trace
-		"Endpoints detected (in: {:#04x}, out: {:#04x}).",
-		endpoints.bulk_in,
-		endpoints.bulk_out,
-	);
+	// Return 'em if we got 'em.
+	if let Some(bulk_in) = bulk_in && let Some(bulk_out) = bulk_out {
+		log!(
+			@trace
+			"Endpoints detected (in: {:#04x}, out: {:#04x}).",
+			bulk_in,
+			bulk_out,
+		);
 
-	Ok(endpoints)
+		Some(Endpoints { bulk_in, bulk_out })
+	}
+	// Boo.
+	else {
+		log!(@trace [bulk_in, bulk_out] "Unable to determine bulk endpoint(s).");
+		None
+	}
+
 }
 
 #[derive(Debug, Default)]
@@ -183,50 +202,76 @@ impl<C: UsbContext> LibusbInstance<C> {
 	pub(super) fn with_context<P>(context: &C, dev: Option<P>)
 	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
+		// Generic Error.
+		fn err(dev: Option<&Path>) -> RipRipError {
+			RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
+		}
+
+		// AsRef gets really fucking annoying. Haha.
+		let dev: Option<PathBuf> = dev.map(|v| v.as_ref().to_path_buf());
+
 		log!(@debug "Initializing `libusb` driver.");
 
-		let devices = context
-			.devices()
-			.map_err(|e| RipRipError::DeviceOpen(Some(e.to_string())))?;
+		let devices = context.devices()
+			.map_err(|e| {
+				log!(@trace [dev] "{e}");
+				err(dev.as_deref())
+			})?;
 
-		let device_handle = if let Some(path) = dev {
-			let device_path = path.as_ref().to_string_lossy();
+		let device_handle =
+			if let Option::<&Path>::Some(path) = dev.as_deref() {
+				log!(@debug "Device path {}.", path.display());
 
-			log!(@debug "Device path {device_path}.");
-
-			if let Some((vid, pid)) = device::get_desc(&path)? {
-				log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
-				find_and_open_device(&devices, vid, pid)?
+				if let Some((vid, pid)) = device::get_desc(&path)? {
+					log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
+					find_and_open_device(&devices, vid, pid)?
+				}
+				else { return Err(err(dev.as_deref())); }
 			}
 			else {
-				return Err(RipRipError::DeviceOpen(Some(device_path.into_owned())));
-			}
-		}
-		else { find_and_open_cd_drive(&devices)? };
+				find_and_open_cd_drive(&devices)?
+			};
 
-		let endpoints = detect_bulk_endpoints(&device_handle.device())?;
+		let endpoints = detect_bulk_endpoints(&device_handle.device())
+			.ok_or_else(|| err(dev.as_deref()))?;
 		let interface_id = 0;
 
 		// Check if kernel driver is owning our device and detach it if so.
 		if device_handle.kernel_driver_active(interface_id) == Ok(true) {
 			device_handle
 				.detach_kernel_driver(interface_id)
-				.map_err(|e| RipRipError::Device(e.to_string()))?;
+				.map_err(|e| {
+					log!(@trace [dev] "{e}");
+					err(dev.as_deref())
+				})?;
 		}
 
 		// Claim it!
 		device_handle
 			.claim_interface(interface_id)
-			.map_err(|_| RipRipError::Bug("Failed to claim iface."))?;
+			.map_err(|e| {
+				log!(@trace [dev, interface_id] "{e}");
+				RipRipError::Bug("Failed to claim iface.")
+			})?;
 
 		// SUDO isn't needed anymore; try to reset to the original user.
 		if let Ok(sudo_uid) = env::var("SUDO_UID") {
-			let original_uid: u32 = sudo_uid
-				.parse()
-				.map_err(|_| RipRipError::Bug("SUDO_UID is not a valid integer."))?;
+			let original_user_id: u32 = sudo_uid.parse()
+				.map_err(|_| {
+					log!(@trace [sudo_uid] "Unable to parse SUDO_UID.");
+					RipRipError::Bug("SUDO_UID is not a valid integer.")
+				})?;
 
-			setuid(Uid::from_raw(original_uid))
-				.map_err(|_| RipRipError::Bug("Failed to drop process privileges."))?;
+			let user_id = Uid::from_raw(original_user_id);
+			if ! user_id.is_root() {
+				setuid(user_id)
+					.map_err(|e| {
+						log!(@trace [original_user_id] "{e}");
+						RipRipError::Bug("Failed to drop process privileges.")
+					})?;
+
+				log!(@debug "Dropped sudo privileges.");
+			}
 		}
 
 		let out = Self {
@@ -266,7 +311,11 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		let cbw = CommandBlockWrapper::new(
 			current_tag,
-			u32::try_from(buf.len()).map_err(|e| RipRipError::Internal(e.to_string()))?,
+			u32::try_from(buf.len())
+				.map_err(|_| {
+					log!(@trace [ctx, buf.len()] "Command block buffer exceeds u32::MAX.");
+					RipRipError::Bug("Command block buffer exceeds u32::MAX.")
+				})?,
 			0x80, // Device-to-Host
 			0,
 			cdb,
@@ -276,8 +325,8 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		self.device_handle
 			.write_bulk(self.endpoints.bulk_out, &cbw_bytes, WRITE_BULK_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace [ctx, cbw, buf] "CBW write failed.");
-				RipRipError::Internal(e.to_string())
+				log!(@trace [ctx, cbw, buf] "Command block write failed.");
+				RipRipError::Internal("Command block write", e.to_string())
 			})?;
 
 		// Skip the read phase entirely if no data transfer is expected.
@@ -290,15 +339,15 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 				{
 					Ok(n) => n,
 					Err(rusb::Error::Pipe) => {
-						log!(@trace [ctx, cbw, buf] "CBW read pipe failed.");
+						log!(@trace [ctx, cbw, buf] "Command block read pipe failed.");
 						self.device_handle
 							.clear_halt(self.endpoints.bulk_in)
-							.map_err(|e| RipRipError::Internal(e.to_string()))?;
+							.map_err(|e| RipRipError::Internal("Command block clear", e.to_string()))?;
 						0
 					}
 					Err(e) => {
-						log!(@trace [ctx, cbw, buf] "CBW read failed.");
-						return Err(RipRipError::Internal(e.to_string()))
+						log!(@trace [ctx, cbw, buf] "Command block read failed.");
+						return Err(RipRipError::Internal("Command block read", e.to_string()))
 					},
 				}
 			};
@@ -308,11 +357,16 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			.device_handle
 			.read_bulk(self.endpoints.bulk_in, &mut csw_raw, STATUS_READ_TIMEOUT)
 			.map_err(|e| {
-				log!(@trace [ctx, cbw, buf, transferred] "CSW read failed.");
-				RipRipError::Internal(e.to_string())
+				log!(@trace [ctx, cbw, buf, transferred] "Command status read failed.");
+				RipRipError::Internal("Command status read", e.to_string())
 			})?;
 
 		if len != CSW_LEN {
+			log!(
+				@trace
+				[ctx, CSW_LEN, len, cbw, buf]
+				"Short read during CSW status phase.",
+			);
 			return Err(RipRipError::Bug("Short read during CSW status phase."));
 		}
 
@@ -320,7 +374,11 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 		// Verify protocol sync state against our local tag.
 		if ! csw.is_valid(current_tag) {
-			log!(@trace [ctx, cbw, buf, transferred, csw] "Invalid CSW.");
+			log!(
+				@trace
+				[ctx, cbw, buf, transferred, csw]
+				"Fatal Protocol Desync: CSW validation error.",
+			);
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
 			));
@@ -329,7 +387,12 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		// Happy!
 		if csw.status() == 0 { return Ok(transferred); }
 
-		log!(@trace [ctx, cbw, buf, transferred, csw] "CSW did not pass.");
+		log!(
+			@trace
+			[ctx, cbw, buf, transferred, csw]
+			"Command status ({}) did not pass.",
+			csw.status(),
+		);
 		match csw.status() {
 			1 => Err(RipRipError::CdRead),
 			2 => Err(RipRipError::Bug("USB BOT phase error.")),
