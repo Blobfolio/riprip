@@ -14,6 +14,7 @@ use crate::{
 	RipRipError,
 	macros::log,
 };
+use dactyl::NiceU32;
 use mmc::{
 	MmcDriverExt,
 	TransportExt,
@@ -380,6 +381,17 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 			return Err(RipRipError::Bug(
 				"Fatal Protocol Desync: CSW validation error.",
 			));
+		}
+
+		// Expect residue to be zero.
+		let residual = csw.data_residue();
+		if residual != 0 {
+			log!(
+				@trace
+				[ctx, csw, len, residual]
+				"Drive reported {residual} residual bytes of data.",
+				residual=NiceU32::from(residual),
+			);
 		}
 
 		// Happy!

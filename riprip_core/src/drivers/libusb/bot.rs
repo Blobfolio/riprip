@@ -109,7 +109,6 @@ pub(super) struct CommandStatusWrapper {
 	/// # Tag.
 	tag: u32,
 
-	#[expect(dead_code, reason = "We might want this some day.")]
 	/// # Residue.
 	data_residue: u32,
 
@@ -141,7 +140,6 @@ impl CommandStatusWrapper {
 	/// # Status
 	pub(super) const fn status(&self) -> u8 { self.status }
 
-	#[expect(dead_code, reason = "We might want this some day.")]
 	#[must_use]
 	/// # Data Residue.
 	pub(super) const fn data_residue(&self) -> u32 { self.data_residue }
