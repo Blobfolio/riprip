@@ -12,13 +12,16 @@ Somewhat useful documentation:
 */
 
 #[cfg(not(any(feature = "libcdio", feature = "libusb")))]
-compile_error!("No driver feature is enabled. Enable exactly one of `libcdio` or `libusb`.");
+compile_error!("A driver feature is required. Enable `libcdio` or `libusb`.");
 
 #[cfg(all(feature = "libcdio", feature = "libusb"))]
-compile_error!("Multiple driver features are enabled. Enable only one of `libcdio` or `libusb`.");
+compile_error!("Conflicting driver features detected. Choose either `libcdio` or `libusb`.");
 
 #[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("Apple does not fully support `libcdio`. Build with `cargo build --no-default-features --features libusb`.");
+compile_error!("The `libcdio` feature does not work on Apple devices. Build with `cargo build --no-default-features --features libusb` instead.");
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
+compile_error!("The `libusb` feature requires linux or macos.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
