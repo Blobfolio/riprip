@@ -5,17 +5,8 @@ Provides cross-platform lookup to get a USB drive descriptor (Vendor and Product
 from an OS device path.
 */
 
-use crate::{
-	macros::log,
-	RipRipError,
-};
-use std::{
-	os::unix::fs::{
-		MetadataExt,
-		FileTypeExt,
-	},
-	path::Path,
-};
+use crate::RipRipError;
+use std::path::Path;
 
 
 
@@ -28,7 +19,6 @@ mod macos {
 	};
 	use objc2_core_foundation::{
 		CFDictionary,
-		CFMutableDictionary,
 		CFNumber,
 		CFRetained,
 		CFString,
@@ -36,12 +26,11 @@ mod macos {
 		kCFAllocatorDefault,
 	};
 	use objc2_io_kit::{
+		IOBSDNameMatching,
 		IOIteratorNext,
 		IOObjectRelease,
 		IORegistryEntrySearchCFProperty,
 		IOServiceGetMatchingServices,
-		kIOBSDMajorKey,
-		kIOBSDMinorKey,
 		kIOMainPortDefault,
 		kIORegistryIterateParents,
 		kIORegistryIterateRecursively,
@@ -87,29 +76,25 @@ mod macos {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
-		// Get the major/minor keys for matching.
-		let Some((major, minor)) = super::get_major_minor(dev) else {
+		let Some(bsd_name) = dev.file_name()
+			.and_then(|name| CString::new(name.as_bytes()).ok())
+		else {
+			log!(@trace [dev] "Failed to get device name.");
 			return Ok(None);
 		};
-		let Ok(major) = i32::try_from(major) else {
-			log!(@trace "Unable to convert device major key {major} to i32.");
-			return None;
-		};
-		let Ok(minor) = i32::try_from(minor) else {
-			log!(@trace "Unable to convert device minor key {minor} to i32.");
-			return None;
-		};
 
-		// Build up a matching dictionary.
-		// Safety: `CFMutableDictionary` structurally inherits from
-		// `CFDictionary`, so reinterpreting it as its base type is entirely
-		// valid.
+		// Find the specific IOMedia service for this BSD name.
+		// Safety: this is an FFI call. Note `CFMutableDictionary` structurally
+		// inherits from `CFDictionary`, so reinterpreting it as its base type
+		// is entirely valid.
 		let matching = unsafe {
-			let mut dict = CFMutableDictionary::new_mut();
-			dict.set(kIOBSDMajorKey.as_ptr(), &CFNumber::new_i32(major));
-			dict.set(kIOBSDMinorKey.as_ptr(), &CFNumber::new_i32(minor));
-			CFRetained::cast_unchecked::<CFDictionary>(dict)
+			IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.as_ptr())
+				.map(|v| CFRetained::cast_unchecked::<CFDictionary>(v))
 		};
+		if matching.is_none() {
+			log!(@trace [dev] "Failed to create an IOKit matching dictionary.");
+			return Ok(None);
+		}
 
 		let mut iterator = 0;
 		// Safety: this is an FFI call.
@@ -155,14 +140,38 @@ mod macos {
 /// # Linux.
 mod linux {
 	use crate::macros::log;
-	use std::path::Path;
+	use std::{
+		os::unix::fs::{
+			MetadataExt,
+			FileTypeExt,
+		},
+		path::Path,
+	};
 
 	#[must_use]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Option<(u16, u16)> {
+		// The path was canonicalized during argument parsing so we should be
+		// able to pull its metadata…
+		let Ok(meta) = std::fs::metadata(dev) else {
+			log!(@trace [dev] "Unable to read device metadata.");
+			return None;
+		};
+
+		// Make sure it is a block or char device.
+		let kind = meta.file_type();
+		if ! kind.is_block_device() && ! kind.is_char_device() {
+			log!(@trace [dev] "Path is not for block or character device.");
+			return None;
+		}
+
 		// Convert to a more authoritative sysfs path.
-		let (major, minor) = super::get_major_minor(dev)?;
-		let syspath = format!("/sys/dev/block/{major}:{minor}");
+		let dev_num = meta.rdev();
+		let syspath = format!(
+			"/sys/dev/block/{}:{}",
+			nix::sys::stat::major(dev_num),
+			nix::sys::stat::minor(dev_num),
+		);
 		let Ok(syspath) = std::fs::canonicalize(&syspath) else {
 			log!(@trace [dev, syspath] "Unable to resolve syspath for device.");
 			return None;
@@ -216,29 +225,4 @@ where P: AsRef<Path> {
 		target_os = "linux" => Ok(linux::get_desc(dev.as_ref())),
 		_ => Ok(None),
 	}
-}
-
-
-/// # Get Device Major/Minor Keys.
-fn get_major_minor(dev: &Path) -> Option<(u64, u64)> {
-	// The path was canonicalized during argument parsing so we should be
-	// able to pull its metadata…
-	let Ok(meta) = std::fs::metadata(dev) else {
-		log!(@trace [dev] "Unable to read device metadata.");
-		return None;
-	};
-
-	// Make sure it is a block or char device.
-	let kind = meta.file_type();
-	if ! kind.is_block_device() && ! kind.is_char_device() {
-		log!(@trace [dev] "Path is not for block or character device.");
-		return None;
-	}
-
-	// Read and return!
-	let dev_num = meta.rdev();
-	Some((
-		nix::sys::stat::major(dev_num),
-		nix::sys::stat::minor(dev_num),
-	))
 }
