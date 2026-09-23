@@ -14,7 +14,10 @@ use crate::{
 	RipRipError,
 	macros::log,
 };
-use dactyl::NiceU32;
+use dactyl::{
+	NiceElapsed,
+	NiceU32,
+};
 use mmc::{
 	MmcDriverExt,
 	TransportExt,
@@ -28,6 +31,7 @@ use rusb::{
 	DeviceHandle,
 	DeviceList,
 	Direction,
+	EndpointDescriptor,
 	GlobalContext,
 	TransferType,
 	UsbContext,
@@ -47,6 +51,9 @@ use std::{
 
 
 
+/// # Open Retry Timeout.
+const OPEN_RETRY_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// # Write Bulk Timeout.
 const WRITE_BULK_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -57,111 +64,6 @@ const READ_BULK_TIMEOUT: Duration = Duration::from_secs(5);
 const STATUS_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 
-
-/// # Find and Open Device.
-fn find_and_open_device<C: UsbContext>(devices: &DeviceList<C>, vid: u16, pid: u16)
--> Result<DeviceHandle<C>, RipRipError> {
-	devices
-		.iter()
-		.find_map(|device| {
-			// If descriptor fails, skip to the next device
-			let desc = device.device_descriptor().ok()?;
-
-			if desc.vendor_id() == vid && desc.product_id() == pid {
-				Some(
-					device.open().map_err(|e| {
-						log!(@trace [vid, pid] "{e}");
-						RipRipError::Internal("Device open", e.to_string())
-					}),
-				)
-			}
-			else { None }
-		})
-		.unwrap_or_else(|| Err(RipRipError::DeviceOpen(Some(format!("{pid}:{vid}")))))
-}
-
-/// # Find and Open CD Drive.
-fn find_and_open_cd_drive<C: UsbContext>(devices: &DeviceList<C>)
--> Result<DeviceHandle<C>, RipRipError> {
-	devices
-		.iter()
-		.find_map(|device| {
-			let config_desc = device.active_config_descriptor().ok()?;
-
-			let is_optical = config_desc.interfaces().any(|interface|
-				interface.descriptors().any(|desc|
-					desc.class_code() == bot::CLASS_MASS_STORAGE &&
-					bot::OpticalDriveSubclass::from_u8(desc.sub_class_code()).is_some() &&
-					desc.protocol_code() == bot::PROTOCOL_BULK_ONLY
-				)
-			);
-
-			if is_optical {
-				log!(@debug "Found optical drive ({:?}).", device);
-				Some(
-					device.open().map_err(|e| {
-						log!(@trace [device] "{e}");
-						RipRipError::Internal("Device open", e.to_string())
-					}),
-				)
-			}
-			else { None }
-		})
-		.unwrap_or_else(|| Err(RipRipError::DeviceOpen(None)))
-}
-
-/// # Detect Bulk Endpoints.
-fn detect_bulk_endpoints<T: UsbContext>(device: &Device<T>) -> Option<Endpoints> {
-	let config_desc = match device.active_config_descriptor() {
-		Ok(v) => v,
-		Err(err) => {
-			log!(
-				@trace [err]
-				"Failed to get active configuration descriptor for device.",
-			);
-			return None;
-		},
-	};
-
-	let (bulk_in, bulk_out) = config_desc
-		.interfaces()
-		.flat_map(|iface| iface.descriptors())
-		.filter(|iface_desc| iface_desc.class_code() == bot::CLASS_MASS_STORAGE)
-		.flat_map(|iface_desc| iface_desc.endpoint_descriptors())
-		.filter(|ep_desc| ep_desc.transfer_type() == TransferType::Bulk)
-		.fold((None, None), |acc, ep| match ep.direction() {
-			Direction::In => (Some(ep.address()), acc.1),
-			Direction::Out => (acc.0, Some(ep.address())),
-		});
-
-	// Return 'em if we got 'em.
-	if let Some(bulk_in) = bulk_in && let Some(bulk_out) = bulk_out {
-		log!(
-			@trace
-			"Endpoints detected (in: {:#04x}, out: {:#04x}).",
-			bulk_in,
-			bulk_out,
-		);
-
-		Some(Endpoints { bulk_in, bulk_out })
-	}
-	// Boo.
-	else {
-		log!(@trace [bulk_in, bulk_out] "Unable to determine bulk endpoint(s).");
-		None
-	}
-
-}
-
-#[derive(Debug, Default)]
-/// # Bulk Endpoints.
-struct Endpoints {
-	/// # Input.
-	bulk_in: u8,
-
-	/// # Output.
-	bulk_out: u8,
-}
 
 /// # USB Instance.
 ///
@@ -202,63 +104,43 @@ impl<C: UsbContext> LibusbInstance<C> {
 	pub(super) fn with_context<P>(context: &C, dev: Option<P>)
 	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
-		// Generic Error.
-		fn err(dev: Option<&Path>) -> RipRipError {
-			RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
-		}
-
 		// AsRef gets really fucking annoying. Haha.
 		let dev: Option<PathBuf> = dev.map(|v| v.as_ref().to_path_buf());
 
 		log!(@debug "Initializing `libusb` driver.");
 
-		let devices = context.devices()
-			.map_err(|e| {
-				log!(@trace [dev] "{e}");
-				err(dev.as_deref())
-			})?;
-
-		let device_handle =
-			if let Option::<&Path>::Some(path) = dev.as_deref() {
-				if let Some((vid, pid)) = device::get_desc(&path)? {
-					log!(@debug "Found USB device (ID {vid:04x}:{pid:04x}).");
-					find_and_open_device(&devices, vid, pid)?
-				}
-				else { return Err(err(dev.as_deref())); }
-			}
-			else {
-				find_and_open_cd_drive(&devices)?
-			};
-
-		let endpoints = detect_bulk_endpoints(&device_handle.device())
-			.ok_or_else(|| err(dev.as_deref()))?;
-		let interface_id = 0;
+		// Find and open the device.
+		let devices = context.devices().map_err(|e| {
+			log!(@trace [dev] "{e}");
+			open_err(dev.as_deref())
+		})?;
+		let device = find_device(&devices, dev.as_deref())?;
+		log!(@debug "Found optical drive ({device:?}).");
+		let device_handle = open_device(&device, dev.as_deref())?;
+		let endpoints = Endpoints::from_device(&device_handle.device())
+			.ok_or_else(|| open_err(dev.as_deref()))?;
 
 		// Check if kernel driver is owning our device and detach it if so.
+		let interface_id = 0;
 		if device_handle.kernel_driver_active(interface_id) == Ok(true) {
-			device_handle
-				.detach_kernel_driver(interface_id)
-				.map_err(|e| {
-					log!(@trace [dev] "{e}");
-					err(dev.as_deref())
-				})?;
+			device_handle.detach_kernel_driver(interface_id).map_err(|e| {
+				log!(@trace [dev] "{e}");
+				open_err(dev.as_deref())
+			})?;
 		}
 
 		// Claim it!
-		device_handle
-			.claim_interface(interface_id)
-			.map_err(|e| {
-				log!(@trace [dev, interface_id] "{e}");
-				RipRipError::Bug("Failed to claim iface.")
-			})?;
+		device_handle.claim_interface(interface_id).map_err(|e| {
+			log!(@trace [dev, interface_id] "{e}");
+			RipRipError::Bug("Failed to claim iface.")
+		})?;
 
 		// SUDO isn't needed anymore; try to reset to the original user.
 		if let Ok(sudo_uid) = env::var("SUDO_UID") {
-			let original_user_id: u32 = sudo_uid.parse()
-				.map_err(|_| {
-					log!(@trace [sudo_uid] "Unable to parse SUDO_UID.");
-					RipRipError::Bug("SUDO_UID is not a valid integer.")
-				})?;
+			let original_user_id: u32 = sudo_uid.parse().map_err(|_| {
+				log!(@trace [sudo_uid] "Unable to parse SUDO_UID.");
+				RipRipError::Bug("SUDO_UID is not a valid integer.")
+			})?;
 
 			let user_id = Uid::from_raw(original_user_id);
 			if ! user_id.is_root() {
@@ -272,6 +154,7 @@ impl<C: UsbContext> LibusbInstance<C> {
 			}
 		}
 
+		// We have enough for an instance.
 		let out = Self {
 			device_handle,
 			interface_id,
@@ -279,9 +162,11 @@ impl<C: UsbContext> LibusbInstance<C> {
 			cbw_tag: AtomicU32::default(),
 		};
 
+		// Double check the disc mode and C2 support.
 		out.check_disc_mode__()?;
 		out.check_c2__()?;
 
+		// Done!
 		Ok(out)
 	}
 }
@@ -291,9 +176,9 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8], ctx: &'static str)
 	-> Result<usize, RipRipError> {
 		use bot::{
-			CSW_LEN,
 			CommandBlockWrapper,
 			CommandStatusWrapper,
+			CSW_LEN,
 		};
 
 		const {
@@ -412,4 +297,202 @@ impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
 	where P: AsRef<Path> {
 		Self::with_context(&GlobalContext::default(), dev)
 	}
+}
+
+
+
+#[derive(Debug, Default)]
+/// # Bulk Endpoints.
+struct Endpoints {
+	/// # Input.
+	bulk_in: u8,
+
+	/// # Output.
+	bulk_out: u8,
+}
+
+impl Endpoints {
+	#[must_use]
+	/// # From Device.
+	fn from_device<T: UsbContext>(device: &Device<T>) -> Option<Self> {
+		let desc = match device.active_config_descriptor() {
+			Ok(v) => v,
+			Err(err) => {
+				log!(
+					@trace [err]
+					"Failed to get active configuration descriptor for device.",
+				);
+				return None;
+			},
+		};
+
+		// Digest and return the results of this terrible iterator!
+		Self::from_descriptors(
+			desc.interfaces()
+				.flat_map(|iface| iface.descriptors())
+				.filter(|iface_desc| iface_desc.class_code() == bot::CLASS_MASS_STORAGE)
+				.flat_map(|iface_desc| iface_desc.endpoint_descriptors())
+		)
+	}
+
+	#[must_use]
+	/// # From Endpoint Descriptors.
+	///
+	/// Tease out the bulk input and output endpoints from the descriptor
+	/// iterator, returning them if one of each is found, otherwise `None`.
+	///
+	/// This is actually pretty straightforward; the verbosity is merely for
+	/// logging purposes.
+	fn from_descriptors<'a, I: Iterator<Item=EndpointDescriptor<'a>>>(src: I) -> Option<Self> {
+		let mut bulk_in = None;
+		let mut bulk_out = None;
+
+		for ep in src {
+			match (ep.transfer_type(), ep.direction()) {
+				(TransferType::Bulk, Direction::In) => {
+					let input2 = ep.address();
+					if let Some(input1) = bulk_in && input1 != input2 {
+						log!(
+							@trace [input1, input2]
+							"Found conflicting bulk input endpoints.",
+						);
+						return None;
+					}
+					bulk_in.replace(input2);
+				},
+				(TransferType::Bulk, Direction::Out) => {
+					let output2 = ep.address();
+					if let Some(output1) = bulk_out && output1 != output2 {
+						log!(
+							@trace [output1, output2]
+							"Found conflicting bulk output endpoints.",
+						);
+						return None;
+					}
+					bulk_out.replace(output2);
+				},
+				_ => {},
+			}
+		}
+
+		match (bulk_in, bulk_out) {
+			(Some(bulk_in), Some(bulk_out)) => {
+				log!(
+					@trace
+					"Found bulk endpoints (in: {bulk_in:#04x}, out: {bulk_out:#04x}).",
+				);
+				Some(Self { bulk_in, bulk_out })
+			},
+			(None, Some(bulk_out)) => {
+				log!(
+					@trace [bulk_out]
+					"Failed to find bulk input endpoint.",
+				);
+				None
+			},
+			(Some(bulk_in), None) => {
+				log!(
+					@trace [bulk_in]
+					"Failed to find bulk output endpoint.",
+				);
+				None
+			},
+			(None, None) => {
+				log!(@trace "Failed to find bulk endpoints.");
+				None
+			},
+		}
+	}
+}
+
+
+
+/// # Find Device.
+///
+/// Run through the list of USB devices, looking for one that matches the
+/// provided path (if some), or the first that looks like an optical drive.
+fn find_device<C: UsbContext>(devices: &DeviceList<C>, path: Option<&Path>)
+-> Result<Device<C>, RipRipError> {
+	// If we have a path, we'll want to match the specific video/product IDs.
+	let ids: Option<(u16, u16)> =
+		if let Some(p) = path {
+			match device::get_desc(&p)? {
+				Some(v) => Some(v),
+				None => return Err(open_err(path)),
+			}
+		}
+		else { None };
+
+	// Loop the devices.
+	for device in devices.iter() {
+		if
+			// It is an optical-ish drive and…
+			let Ok(config_desc) = device.active_config_descriptor() &&
+			config_desc.interfaces().any(|interface|
+				interface.descriptors().any(|desc|
+					desc.class_code() == bot::CLASS_MASS_STORAGE &&
+					bot::OpticalDriveSubclass::from_u8(desc.sub_class_code()).is_some() &&
+					desc.protocol_code() == bot::PROTOCOL_BULK_ONLY
+				)
+			) &&
+
+			// We're looking for any device, or a specific one that matches.
+			ids.is_none_or(|(vid, pid)|
+				device.device_descriptor().is_ok_and(|desc|
+					desc.vendor_id() == vid &&
+					desc.product_id() == pid
+				)
+			)
+		{
+			return Ok(device);
+		}
+	}
+
+	// No match.
+	Err(open_err(path))
+}
+
+/// # Open Device.
+fn open_device<C: UsbContext>(device: &Device<C>, path: Option<&Path>)
+-> Result<DeviceHandle<C>, RipRipError> {
+	use rusb::Error;
+
+	let mut tries = 0;
+	while tries < 3 {
+		tries += 1;
+		match device.open() {
+			Ok(v) => return Ok(v),
+			Err(Error::Busy) => {
+				// Give it a second and try again.
+				log!(
+					@trace
+					"Device is busy. Wait {} and retry.",
+					NiceElapsed::from(OPEN_RETRY_TIMEOUT),
+				);
+				std::thread::sleep(OPEN_RETRY_TIMEOUT);
+			},
+			Err(Error::Access) => {
+				log!(@error "Unable to open device: permission denied.");
+				return Err(RipRipError::CdReadNotPermitted);
+			},
+			Err(Error::NotSupported) => {
+				log!(@error "Unable to open device: operation not supported.");
+				return Err(RipRipError::CdReadUnsupported);
+			},
+			Err(e) => {
+				log!(@error "Unable to open device: {e}.");
+				break;
+			},
+		}
+	}
+
+	Err(open_err(path))
+}
+
+/// # Open Error.
+///
+/// Most points of failure return a `DeviceOpen` error. This method handles the
+/// somewhat tedious conversion of the path for use with that variant.
+fn open_err(dev: Option<&Path>) -> RipRipError {
+	RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
 }

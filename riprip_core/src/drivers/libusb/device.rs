@@ -141,16 +141,11 @@ mod macos {
 mod linux {
 	use crate::macros::log;
 	use std::{
-		ffi::OsStr,
 		os::unix::fs::{
 			MetadataExt,
 			FileTypeExt,
 		},
 		path::Path,
-	};
-	use udev::{
-		Device,
-		DeviceType,
 	};
 
 	#[must_use]
@@ -163,58 +158,49 @@ mod linux {
 			return None;
 		};
 
-		// Figure out what kind of device this is, and if valid, pull its
-		// (real) device number.
+		// Make sure it is a block or char device.
 		let kind = meta.file_type();
-		let (kind, dev_type) =
-			if kind.is_block_device()     { (DeviceType::Block,     "block"    ) }
-			else if kind.is_char_device() { (DeviceType::Character, "character") }
-			else {
-				log!(@trace [dev] "Path is not for block or character device.");
-				return None;
-			};
-		let dev_num = meta.rdev();
-
-		// Send it to udev and see what happens!
-		let drive = match Device::from_devnum(kind, dev_num) {
-			Ok(v) => v,
-			Err(e) => {
-				log!(@trace [dev, dev_type, dev_num] "Failed to open device (udev): {e}");
-				return None;
-			},
-		};
-
-		// The descriptors come from the underlying USB subsystem, so let's
-		// try to pull that.
-		let usb = match drive.parent_with_subsystem_devtype("usb", "usb_device") {
-			Ok(Some(v)) => v,
-			Ok(None) => {
-				log!(
-					@trace [dev, dev_type, dev_num]
-					"Failed to open USB subsystem parent of device (udev).",
-				);
-				return None;
-			},
-			Err(e) => {
-				log!(
-					@trace [dev, dev_type, dev_num]
-					"Failed to open USB subsystem parent of device (udev): {e}.",
-				);
-				return None;
-			},
-		};
-
-		// Pull and return the descriptors.
-		if
-			let Some(vid) = usb.attribute_value("idVendor").and_then(OsStr::to_str) &&
-			let Ok(vid) = u16::from_str_radix(vid.trim(), 16) &&
-			let Some(pid) = usb.attribute_value("idProduct").and_then(OsStr::to_str) &&
-			let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
-		{
-			Some((vid, pid))
+		if ! kind.is_block_device() && ! kind.is_char_device() {
+			log!(@trace [dev] "Path is not for block or character device.");
+			return None;
 		}
-		// Boo.
-		else { None }
+
+		// Convert to a more authoritative sysfs path.
+		let dev_num = meta.rdev();
+		let syspath = format!(
+			"/sys/dev/block/{}:{}",
+			nix::sys::stat::major(dev_num),
+			nix::sys::stat::minor(dev_num),
+		);
+		let Ok(syspath) = std::fs::canonicalize(&syspath) else {
+			log!(@trace [dev, syspath] "Unable to resolve syspath for device.");
+			return None;
+		};
+		if ! syspath.starts_with("/sys/devices") {
+			log!(@trace [dev, syspath] "Unable to resolve syspath for device.");
+			return None;
+		}
+
+		// Travel up the tree same as `udev` would do, looking for the
+		// attribute files of interest.
+		for base in syspath.ancestors() {
+			// These can be at just about any depth, but definitely not in or
+			// above the devices folder.
+			if base == "/sys/devices" { break; }
+
+			if
+				let Ok(vid) = std::fs::read_to_string(base.join("idVendor")) &&
+				let Ok(vid) = u16::from_str_radix(vid.trim(), 16) &&
+				let Ok(pid) = std::fs::read_to_string(base.join("idProduct")) &&
+				let Ok(pid) = u16::from_str_radix(pid.trim(), 16)
+			{
+				return Some((vid, pid));
+			}
+		}
+
+		// Nothing doing.
+		log!(@trace [dev, syspath] "Missing USB device properties.");
+		None
 	}
 }
 
