@@ -53,7 +53,7 @@ But it does print a nice little summary of the disc's table of contents and its 
 
 ## Requirements
 
-Rip Rip Hooray! is a command line utility built for and tested on x86-64 Linux systems, but it may well work with other 64-bit Unix platforms and/or Windows WSL too. See the [installation](#installation) section for information about building it from source.
+Rip Rip Hooray! is a command line utility for 64-bit Linux and Mac systems, but may well work with other 64-bit Unix platforms. See the [installation](#installation) section for information about building it from source.
 
 
 ### Optical Drive
@@ -102,6 +102,7 @@ riprip [OPTIONS]
 # To see a list of options, use -h/--help:
 riprip --help
 ```
+
 
 ### Example Recovery Workflow
 
@@ -162,6 +163,7 @@ There are a number of different options that can come in handy for tricky situat
 
 Good luck!
 
+
 ### Debugging and Troubleshooting.
 
 If a disc is giving you trouble or you simply want a record of the proceedings, set the `-v`/`--verbose` flag to have Rip Rip emit a log to STDOUT.
@@ -193,36 +195,67 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 ## Installation
 
-Debian and Ubuntu users can just grab the pre-built `.deb` package from the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can grab it from [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
+Pre-built x86-64-v3 `.deb` packages are available for Debian and Ubuntu users on the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-To use Rip Rip on other x86-64 unix systems, it'll need to built from source.
+Rip Rip should run A-OK on most other 64-bit unix platforms, but will need to be built from source.
 
-> [!NOTE]
-> Support for Apple is coming soon. If you're interested, check out [this PR](https://github.com/Blobfolio/riprip/pull/10) (thanks @elmattic!).
+To that end, you'll need:
 
-Thankfully, [Rust](https://www.rust-lang.org/)/[Cargo](https://github.com/rust-lang/cargo) make this pretty easy:
+* [Rust](https://rustup.rs/) (latest stable)
+* [Clang](https://rust-lang.github.io/rust-bindgen/requirements.html#clang)
+
+
+### Linux, BSD, and "Weird" Unix
+
+One line should do it:
 
 ```bash
-# The only non-rust build dependency is clang. On Debian and Ubuntu,
-# for example, that can be installed by running:
-sudo apt-get install clang
-
 # See "cargo install --help" for more options.
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
     --bin riprip
 ```
 
-By default, Rip Rip compiles and statically links to `libcdio`, but it can be made to link to your system's copy instead with a few small tweaks:
+By default, Rip Rip builds and links to `libcdio` statically, but if you'd rather it link to your system's packages, do this instead:
 
 ```bash
-# Install libcdio development headers in addition to clang, e.g.
-sudo apt-get install libcdio-dev clang
+# You'll need `libcdio-dev` for build, and `libcdio` for runtime.
+# On e.g. Debian, those can be installed with:
+sudo apt-get install libcdio-dev libcdio
 
-# Disable the default features, and enable `libcdio`.
+# The cargo line is almost but not quite the same:
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
     --bin riprip \
     --no-default-features \
     --features=libcdio
 ```
+
+
+### macOS
+
+Apple doesn't expose everything `libcdio` needs for advanced data recovery, but thanks to @elmattic, Rip Rip can leverage `libusb` for low-level device communications instead!
+
+> [!TIP]
+> 
+> The `libusb` driver works on Linux too!
+
+To build Rip Rip on a Mac, run:
+
+```bash
+# If you haven't already set up Xcode, do that first.
+xcode-select --install
+
+# Libusb will be statically built and linked by default, but if you'd
+# rather manage it separately, install it with brew.
+brew install libusb
+
+# See "cargo install --help" for more options.
+cargo install \
+    --git https://github.com/Blobfolio/riprip.git \
+    --bin riprip \
+    --no-default-features \
+    --features=libusb
+```
+
+The `libusb` option — and Mac support more generally — is relatively new, so if you run into any issues, please [let us know](https://github.com/Blobfolio/riprip/issues/new)!
