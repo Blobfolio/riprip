@@ -11,17 +11,23 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-// TODO: update logic when there are multiple drivers to ensure that only
-// one is enabled.
-#[cfg(not(feature = "libcdio"))]
-compile_error!("Crate feature `libcdio` is required.");
+#[cfg(not(any(feature = "libcdio", feature = "libusb")))]
+compile_error!("A driver feature is required. Enable `libcdio` or `libusb`.");
 
-// TODO: suggest using `libusb` feature when merged.
+#[cfg(all(feature = "libcdio", feature = "libusb"))]
+compile_error!("Conflicting driver features detected. Choose either `libcdio` or `libusb`.");
+
 #[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("Apple does not fully support `libcdio`.");
+compile_error!("The `libcdio` feature does not work on Apple devices. Build with `cargo build --no-default-features --features libusb` instead.");
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
+compile_error!("The `libusb` feature requires linux or macos.");
 
 #[cfg(feature = "libcdio")]
 mod libcdio;
+
+#[cfg(feature = "libusb")]
+mod libusb;
 
 use crate::{
 	Barcode,
@@ -56,6 +62,12 @@ use std::{
 /// driver.
 pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 
+#[cfg(feature = "libusb")]
+/// # USB Driver.
+///
+/// This type alias is how the rest of the library references the chosen
+/// driver.
+pub(crate) type CddaDriver = libusb::LibusbInstance;
 
 
 /// # Cache Bust Timeout.

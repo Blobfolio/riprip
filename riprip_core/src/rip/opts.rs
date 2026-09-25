@@ -5,6 +5,7 @@
 use crate::{
 	CD_DATA_SIZE,
 	ReadOffset,
+	TrackRange,
 };
 use std::{
 	num::NonZeroU16,
@@ -531,7 +532,7 @@ impl Iterator for RipOptionsTracks {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		while self.pos < 100 {
+		while self.pos <= TrackRange::MAX {
 			let idx = self.pos;
 			self.pos += 1;
 			if 0 != self.set & track_idx_to_bits(idx) {
@@ -543,9 +544,12 @@ impl Iterator for RipOptionsTracks {
 
 	/// # Size Hint.
 	///
-	/// There will never be more than 99 tracks.
+	/// There will never be more than 100 tracks (including #0).
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
+		let max = TrackRange::new(self.pos, TrackRange::MAX)
+			.map_or(0, TrackRange::len);
+
+		(0, Some(usize::from(max)))
 	}
 }
 
@@ -573,7 +577,7 @@ impl Iterator for RipOptionsTracksRng {
 		let mut from = u8::MAX;
 		let mut to = u8::MAX;
 
-		while self.pos < 100 {
+		while self.pos <= TrackRange::MAX {
 			let idx = self.pos;
 			if 0 != self.set & track_idx_to_bits(idx) {
 				if from == u8::MAX {
@@ -596,11 +600,13 @@ impl Iterator for RipOptionsTracksRng {
 
 	/// # Size Hint.
 	///
-	/// There will never be more than 99 tracks.
+	/// There will never be more than 100 tracks (including #0).
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, Some(100_usize.saturating_sub(usize::from(self.pos))))
-	}
+		let max = TrackRange::new(self.pos, TrackRange::MAX)
+			.map_or(0, TrackRange::len);
 
+		(0, Some(usize::from(max)))
+	}
 }
 
 impl std::iter::FusedIterator for RipOptionsTracksRng {}

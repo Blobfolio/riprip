@@ -74,30 +74,37 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 
 # Clippy.
-@clippy:
+clippy:
+	#!/usr/bin/env bash
+	set -e
+
 	clear
+	for features in libcdio-static libcdio libusb; do
+		fyi info "riprip/$features"
+		cargo clippy \
+			--release \
+			-p "riprip" \
+			--no-default-features \
+			--features="$features" \
+			--target-dir "{{ cargo_dir }}"
+	done
+	for features in libcdio-static libcdio libusb; do
+		fyi info "riprip_core/$features"
+		cargo clippy \
+			--release \
+			-p "riprip_core" \
+			--no-default-features \
+			--features="$features" \
+			--target-dir "{{ cargo_dir }}"
 
-	fyi info "riprip/libcdio"
-	cargo clippy \
-		--release \
-		-p riprip \
-		--no-default-features \
-		--features=libcdio \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi info "riprip_core/libcdio"
-	cargo clippy \
-		--release \
-		-p riprip_core \
-		--features=libcdio \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi info "riprip_core/bin,libcdio"
-	cargo clippy \
-		--release \
-		-p riprip_core \
-		--features=bin,libcdio \
-		--target-dir "{{ cargo_dir }}"
+		fyi info "riprip_core/$features,bin"
+		cargo clippy \
+			--release \
+			-p "riprip_core" \
+			--no-default-features \
+			--features="$features,bin" \
+			--target-dir "{{ cargo_dir }}"
+	done
 
 
 # Generate CREDITS.
@@ -139,29 +146,36 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 # Unit tests!
 @test:
+	#!/usr/bin/env bash
+	set -e
+
 	clear
+	for features in libcdio-static libcdio libusb; do
+		fyi info "riprip/$features"
+		cargo test \
+			--release \
+			-p "riprip" \
+			--no-default-features \
+			--features="$features" \
+			--target-dir "{{ cargo_dir }}"
+	done
+	for features in libcdio-static libcdio libusb; do
+		fyi info "riprip_core/$features"
+		cargo test \
+			--release \
+			-p "riprip_core" \
+			--no-default-features \
+			--features="$features" \
+			--target-dir "{{ cargo_dir }}"
 
-	fyi info "riprip/libcdio"
-	cargo test \
-		--release \
-		-p riprip \
-		--no-default-features \
-		--features=libcdio \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi info "riprip_core/libcdio"
-	cargo test \
-		--release \
-		-p riprip_core \
-		--features=libcdio \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi info "riprip_core/bin,libcdio"
-	cargo test \
-		--release \
-		-p riprip_core \
-		--features=bin,libcdio \
-		--target-dir "{{ cargo_dir }}"
+		fyi info "riprip_core/$features,bin"
+		cargo test \
+			--release \
+			-p "riprip_core" \
+			--no-default-features \
+			--features="$features,bin" \
+			--target-dir "{{ cargo_dir }}"
+	done
 
 
 # Get/Set version.

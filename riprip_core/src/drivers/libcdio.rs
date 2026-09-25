@@ -92,8 +92,6 @@ impl CddaDriverNewExt for LibcdioInstance {
 				}
 				let dev = CString::new(dev.as_os_str().as_bytes())
 					.map_err(|_| RipRipError::Device(original))?;
-
-				log!(@debug "Device path {}.", dev.to_string_lossy());
 				Some(dev)
 			}
 			else { None };
@@ -259,8 +257,8 @@ impl CddaDriverExt for LibcdioInstance {
 		}
 
 		let mut raw = cdio_hwinfo {
-			psz_vendor: [0; 9],
-			psz_model: [0; 17],
+			psz_vendor:   [0; 9],
+			psz_model:    [0; 17],
 			psz_revision: [0; 5],
 		};
 
@@ -270,15 +268,21 @@ impl CddaDriverExt for LibcdioInstance {
 		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &raw mut raw) } {
 			// Rather than deal with the uncertainty of pointers, let's recast
 			// the signs since we have everything right here.
-			let vendor_u8 = raw.psz_vendor.map(u8::saturating_from);
-			let model_u8 = raw.psz_model.map(u8::saturating_from);
+			let vendor_id = raw.psz_vendor.map(u8::saturating_from);
+			let model_id = raw.psz_model.map(u8::saturating_from);
+			let revision = raw.psz_revision.map(u8::saturating_from);
 
-			let Some(vendor) = to_str(&vendor_u8) else {
-				log!(@trace [vendor_u8] "Invalid drive vendor.");
+			// If we have a revision, debug it.
+			if let Some(revision) = to_str(&revision) {
+				log!(@debug "Drive revision: {revision}.");
+			}
+
+			let Some(vendor) = to_str(&vendor_id) else {
+				log!(@trace [vendor_id] "Invalid drive vendor.");
 				return None;
 			};
-			let Some(model) = to_str(&model_u8) else {
-				log!(@trace [model_u8] "Invalid drive model.");
+			let Some(model) = to_str(&model_id) else {
+				log!(@trace [model_id] "Invalid drive model.");
 				return None;
 			};
 			DriveVendorModel::new(vendor, model).ok()

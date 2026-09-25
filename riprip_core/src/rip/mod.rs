@@ -29,6 +29,7 @@ use crate::{
 	SavedRips,
 	SECTOR_OVERREAD,
 	state_path,
+	TrackRange,
 };
 use dactyl::{
 	NiceElapsed,
@@ -943,7 +944,7 @@ fn standby_msg() -> &'static str {
 /// This method converts a `u8` decimal into the equivalent flag. Out of range
 /// values are silently treated as zero.
 const fn track_idx_to_bits(idx: u8) -> u128 {
-	if 99 < idx { 0 }
+	if TrackRange::MAX < idx { 0 }
 	else { 2_u128.pow(idx as u32) }
 }
 

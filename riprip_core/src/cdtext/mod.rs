@@ -12,13 +12,13 @@ mod field;
 mod genre;
 mod language;
 mod stream;
-mod track;
 
 use crate::{
 	Barcode,
 	Isrc,
 	IsrcMap,
 	macros::log,
+	TrackRange,
 };
 use dactyl::NoHash;
 pub use field::{
@@ -35,7 +35,6 @@ use stream::{
 	Block,
 	BlockId,
 };
-use track::TrackRange;
 
 
 

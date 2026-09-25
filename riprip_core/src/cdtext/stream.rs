@@ -246,7 +246,8 @@ impl BlockInfo {
 		let encoding_code = raw[0];
 
 		// Track range.
-		let tracks = TrackRange::new(raw[1], raw[2])?;
+		let tracks = TrackRange::new(raw[1], raw[2])
+			.ok_or(CDTextError::InvalidTrackRange)?;
 
 		/*
 		// Copyright: 0 (No), 3 (Yes).
