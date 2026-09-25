@@ -8,6 +8,8 @@
 
 Rip Rip Hooray! is a specialized audio CD-ripper optimized for track recovery.
 
+<img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-a.webp" width="30%" alt="Rip Rip rip settings confirmation screen."></img> <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-b.webp" width="60%" alt="Rip Rip rip settings confirmation screen."></img>
+
 Rather than beat the drive senseless every time a read error is encountered, it simply notes the problem and moves on. Its iterative design allows it to grab what it can, as it can, progressively filling in the gaps from run-to-run.
 
 Between those (relatively quick) runs, you can actually _do things_. You can inspect the disc, give it another clean, switch drives, shut down your computer and go to bed, or check to see the rip is already _good enough_ for [CUETools repair](https://cue.tools/wiki/CUETools_Database) to finish up for you.
