@@ -1,6 +1,5 @@
 **.gz
 **/target/
-/Cargo.lock
 /doc/
 /ref-bin*
 /release/**.deb
