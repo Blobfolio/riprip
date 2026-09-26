@@ -1,0 +1,41 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Patience
+	PERFORMER: George Michael
+	DISC ID: EK92080
+TRACK 01:
+	TITLE: Patience
+	ISRC: GB-BBN-03-00689
+TRACK 02:
+	TITLE: Amazing
+	ISRC: GB-BBN-03-00681
+TRACK 03:
+	TITLE: John And Elvis Are Dead
+	ISRC: GB-BBN-03-00646
+TRACK 04:
+	TITLE: Cars and Trains
+	ISRC: GB-BBN-03-00682
+TRACK 05:
+	TITLE: Round Here
+	ISRC: GB-BBN-03-00684
+TRACK 06:
+	TITLE: My Mother Had A Brother
+	ISRC: GB-BBN-03-00685
+TRACK 07:
+	TITLE: Flawless (Go to the City)
+	ISRC: GB-BBN-03-00686
+TRACK 08:
+	TITLE: American Angel
+	ISRC: GB-BBN-04-00029
+TRACK 09:
+	TITLE: Precious Box
+	ISRC: GB-BBN-03-00683
+TRACK 10:
+	TITLE: Please Send Me Someone (Anselmo's Song)
+	ISRC: GB-BBN-04-00041
+TRACK 11:
+	TITLE: Freeek! '04
+	ISRC: GB-BBN-04-00043
+TRACK 12:
+	TITLE: Through
+	ISRC: GB-BBN-03-00688

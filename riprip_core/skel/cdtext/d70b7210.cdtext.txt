@@ -1,0 +1,53 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Good News For People Who Love Bad News
+	PERFORMER: Modest Mouse
+	DISC ID: EK87125
+TRACK 01:
+	TITLE: Horn Intro
+	ISRC: US-SM1-03-15492
+TRACK 02:
+	TITLE: The World At Large
+	ISRC: US-SM1-03-15493
+TRACK 03:
+	TITLE: Float On
+	ISRC: US-SM1-03-15494
+TRACK 04:
+	TITLE: Ocean Breathes Salty
+	ISRC: US-SM1-03-15495
+TRACK 05:
+	TITLE: Dig Your Grave
+	ISRC: US-SM1-03-15496
+TRACK 06:
+	TITLE: Bury Me With It
+	ISRC: US-SM1-03-15497
+TRACK 07:
+	TITLE: Dance Hall
+	ISRC: US-SM1-03-15498
+TRACK 08:
+	TITLE: Bukowski
+	ISRC: US-SM1-03-15499
+TRACK 09:
+	TITLE: This Devil's Workday
+	ISRC: US-SM1-03-15500
+TRACK 10:
+	TITLE: The View
+	ISRC: US-SM1-03-15501
+TRACK 11:
+	TITLE: Satin In A Coffin
+	ISRC: US-SM1-03-15502
+TRACK 12:
+	TITLE: Interlude (Milo)
+	ISRC: US-SM1-03-15503
+TRACK 13:
+	TITLE: Blame It On The Tetons
+	ISRC: US-SM1-03-15504
+TRACK 14:
+	TITLE: Black Cadillacs
+	ISRC: US-SM1-03-15505
+TRACK 15:
+	TITLE: One Chance
+	ISRC: US-SM1-03-15506
+TRACK 16:
+	TITLE: The Good Times Are Killing Me
+	ISRC: US-SM1-03-15507

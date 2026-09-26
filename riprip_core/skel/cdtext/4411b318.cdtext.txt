@@ -1,0 +1,76 @@
+[BLOCK 0]
+DISC:
+	TITLE: Chattanooga Choo-Choo
+	PERFORMER: Glenn Miller
+TRACK 01:
+	TITLE: Chattanooga Choo-Choo
+	PERFORMER: Glenn Miller
+TRACK 02:
+	TITLE: The Booglie Wooglie Piggy
+	PERFORMER: Glenn Miller
+TRACK 03:
+	TITLE: I Know Why (And So Do You)
+	PERFORMER: Glenn Miller
+TRACK 04:
+	TITLE: You And I
+	PERFORMER: Glenn Miller
+TRACK 05:
+	TITLE: Adios
+	PERFORMER: Glenn Miller
+TRACK 06:
+	TITLE: The Kiss Polka
+	PERFORMER: Glenn Miller
+TRACK 07:
+	TITLE: Elmer's Tune
+	PERFORMER: Glenn Miller
+TRACK 08:
+	TITLE: A String Of Pearls
+	PERFORMER: Glenn Miller
+TRACK 09:
+	TITLE: Moonlight Sonata
+	PERFORMER: Glenn Miller
+TRACK 10:
+	TITLE: Slumber Song
+	PERFORMER: Glenn Miller
+TRACK 11:
+	TITLE: (There'll Be Bluebirds Over) The White Cliffs Of Dover
+	PERFORMER: Glenn Miller
+TRACK 12:
+	TITLE: Moonlight Cocktail
+	PERFORMER: Glenn Miller
+TRACK 13:
+	TITLE: Skylark
+	PERFORMER: Glenn Miller
+TRACK 14:
+	TITLE: When The Roses Bloom Again
+	PERFORMER: Glenn Miller
+TRACK 15:
+	TITLE: Don't Sit Under The Apple Tree (With Anyone Else But Me)
+	PERFORMER: Glenn Miller
+TRACK 16:
+	TITLE: When Johnny Comes Marching Home
+	PERFORMER: Glenn Miller
+TRACK 17:
+	TITLE: American Patrol
+	PERFORMER: Glenn Miller
+TRACK 18:
+	TITLE: I've Got A Gal In Kalamazoo
+	PERFORMER: Glenn Miller
+TRACK 19:
+	TITLE: Serenade In Blue
+	PERFORMER: Glenn Miller
+TRACK 20:
+	TITLE: At Last
+	PERFORMER: Glenn Miller
+TRACK 21:
+	TITLE: Caribbean Clipper
+	PERFORMER: Glenn Miller
+TRACK 22:
+	TITLE: That Old Black Magic
+	PERFORMER: Glenn Miller
+TRACK 23:
+	TITLE: Moonlight Becomes You
+	PERFORMER: Glenn Miller
+TRACK 24:
+	TITLE: Juke Box Saturday Night
+	PERFORMER: Glenn Miller

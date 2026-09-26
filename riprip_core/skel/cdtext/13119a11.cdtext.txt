@@ -1,0 +1,55 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Live at Aylesbury Friars, 31st March 1979
+	PERFORMER: Motörhead
+TRACK 01:
+	TITLE: Overkill
+	PERFORMER: Motörhead
+TRACK 02:
+	TITLE: Stay Clean
+	PERFORMER: Motörhead
+TRACK 03:
+	TITLE: Keep Us On The Road
+	PERFORMER: Motörhead
+TRACK 04:
+	TITLE: No Class
+	PERFORMER: Motörhead
+TRACK 05:
+	TITLE: Leaving Here
+	PERFORMER: Motörhead
+TRACK 06:
+	TITLE: Iron Horse Born to Lose
+	PERFORMER: Motörhead
+TRACK 07:
+	TITLE: Metropolis
+	PERFORMER: Motörhead
+TRACK 08:
+	TITLE: The Watcher
+	PERFORMER: Motörhead
+TRACK 09:
+	TITLE: Damage Case
+	PERFORMER: Motörhead
+TRACK 10:
+	TITLE: (I Won't) Pay Your Price
+	PERFORMER: Motörhead
+TRACK 11:
+	TITLE: Too Late, Too Late
+	PERFORMER: Motörhead
+TRACK 12:
+	TITLE: I'll Be Your Sister
+	PERFORMER: Motörhead
+TRACK 13:
+	TITLE: I'm Your Witchdoctor
+	PERFORMER: Motörhead
+TRACK 14:
+	TITLE: Train Kept A-Rollin?
+	PERFORMER: Motörhead
+TRACK 15:
+	TITLE: Limb From Limb
+	PERFORMER: Motörhead
+TRACK 16:
+	TITLE: White Line Fever
+	PERFORMER: Motörhead
+TRACK 17:
+	TITLE: Motörhead
+	PERFORMER: Motörhead

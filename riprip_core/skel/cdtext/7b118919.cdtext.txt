@@ -1,0 +1,79 @@
+[BLOCK 0]
+DISC:
+	TITLE: Moonlight Serenade
+	PERFORMER: Glenn Miller
+TRACK 01:
+	TITLE: King Porter Stomp
+	PERFORMER: Glenn Miller
+TRACK 02:
+	TITLE: And The Angels Sing
+	PERFORMER: Glenn Miller
+TRACK 03:
+	TITLE: Moonlight Serenade
+	PERFORMER: Glenn Miller
+TRACK 04:
+	TITLE: The Lady's In Love With You
+	PERFORMER: Glenn Miller
+TRACK 05:
+	TITLE: Wishing (Will Make It So)
+	PERFORMER: Glenn Miller
+TRACK 06:
+	TITLE: Sunrise Serenade
+	PERFORMER: Glenn Miller
+TRACK 07:
+	TITLE: Little Brown Jug
+	PERFORMER: Glenn Miller
+TRACK 08:
+	TITLE: But It Didn't Mean A Thing
+	PERFORMER: Glenn Miller
+TRACK 09:
+	TITLE: Pavane
+	PERFORMER: Glenn Miller
+TRACK 10:
+	TITLE: Runnin' Wild
+	PERFORMER: Glenn Miller
+TRACK 11:
+	TITLE: Stairway To The Stars
+	PERFORMER: Glenn Miller
+TRACK 12:
+	TITLE: Blue Evening
+	PERFORMER: Glenn Miller
+TRACK 13:
+	TITLE: We Can Live On Love (We Haven't Got A Pot To Cook In)
+	PERFORMER: Glenn Miller
+TRACK 14:
+	TITLE: Moon Love
+	PERFORMER: Glenn Miller
+TRACK 15:
+	TITLE: Sliphorn Jive
+	PERFORMER: Glenn Miller
+TRACK 16:
+	TITLE: Oh! You Crazy Moon
+	PERFORMER: Glenn Miller
+TRACK 17:
+	TITLE: Ain't Cha Comin' Out?
+	PERFORMER: Glenn Miller
+TRACK 18:
+	TITLE: Wanna Hat With Cherries
+	PERFORMER: Glenn Miller
+TRACK 19:
+	TITLE: Pagan Love Song
+	PERFORMER: Glenn Miller
+TRACK 20:
+	TITLE: Ding-Dong! The Witch Is Dead
+	PERFORMER: Glenn Miller
+TRACK 21:
+	TITLE: Over The Rainbow
+	PERFORMER: Glenn Miller
+TRACK 22:
+	TITLE: The Man With The Mandolin
+	PERFORMER: Glenn Miller
+TRACK 23:
+	TITLE: Blue Orchids
+	PERFORMER: Glenn Miller
+TRACK 24:
+	TITLE: Glen Island Special
+	PERFORMER: Glenn Miller
+TRACK 25:
+	TITLE: Farewell Blues
+	PERFORMER: Glenn Miller

@@ -1,0 +1,19 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: METROPOLIS:  THE CHASE SUITE
+	PERFORMER: JANELLE MONAE
+	DISC ID: 511234-2
+TRACK 01:
+	TITLE: The March of the Wolfmasters - JANELLE MONAE
+TRACK 02:
+	TITLE: Violet Stars Happy Hunting!!! (Featuring The Skunks) - JANELLE MONAE
+TRACK 03:
+	TITLE: Many Moons - JANELLE MONAE
+TRACK 04:
+	TITLE: Cybertronic Purgatory - JANELLE MONAE
+TRACK 05:
+	TITLE: Sincerely, Jane. - JANELLE MONAE
+TRACK 06:
+	TITLE: Mr. President - JANELLE MONAE
+TRACK 07:
+	TITLE: Smile - JANELLE MONAE

@@ -1,0 +1,58 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Downward Spiral - Deluxe Edition [ Disc 2 ]
+	PERFORMER: Nine Inch Nails
+	BARCODE: 6-02498-64730-1
+	DISC ID: B0003739-36 CD02
+TRACK 01:
+	TITLE: Burn - Soundtrack Version (Explicit)
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00961
+TRACK 02:
+	TITLE: Closer (Precursor)
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00962
+TRACK 03:
+	TITLE: Piggy (Nothing Can Stop Me Now)
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00963
+TRACK 04:
+	TITLE: A Violet Fluid
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00964
+TRACK 05:
+	TITLE: Dead Souls
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00965
+TRACK 06:
+	TITLE: Hurt (Quiet)
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00966
+TRACK 07:
+	TITLE: Closer To God
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00967
+TRACK 08:
+	TITLE: All The Pigs, All Lined Up
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00968
+TRACK 09:
+	TITLE: Memorabilia
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00969
+TRACK 10:
+	TITLE: The Downward Spiral (The Bottom)
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00970
+TRACK 11:
+	TITLE: Ruiner - Demo
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00975
+TRACK 12:
+	TITLE: Liar - Reptile Demo
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00977
+TRACK 13:
+	TITLE: Heresy - Demo
+	PERFORMER: Nine Inch Nails
+	ISRC: US-IR1-04-00979

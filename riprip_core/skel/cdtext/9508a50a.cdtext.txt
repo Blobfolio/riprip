@@ -1,0 +1,35 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Bomber (40th Anniversary Edition)
+	PERFORMER: Motorhead
+	BARCODE: 4-050538-462425
+TRACK 01:
+	TITLE: Dead Men Tell No Tales
+	PERFORMER: Motorhead
+TRACK 02:
+	TITLE: Lawman
+	PERFORMER: Motorhead
+TRACK 03:
+	TITLE: Sweet Revenge
+	PERFORMER: Motorhead
+TRACK 04:
+	TITLE: Sharpshooter
+	PERFORMER: Motorhead
+TRACK 05:
+	TITLE: Poison
+	PERFORMER: Motorhead
+TRACK 06:
+	TITLE: Dead Forever
+	PERFORMER: Motorhead
+TRACK 07:
+	TITLE: All The Aces
+	PERFORMER: Motorhead
+TRACK 08:
+	TITLE: Step Down
+	PERFORMER: Motorhead
+TRACK 09:
+	TITLE: Talking Head
+	PERFORMER: Motorhead
+TRACK 10:
+	TITLE: Bomber
+	PERFORMER: Motorhead

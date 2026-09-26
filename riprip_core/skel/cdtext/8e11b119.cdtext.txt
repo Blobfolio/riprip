@@ -1,0 +1,79 @@
+[BLOCK 0]
+DISC:
+	TITLE: In The Mood
+	PERFORMER: Glenn Miller
+TRACK 01:
+	TITLE: In The Mood
+	PERFORMER: Glenn Miller
+TRACK 02:
+	TITLE: My Isle Of Golden Dreams
+	PERFORMER: Glenn Miller
+TRACK 03:
+	TITLE: My Prayer
+	PERFORMER: Glenn Miller
+TRACK 04:
+	TITLE: Blue Moonlight
+	PERFORMER: Glenn Miller
+TRACK 05:
+	TITLE: Bluebirds In The Moonlight
+	PERFORMER: Glenn Miller
+TRACK 06:
+	TITLE: Indian Summer
+	PERFORMER: Glenn Miller
+TRACK 07:
+	TITLE: Johnson Rag
+	PERFORMER: Glenn Miller
+TRACK 08:
+	TITLE: Careless
+	PERFORMER: Glenn Miller
+TRACK 09:
+	TITLE: It's A Blue World
+	PERFORMER: Glenn Miller
+TRACK 10:
+	TITLE: When You Wish Upon A Star
+	PERFORMER: Glenn Miller
+TRACK 11:
+	TITLE: The Rhumba Jumps
+	PERFORMER: Glenn Miller
+TRACK 12:
+	TITLE: Stardust
+	PERFORMER: Glenn Miller
+TRACK 13:
+	TITLE: Rug Cutter's Swing
+	PERFORMER: Glenn Miller
+TRACK 14:
+	TITLE: The Woodpecker Song
+	PERFORMER: Glenn Miller
+TRACK 15:
+	TITLE: Tuxedo Junction
+	PERFORMER: Glenn Miller
+TRACK 16:
+	TITLE: Danny Boy (Londonderry Air)
+	PERFORMER: Glenn Miller
+TRACK 17:
+	TITLE: Imagination
+	PERFORMER: Glenn Miller
+TRACK 18:
+	TITLE: Shake Down The Stars
+	PERFORMER: Glenn Miller
+TRACK 19:
+	TITLE: Polka Dots And Moon Beams
+	PERFORMER: Glenn Miller
+TRACK 20:
+	TITLE: Say It
+	PERFORMER: Glenn Miller
+TRACK 21:
+	TITLE: April Played The Fiddle
+	PERFORMER: Glenn Miller
+TRACK 22:
+	TITLE: Fools Rush In
+	PERFORMER: Glenn Miller
+TRACK 23:
+	TITLE: Slow Freight
+	PERFORMER: Glenn Miller
+TRACK 24:
+	TITLE: Pennsylvania 6-5000
+	PERFORMER: Glenn Miller
+TRACK 25:
+	TITLE: Bugle Call Rag
+	PERFORMER: Glenn Miller

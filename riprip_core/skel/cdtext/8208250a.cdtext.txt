@@ -1,0 +1,35 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Overkill (40th Anniversary Edition)
+	PERFORMER: Motorhead
+	BARCODE: 4-050538-462517
+TRACK 01:
+	TITLE: Overkill
+	PERFORMER: Motorhead
+TRACK 02:
+	TITLE: Stay Clean
+	PERFORMER: Motorhead
+TRACK 03:
+	TITLE: (I Won't) Pay Your Price
+	PERFORMER: Motorhead
+TRACK 04:
+	TITLE: I'll Be Your Sister
+	PERFORMER: Motorhead
+TRACK 05:
+	TITLE: Capricorn
+	PERFORMER: Motorhead
+TRACK 06:
+	TITLE: No Class
+	PERFORMER: Motorhead
+TRACK 07:
+	TITLE: Damage case
+	PERFORMER: Motorhead
+TRACK 08:
+	TITLE: Tear Ya Down
+	PERFORMER: Motorhead
+TRACK 09:
+	TITLE: Metropolis
+	PERFORMER: Motorhead
+TRACK 10:
+	TITLE: Limb From Limb
+	PERFORMER: Motorhead
