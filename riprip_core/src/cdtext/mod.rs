@@ -472,6 +472,7 @@ impl Encoding {
 mod test {
 	use super::*;
 	use std::{
+		collections::BTreeMap,
 		ffi::OsStr,
 		path::PathBuf,
 	};
@@ -484,8 +485,8 @@ mod test {
 		}
 
 		// Find all the files. Haha.
-		let mut bins = HashMap::<String, PathBuf>::new();
-		let mut txts = HashMap::<String, PathBuf>::new();
+		let mut bins = BTreeMap::<String, PathBuf>::new();
+		let mut txts = BTreeMap::<String, PathBuf>::new();
 		for e in std::fs::read_dir(&dir).expect("Unable to open cdtext test directory.") {
 			let e = e.unwrap();
 			let path = e.path();
