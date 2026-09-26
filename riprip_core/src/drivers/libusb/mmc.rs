@@ -406,7 +406,7 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
 		let out = self.mcn_subchannel__();
-		if out.is_none() { log!(@trace "Subchannel contains no MCN data."); }
+		if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
 		out
 	}
 

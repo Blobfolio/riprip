@@ -277,7 +277,7 @@ impl CddaDriverExt for LibcdioInstance {
 		// Safety: this is an FFI call…
 		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
 		if raw.is_null() {
-			log!(@trace "Subchannel contains no MCN data.");
+			log!(@trace "Sub-Q contains no MCN data.");
 			None
 		}
 		else {

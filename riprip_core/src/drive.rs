@@ -237,7 +237,7 @@ impl DriveVendorModel {
 		};
 		log!(
 			@debug
-			"Assuming {}KiB cache size based on drive.",
+			"Found cache size of {}KiB.",
 			NiceU16::from(DRIVE_CACHES[idx].1),
 		);
 		Some(DRIVE_CACHES[idx].1)
@@ -254,7 +254,7 @@ impl DriveVendorModel {
 		};
 		log!(
 			@debug
-			"Assuming read offset of {} samples based on drive.",
+			"Found read offset of {} samples.",
 			DRIVE_OFFSETS[idx].1.samples(),
 		);
 		Some(DRIVE_OFFSETS[idx].1)
