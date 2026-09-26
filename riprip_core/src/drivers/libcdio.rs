@@ -15,7 +15,6 @@ use crate::{
 	macros::log,
 	RipRipError,
 };
-use dactyl::traits::SaturatingFrom;
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -236,56 +235,36 @@ impl CddaDriverExt for LibcdioInstance {
 	///
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-		/// # Parse String.
+		/// # Rustify Cstr Arrays.
 		///
-		/// Convert raw vendor/model bytes to a string slice, trimming trailing
-		/// null bytes, but otherwise not worrying about the logical sanity of
-		/// the value.
-		const fn to_str<const N: usize>(raw: &[u8; N]) -> Option<&str> {
-			const { assert!(N != 0, "BUG: N cannot be zero."); }
-
-			// The members of `cdio_hwinfo` are one byte longer than the actual
-			// data so there should always be a trailing null byte.
-			let Ok(cstr) = CStr::from_bytes_until_nul(raw.as_slice()) else {
-				std::hint::cold_path();
-				return None;
-			};
-
-			// UTF-8 validity is less certain. Haha.
-			let Ok(out) = cstr.to_str() else { return None; };
-			Some(out)
+		/// The `libcdio` member arrays are `i8` for reasons…
+		const fn normalize<const N: usize>(src: [i8; N]) -> [u8; N] {
+			let mut out = [0_u8; N];
+			let mut i = 0;
+			while i < out.len() {
+				if src[i] <= 0 { out[i] = 0; }
+				else { out[i] = src[i].cast_unsigned(); }
+				i += 1;
+			}
+			out
 		}
 
 		let mut raw = cdio_hwinfo {
-			psz_vendor:   [0; 9],
-			psz_model:    [0; 17],
-			psz_revision: [0; 5],
+			psz_vendor:   [0; DriveVendorModel::VENDOR_LEN + 1],
+			psz_model:    [0; DriveVendorModel::MODEL_LEN + 1],
+			psz_revision: [0; DriveVendorModel::REVISION_LEN + 1],
 		};
 
 		// The return code is a bool, true for good, instead of the usual
 		// 0 FFI normally kicks back.
 		// Safety: this is an FFI call…
 		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &raw mut raw) } {
-			// Rather than deal with the uncertainty of pointers, let's recast
-			// the signs since we have everything right here.
-			let vendor_id = raw.psz_vendor.map(u8::saturating_from);
-			let model_id = raw.psz_model.map(u8::saturating_from);
-			let revision = raw.psz_revision.map(u8::saturating_from);
+			// Recast as normal-ass bytes.
+			let vendor = normalize(raw.psz_vendor);
+			let model = normalize(raw.psz_model);
+			let revision = normalize(raw.psz_revision);
 
-			// If we have a revision, debug it.
-			if let Some(revision) = to_str(&revision) {
-				log!(@debug "Drive revision: {revision}.");
-			}
-
-			let Some(vendor) = to_str(&vendor_id) else {
-				log!(@trace [vendor_id] "Invalid drive vendor.");
-				return None;
-			};
-			let Some(model) = to_str(&model_id) else {
-				log!(@trace [model_id] "Invalid drive model.");
-				return None;
-			};
-			DriveVendorModel::new(vendor, model).ok()
+			DriveVendorModel::new(&vendor, &model, &revision).ok()
 		}
 		else { None }
 	}

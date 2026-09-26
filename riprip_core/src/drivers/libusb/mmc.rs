@@ -265,20 +265,17 @@ pub(super) trait MmcDriverExt: TransportExt {
 	/// # Drive Vendor/Model.
 	fn drive_vendor_model__(&self) -> Result<DriveVendorModel, RipRipError> {
 		const INQUIRY_HEADER_LEN: usize = 8;
-		const INQUIRY_VENDOR_ID_LEN: usize = 8;
-		const INQUIRY_PRODUCT_ID_LEN: usize = 16;
-		const INQUIRY_REVISION_LEVEL_LEN: usize = 4;
 
 		const VENDOR_ID_RANGE: Range<usize> =
-			INQUIRY_HEADER_LEN..(INQUIRY_HEADER_LEN + INQUIRY_VENDOR_ID_LEN);
+			INQUIRY_HEADER_LEN..(INQUIRY_HEADER_LEN + DriveVendorModel::VENDOR_LEN);
 
 		const PRODUCT_ID_RANGE: Range<usize> =
-			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + INQUIRY_PRODUCT_ID_LEN;
+			VENDOR_ID_RANGE.end..VENDOR_ID_RANGE.end + DriveVendorModel::MODEL_LEN;
 
 		const ALLOC_LEN: usize = INQUIRY_HEADER_LEN +
-			INQUIRY_VENDOR_ID_LEN +
-			INQUIRY_PRODUCT_ID_LEN +
-			INQUIRY_REVISION_LEVEL_LEN;
+			DriveVendorModel::VENDOR_LEN +
+			DriveVendorModel::MODEL_LEN +
+			DriveVendorModel::REVISION_LEN;
 
 		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		const CDB: [u8; 6] = {
@@ -300,21 +297,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let model_id = &buf[PRODUCT_ID_RANGE];
 		let revision_level = &buf[PRODUCT_ID_RANGE.end..];
 
-		if let Ok(revision_level_str) = std::str::from_utf8(revision_level) {
-			log!(@debug "Drive revision: {revision_level_str}.");
-		}
-
-		// Convert the raw bytes into UTF-8 strings.
-		let Ok(vendor_id) = std::str::from_utf8(vendor_id) else {
-			log!(@trace [vendor_id] "Invalid drive vendor.");
-			return Err(RipRipError::DriveVendor);
-		};
-		let Ok(model_id) = std::str::from_utf8(model_id) else {
-			log!(@trace [model_id] "Invalid drive model.");
-			return Err(RipRipError::DriveVendor);
-		};
-
-		DriveVendorModel::new(vendor_id, model_id)
+		DriveVendorModel::new(vendor_id, model_id, revision_level)
 	}
 
 	/// # Execute Read Command.

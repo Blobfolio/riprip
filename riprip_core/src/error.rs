@@ -174,6 +174,9 @@ pub enum RipRipError {
 	/// # Invalid drive model.
 	DriveModel,
 
+	/// # Invalid drive revision.
+	DriveRevision,
+
 	/// # Invalid drive vendor.
 	DriveVendor,
 
@@ -276,6 +279,7 @@ impl fmt::Display for RipRipError {
 				},
 			Self::DiscMode => f.write_str("Missing or unsupported disc type."),
 			Self::DriveModel => f.write_str("Invalid drive model."),
+			Self::DriveRevision => f.write_str("Invalid drive revision."),
 			Self::DriveVendor => f.write_str("Invalid drive vendor."),
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
 			Self::Isrc => f.write_str("Invalid ISRC."),

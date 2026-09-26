@@ -70,7 +70,7 @@ fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
 		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 			write!(
 				f,
-				"(DriveVendorModel({:?}), {}_u16)",
+				"({:?}, {}_u16)",
 				self.0,
 				NiceU16::with_separator(self.1, NiceSeparator::Underscore),
 			)
@@ -81,7 +81,7 @@ fn nice_caches(parsed: BTreeMap<VendorModel, u16>) -> String {
 	format!(
 		r#"
 /// # Drive Cache Sizes.
-const DRIVE_CACHES: [(DriveVendorModel, u16); {}] = [
+const DRIVE_CACHES: [(VendorModel, u16); {}] = [
 	{}
 ];
 "#,
@@ -106,7 +106,7 @@ fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
 		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 			write!(
 				f,
-				"(DriveVendorModel({:?}), ReadOffset({}))",
+				"({:?}, ReadOffset({}))",
 				self.0,
 				self.1,
 			)
@@ -117,7 +117,7 @@ fn nice_offsets(parsed: BTreeMap<VendorModel, i16>) -> String {
 	format!(
 		r#"
 /// # Drive Offsets.
-static DRIVE_OFFSETS: [(DriveVendorModel, ReadOffset); {}] = [
+static DRIVE_OFFSETS: [(VendorModel, ReadOffset); {}] = [
 	{},
 ];
 "#,
@@ -203,18 +203,16 @@ fn parse_offsets() -> BTreeMap<VendorModel, i16> {
 	let parsed: BTreeMap<VendorModel, i16> = AccurateRip::parse_drive_offsets(&raw)
 		.expect("Unable to parse drive offsets.")
 		.into_iter()
-		.filter_map(|((v, m), o)|
+		.filter_map(|((vendor, model), o)|
 			if o == 0 { None }
 			else {
 				// Reformat the vendor/model pairs into our array.
 				let mut vm = VendorModel::default();
-				if ! v.is_empty() {
-					for (old, new) in vm.iter_mut().zip(v.bytes()) {
-						*old = new.to_ascii_uppercase();
-					}
+				for (b, v) in vm.iter_mut().zip(vendor.bytes()) {
+					*b = v.to_ascii_uppercase();
 				}
-				for (old, new) in vm.iter_mut().skip(8).zip(m.bytes()) {
-					*old = new.to_ascii_uppercase();
+				for (b, v) in vm.iter_mut().skip(8).zip(model.bytes()) {
+					*b = v.to_ascii_uppercase();
 				}
 
 				// And return!
