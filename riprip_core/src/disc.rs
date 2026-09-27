@@ -394,14 +394,16 @@ impl Disc {
 			if let Some(manifest) = RipManifest::new(
 				&self.toc,
 				&saved,
+				self.barcode(),
 				cdtext_paths.as_ref().map(|(v, _)| v.as_path()).zip(self.cdtext()),
 			) {
 				if let Some(file) = manifest.save_cue() {
 					let _res = writeln!(&mut handle, dim!("  {}"), file.display());
-					log!(@info "Saved cuesheet.\n  {}", file.display());
+					log!(@info "Saved cuesheet (CUE).\n  {}", file.display());
 				}
-				else {
-					log!(@trace "Failed to save cuesheet.");
+				if let Some(file) = manifest.save_toc() {
+					let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+					log!(@info "Saved cuesheet (TOC).\n  {}", file.display());
 				}
 			}
 

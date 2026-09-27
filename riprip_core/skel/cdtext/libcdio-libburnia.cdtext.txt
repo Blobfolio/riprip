@@ -4,8 +4,8 @@ DISC:
 	PERFORMER: United Cat Orchestra
 	SONGWRITER: Various Songwriters
 	COMPOSER: Various Composers
-	MESSAGE: For all our fans
 	ARRANGER: Tom Cat
+	MESSAGE: For all our fans
 	DISC ID: 1234567890
 	GENRE: Feline classic music
 	GENRE CODE: 5 (Classical)
@@ -14,8 +14,8 @@ TRACK 01:
 	PERFORMER: Felix and The Purrs
 	SONGWRITER: Friedrich Schiller
 	COMPOSER: Ludwig van Beethoven
-	MESSAGE: Fritz and Louie once were punks
 	ARRANGER: Tom Cat
+	MESSAGE: Fritz and Louie once were punks
 	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: The Hunt
@@ -38,8 +38,8 @@ DISC:
 	PERFORMER: Vereinigtes Katzenorchester
 	SONGWRITER: Verschiedene Liedschreiber
 	COMPOSER: Verschiedene Komponisten
-	MESSAGE: Für alle unsere Fans
 	ARRANGER: Tom Cat
+	MESSAGE: Für alle unsere Fans
 	DISC ID: 1234567890
 	GENRE: Klassische Katzenmusik
 	GENRE CODE: 5 (Classical)
@@ -48,8 +48,8 @@ TRACK 01:
 	PERFORMER: Felix und Die Schnurrer
 	SONGWRITER: Friedrich Schiller
 	COMPOSER: Ludwig van Beethoven
-	MESSAGE: Fritz und Louie waren einmal Punks
 	ARRANGER: Tom Cat
+	MESSAGE: Fritz und Louie waren einmal Punks
 	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: Die Jagd

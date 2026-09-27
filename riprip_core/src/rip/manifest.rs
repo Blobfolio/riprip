@@ -7,6 +7,7 @@ use cdtoc::{
 	Track,
 };
 use crate::{
+	Barcode,
 	cache_prefix,
 	CacheWriter,
 	cdtext::{
@@ -38,16 +39,14 @@ pub(crate) struct RipManifest<'a> {
 	/// The common output path for manifests, minus extension.
 	stub: PathBuf,
 
-	/*
-	/// # CDTOC.
-	toc: &'a Toc,
-	*/
-
 	/// # HTOA.
 	htoa: Option<(Track, &'a str)>,
 
 	/// # Tracks.
 	tracks: Vec<(Track, &'a str)>,
+
+	/// # Barcode.
+	barcode: Option<Barcode>,
 
 	/// # CD-Text.
 	///
@@ -65,6 +64,7 @@ impl<'a> RipManifest<'a> {
 	pub(crate) fn new(
 		toc: &'a Toc,
 		ripped: &'a SavedRips,
+		barcode: Option<Barcode>,
 		cdtext: Option<(&'a Path, &'a CDText)>,
 	) -> Option<Self> {
 		// We'll get to these.
@@ -119,9 +119,9 @@ impl<'a> RipManifest<'a> {
 		// Good enough!
 		Some(Self {
 			stub,
-			//toc,
 			htoa,
 			tracks,
+			barcode,
 			cdtext: cdtext.and_then(|(k, v)|
 				if k.is_file() {
 					k.file_name().and_then(OsStr::to_str).map(|k| (v, k))
@@ -137,6 +137,14 @@ impl<'a> RipManifest<'a> {
 	/// Generate and save the cuesheet, returning the path if successful.
 	pub(crate) fn save_cue(&self) -> Option<PathBuf> {
 		self.generate_cue().and_then(|v| self.save_manifest(v.as_bytes(), "cue"))
+	}
+
+	#[must_use]
+	/// # Save `.cue` Cuesheet.
+	///
+	/// Generate and save the cuesheet, returning the path if successful.
+	pub(crate) fn save_toc(&self) -> Option<PathBuf> {
+		self.generate_toc().and_then(|v| self.save_manifest(v.as_bytes(), "toc"))
 	}
 }
 
@@ -179,7 +187,7 @@ impl RipManifest<'_> {
 	/// # Generate `.cue`.
 	///
 	/// Generate and return a `.cue`. This shouldn't fail, but `fmt::Write`
-	/// is technically fallible, so maybe?
+	/// is used to populate the string, so you never know.
 	fn generate_cue(&self) -> Option<String> {
 		use std::fmt::Write;
 
@@ -187,14 +195,14 @@ impl RipManifest<'_> {
 		// start.
 		let mut out = String::with_capacity(2048);
 
+		// Barcode goes first, if we've got one. Note this is called
+		// "CATALOG" in cuesheets.
+		if let Some(barcode) = self.barcode {
+			writeln!(&mut out, "CATALOG {barcode:#}").ok()?;
+		}
+
 		// If there's CD-Text, start with some disc-level details.
 		if let Some((cdtext_values, cdtext_bin)) = self.cdtext {
-			// Barcode goes first, if we've got one. Note this is called
-			// "CATALOG" in cuesheets.
-			if let Some(barcode) = cdtext_values.barcode() {
-				writeln!(&mut out, "CATALOG {barcode:#}").ok()?;
-			}
-
 			// CDTEXTFILE is second.
 			writeln!(&mut out, "CDTEXTFILE \"{cdtext_bin}\"").ok()?;
 
@@ -248,10 +256,138 @@ impl RipManifest<'_> {
 
 		Some(out)
 	}
+
+	#[must_use]
+	/// # Generate `.toc`.
+	///
+	/// Generate and return a `.toc`. This shouldn't fail, but `fmt::Write`
+	/// is used to populate the string, so you never know.
+	fn generate_toc(&self) -> Option<String> {
+		use std::fmt::Write;
+
+		// It might wind up bigger or smaller, but 2KiB is a good place to
+		// start.
+		let mut out = String::with_capacity(2048);
+
+		// Barcode goes first, if we've got one. Note this is called
+		// "CATALOG" in cuesheets.
+		if let Some(barcode) = self.barcode {
+			writeln!(&mut out, "CATALOG \"{barcode:#}\"").ok()?;
+		}
+
+		// The type is always CD_DA because `.toc` can't represent
+		// multi-session content in a single file anyway.
+		out.push_str("CD_DA\n");
+
+		// Four our purposes here, CD-Text needs to be per-block.
+		let cdtext = self.cdtext().map(CDText::blocks);
+		if let Some(blocks) = cdtext {
+			out.push_str("\nCD_TEXT {\n");
+
+			// Language map.
+			out.push_str("  LANGUAGE_MAP {\n");
+			for (i, block) in blocks.iter().enumerate() {
+				writeln!(&mut out, "    {i}: {}", block.language_code()).ok()?;
+			}
+			out.push_str("  }\n");
+
+			// Disc-level Fields.
+			for (i, block) in blocks.iter().enumerate() {
+				writeln!(&mut out, "  LANGUAGE {i} {{").ok()?;
+				for key in DiscField::ALL {
+					match key {
+						// Prefer the master barcode.
+						DiscField::Barcode if let Some(v) = self.barcode =>
+							writeln!(&mut out, "    UPC_EAN \"{v:#}\""),
+
+						// Genre is binary.
+						DiscField::Genre => writeln!(
+							&mut out,
+							"    GENRE {}",
+							TocValue::Binary(block.raw_genre().unwrap_or(&[]))
+						),
+
+						// Everything else is a string, empty or not.
+						_ => writeln!(
+							&mut out,
+							"    {} {}",
+							key.as_str_toc(),
+							TocValue::String(block.disc(key).unwrap_or("")),
+						),
+					}.ok()?;
+				}
+				out.push_str("  }\n");
+			}
+
+			out.push_str("}\n");
+		}
+
+		// Now the tracks.
+		for (track, src) in &self.tracks {
+			writeln!(
+				&mut out,
+				"\n// {}Track {:02}.\nTRACK AUDIO\nCOPY\nNO PRE_EMPHASIS\nTWO_CHANNEL_AUDIO",
+				if track.position().is_first() && self.htoa.is_some() { "HTOA and " } else { "" },
+				track.number(),
+			).ok()?;
+
+			// Redundant ISRC?
+			if let Some(v) = self.isrc(track.number()) {
+				writeln!(&mut out, "ISRC \"{v:#}\"").ok()?;
+			}
+
+			// CD-Text?
+			if let Some(blocks) = cdtext {
+				out.push_str("CD_TEXT {\n");
+				for (i, block) in blocks.iter().enumerate() {
+					writeln!(&mut out, "  LANGUAGE {i} {{").ok()?;
+					for key in TrackField::ALL {
+						match key {
+							// These values are stored outside the catalog.
+							TrackField::Isrc if let Some(v) = self.isrc(track.number()) =>
+								writeln!(&mut out, "    ISRC \"{v:#}\""),
+
+							// Everything else is a string, empty or not.
+							_ => writeln!(
+								&mut out,
+								"    {} {}",
+								key.as_str_toc(),
+								TocValue::String(block.track(key, track.number()).unwrap_or("")),
+							),
+						}.ok()?;
+					}
+					out.push_str("  }\n");
+				}
+				out.push_str("}\n");
+			}
+
+			// If there's an HTOA, it needs to be grouped with the first track.
+			if track.position().is_first() && let Some((htoa_track, htoa_src)) = self.htoa {
+				let msf = sectors_to_msf(htoa_track.sectors());
+				writeln!(
+					&mut out,
+					"FILE \"{htoa_src}\" 0 {:02}:{:02}:{:02}\nSTART",
+					msf.0, msf.1, msf.2,
+				).ok()?;
+			}
+
+			// Track file.
+			let msf = sectors_to_msf(track.sectors());
+			writeln!(
+				&mut out,
+				"FILE \"{src}\" 0 {:02}:{:02}:{:02}",
+				msf.0, msf.1, msf.2,
+			).ok()?;
+		}
+
+		// Done!
+		Some(out)
+	}
 }
 
 
 
+#[derive(Debug, Clone, Copy)]
 /// # Escape `.cue` Value.
 ///
 /// This struct is used to ensure that special characters — `'"'` — in quoted
@@ -274,4 +410,69 @@ impl fmt::Display for CueValueEscape<'_> {
 			<str as fmt::Display>::fmt(self.0, f)
 		}
 	}
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+/// # TOC CD-Text Value.
+///
+/// This prints a CD-Text value formatted (and escaped) for inclusion in a
+/// `.toc` cuesheet. Unlike `.cue` values, these are not necessarily strings
+/// so output includes the wrapping quotes, if any.
+enum TocValue<'a> {
+	/// # Binary.
+	Binary(&'a [u8]),
+
+	/// # String.
+	String(&'a str),
+}
+
+impl fmt::Display for TocValue<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		use std::fmt::Write;
+
+		match self {
+			// Binary value.
+			Self::Binary([ next, rest @ .. ]) => {
+				write!(f, " {{ {next}")?;
+				for next in rest {
+					write!(f, ", {next}")?;
+				}
+				f.write_str(" }")
+			},
+
+			// Empty binary value.
+			Self::Binary([]) => { f.write_str("{}") },
+
+			// String needing escaping.
+			Self::String(v) if v.contains(['\\', '"']) => {
+				f.write_char('"')?;
+				for c in v.chars() {
+					match c {
+						'"' => f.write_str(r#"\""#)?,
+						'\\' => f.write_str(r"\\")?,
+						_ => f.write_char(c)?,
+					}
+				}
+				f.write_char('"')
+			},
+
+			// String not needing escaping.
+			Self::String(v) => { write!(f, "\"{v}\"") },
+		}
+	}
+}
+
+#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+#[must_use]
+/// # Sectors to MSF.
+const fn sectors_to_msf(sectors: u32) -> (u32, u8, u8) {
+	// 75 sectors per second.
+	let mut s = sectors.wrapping_div(75);
+	let f = sectors - s * 75;
+
+	// 60 seconds per minute.
+	let m = s.wrapping_div(60);
+	s -= m * 60;
+
+	(m, s as u8, f as u8)
 }
