@@ -99,6 +99,26 @@ impl CDText {
 		if self.isrcs.is_empty() { None }
 		else { Some(&self.isrcs) }
 	}
+
+	#[must_use]
+	/// # Disc Field.
+	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
+		if self.blocks.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else { self.blocks[0].disc(field) }
+	}
+
+	#[must_use]
+	/// # Track Field.
+	pub(crate) fn track(&self, field: TrackField, idx: u8) -> Option<&str> {
+		if self.blocks.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else { self.blocks[0].track(field, idx) }
+	}
 }
 
 impl CDText {

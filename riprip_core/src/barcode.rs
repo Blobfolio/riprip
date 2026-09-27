@@ -34,8 +34,12 @@ impl fmt::Display for Barcode {
 			}
 		}
 
+		// Alternate is digits-only.
+		if f.alternate() {
+			write!(f, "{}", SliceFmt(self.0.as_slice()))
+		}
 		// Treat like UPC12 if the first digit is zero.
-		if self.0[0] == b'0' {
+		else if self.0[0] == b'0' {
 			write!(
 				f,
 				"{}-{}-{}-{}",

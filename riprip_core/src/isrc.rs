@@ -48,14 +48,21 @@ impl fmt::Display for Isrc {
 			}
 		}
 
-		write!(
-			f,
-			"{}-{}-{}-{}",
-			SliceFmt(&self.0[..2]),
-			SliceFmt(&self.0[2..5]),
-			SliceFmt(&self.0[5..7]),
-			SliceFmt(&self.0[7..]),
-		)
+		// Alternate has no dashes.
+		if f.alternate() {
+			write!(f, "{}", SliceFmt(self.0.as_slice()))
+		}
+		// Otherwise format it pretty.
+		else {
+			write!(
+				f,
+				"{}-{}-{}-{}",
+				SliceFmt(&self.0[..2]),
+				SliceFmt(&self.0[2..5]),
+				SliceFmt(&self.0[5..7]),
+				SliceFmt(&self.0[7..]),
+			)
+		}
 	}
 }
 
