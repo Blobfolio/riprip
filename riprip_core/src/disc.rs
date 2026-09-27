@@ -18,14 +18,13 @@ use crate::{
 	cdtext::{
 		CDText,
 		CDTextError,
-		DiscField,
-		TrackField,
 	},
 	DriveVendorModel,
 	Isrc,
 	IsrcMap,
 	KillSwitch,
 	macros::log,
+	RipManifest,
 	RipOptions,
 	Ripper,
 	RipRipError,
@@ -43,7 +42,6 @@ use fyi_msg::{
 };
 use std::{
 	borrow::Cow,
-	ffi::OsStr,
 	fmt,
 	io::StderrLock,
 	path::{
@@ -393,13 +391,18 @@ impl Disc {
 			log!(@info "Finished rip.{}", LoggableFruits(&saved));
 
 			// If we did all tracks, make a cue sheet and print its path.
-			if let Some(file) = save_cuesheet(
+			if let Some(manifest) = RipManifest::new(
 				&self.toc,
 				&saved,
 				cdtext_paths.as_ref().map(|(v, _)| v.as_path()).zip(self.cdtext()),
 			) {
-				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
-				log!(@info "Saved cuesheet.\n  {}", file.display());
+				if let Some(file) = manifest.save_cue() {
+					let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+					log!(@info "Saved cuesheet.\n  {}", file.display());
+				}
+				else {
+					log!(@trace "Failed to save cuesheet.");
+				}
 			}
 
 			// Print the verification status for all track(s).
@@ -610,128 +613,6 @@ fn fmt_ctdb(ctdb: Option<u16>, color: bool) -> Cow<'static, str> {
 	else { Cow::Borrowed("          ") }
 }
 
-/// # Generate CUE Sheet if Complete.
-fn save_cuesheet(
-	toc: &Toc,
-	ripped: &SavedRips,
-	cdtext: Option<(&Path, &CDText)>,
-) -> Option<PathBuf> {
-	use std::fmt::Write;
-
-	// Make sure all tracks on the disc have been ripped, and pair their file
-	// names with the corresponding Track object.
-	let mut all = Vec::with_capacity(ripped.len());
-	for track in toc.audio_tracks() {
-		let Some((dst, _, _)) = ripped.get(&track.number()) else {
-			log!(@debug "Missing track {}; skipping cuesheet.", track.number());
-			return None;
-		};
-		let Some(dst) = dst.file_name().and_then(OsStr::to_str) else {
-			log!(
-				@trace [dst]
-				"Unable to obtain output file name for track {}; skipping cuesheet.",
-				track.number(),
-			);
-			return None;
-		};
-		all.push((track, dst));
-	}
-
-	// The output folder.
-	let Some(parent) = ripped.get(&1).and_then(|(dst, _, _)| dst.parent()) else {
-		log!(@trace "Failed to find parent directory of first track; skipping cuesheet.");
-		return None;
-	};
-
-	let mut cue = String::new();
-
-	// Disc-level CD-Text?
-	if
-		let Some((cdtext_bin, cdtext_values)) = cdtext &&
-		cdtext_bin.is_file() &&
-		let Some(cdtext_bin) = cdtext_bin.file_name()
-	{
-		// Barcode goes first, if we've got one.
-		if let Some(barcode) = cdtext_values.barcode() {
-			writeln!(&mut cue, "CATALOG {barcode:#}").ok()?;
-		}
-
-		// CDTEXTFILE is second.
-		writeln!(&mut cue, "CDTEXTFILE \"{}\"", cdtext_bin.display()).ok()?;
-
-		// Now title, performer, and songwriter.
-		if let Some(title) = cdtext_values.disc(DiscField::Title) {
-			writeln!(&mut cue, "TITLE \"{}\"", CuesheetEscape(title)).ok()?;
-		}
-		if let Some(performer) = cdtext_values.disc(DiscField::Performer) {
-			writeln!(&mut cue, "PERFORMER \"{}\"", CuesheetEscape(performer)).ok()?;
-		}
-		if let Some(songwriter) = cdtext_values.disc(DiscField::Songwriter) {
-			writeln!(&mut cue, "SONGWRITER \"{}\"", CuesheetEscape(songwriter)).ok()?;
-		}
-
-		// Give an extra line.
-		cue.push('\n');
-	}
-
-	// Pull ISRCs if any.
-	let isrcs = cdtext.and_then(|(_, v)| v.isrcs());
-
-	for (track, src) in all {
-		// If there's an HTOA, it needs to be grouped with the first track.
-		if track.position().is_first() && toc.htoa().is_some() {
-			// This should have been ripped with everything else.
-			let Some(src0) = ripped.get(&0)
-				.and_then(|(dst, _, _)| dst.file_name())
-				.and_then(OsStr::to_str) else {
-				log!(@trace "Unable to obtain output file name for HTOA; skipping cuesheet.");
-				return None;
-			};
-
-			// Add the lines to our cue!
-			writeln!(&mut cue, "FILE \"{src0}\" WAVE").ok()?;
-			cue.push_str("  TRACK 01 AUDIO\n");
-			cue.push_str("    INDEX 00 00:00:00\n");
-			writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
-		}
-		else {
-			// All other tracks are just file/track/index.
-			writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
-			writeln!(&mut cue, "  TRACK {:02} AUDIO", track.number()).ok()?;
-		}
-
-		// Title and performer.
-		if let Some((_, cdtext_values)) = cdtext {
-			if let Some(title) = cdtext_values.track(TrackField::Title, track.number()) {
-				writeln!(&mut cue, "    TITLE \"{}\"", CuesheetEscape(title)).ok()?;
-			}
-			if let Some(performer) = cdtext_values.track(TrackField::Performer, track.number()) {
-				writeln!(&mut cue, "    PERFORMER \"{}\"", CuesheetEscape(performer)).ok()?;
-			}
-		}
-
-		// Then index.
-		cue.push_str("    INDEX 01 00:00:00\n");
-
-		// Lastly the ISRC.
-		if let Some(i) = isrcs.and_then(|v| v.get(&track.number())) {
-			writeln!(&mut cue, "    ISRC {i:#}").ok()?	;
-		}
-	}
-
-	// Save the cue sheet!
-	let dst = parent.join(format!("{}.cue", cache_prefix(toc)));
-	{
-		use std::io::Write;
-		let mut writer = CacheWriter::new(&dst).ok()?;
-		writer.writer().write_all(cue.as_bytes()).ok()?;
-		writer.finish().ok()?;
-	}
-
-	// Return the path.
-	Some(dst)
-}
-
 /// # Write HTOA (Likely).
 ///
 /// This writes the footnote explaining that the HTOA can't be verified but
@@ -775,26 +656,6 @@ fn write_htoa_any(stderr: &mut StderrLock<'static>) {
 }
 
 
-
-/// # Cuesheet Escaped Value.
-struct CuesheetEscape<'a>(&'a str);
-
-impl fmt::Display for CuesheetEscape<'_> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		use std::fmt::Write;
-
-		if self.0.contains('"') {
-			for c in self.0.chars() {
-				if c == '"' { f.write_str("\"\"")?; }
-				else { f.write_char(c)?; }
-			}
-			Ok(())
-		}
-		else {
-			<str as fmt::Display>::fmt(self.0, f)
-		}
-	}
-}
 
 /// # Loggable AccurateRip.
 struct LoggableAccurateRip(Option<(u8, u8)>);

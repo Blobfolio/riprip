@@ -113,6 +113,7 @@ use drivers::{
 use rip::{
 	buf::RipBuffer,
 	data::RipState,
+	manifest::RipManifest,
 	sample::RipSample,
 	Ripper,
 };

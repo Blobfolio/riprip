@@ -6,6 +6,7 @@ pub(super) mod buf;
 pub(super) mod data;
 mod iter;
 pub(super) mod opts;
+pub(super) mod manifest;
 mod riplog;
 mod quality;
 pub(super) mod sample;
