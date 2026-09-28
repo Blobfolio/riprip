@@ -12,11 +12,14 @@ use crate::{
 	CddaDriverExt,
 	CddaDriverNewExt,
 	DriveVendorModel,
+	Isrc,
 	macros::log,
 	RipRipError,
 };
 use libcdio_sys::{
 	cdio_hwinfo,
+	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
+	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
 	discmode_t_CDIO_DISC_MODE_CD_DA,
 	discmode_t_CDIO_DISC_MODE_CD_MIXED,
@@ -57,6 +60,9 @@ pub(crate) struct LibcdioInstance {
 
 	/// # CDIO Instance (Pointer).
 	ptr: *mut libcdio_sys::CdIo_t,
+
+	/// # Flags.
+	flags: u8,
 }
 
 impl Drop for LibcdioInstance {
@@ -110,11 +116,14 @@ impl CddaDriverNewExt for LibcdioInstance {
 		}
 		// Otherwise maybe!
 		else {
-			let out = Self { dev, ptr };
+			let mut out = Self { dev, ptr, flags: 0 };
 
 			// Make sure the disc is present and valid before leaving, and
 			// initialize the CD-Text to have it ready for later queries.
 			out.check_disc_mode__()?;
+
+			// Check capabilities.
+			out.check_capabilities__();
 
 			// Done!
 			Ok(out)
@@ -270,10 +279,37 @@ impl CddaDriverExt for LibcdioInstance {
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
+	/// # ISRC From Subchannel.
+	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
+		// Short circuit.
+		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_ISRC { return None; }
+
+		// Safety: this is an FFI call…
+		let raw = unsafe { libcdio_sys::cdio_get_track_isrc(self.as_ptr(), idx) };
+		if raw.is_null() {
+			log!(@trace "Sub-Q contains no ISRC data for track {idx}.");
+			None
+		}
+		else {
+			// Safety: this is an FFI call…
+			let isrc = unsafe { CStr::from_ptr(raw) }
+				.to_str()
+				.ok()
+				.and_then(|v| Isrc::try_from(v.as_bytes()).ok());
+			// Safety: this is an FFI call…
+			unsafe { libcdio_sys::cdio_free(raw.cast()); }
+			isrc
+		}
+	}
+
+	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
 	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
+		// Short circuit.
+		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_MCN { return None; }
+
 		// Safety: this is an FFI call…
 		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
 		if raw.is_null() {
@@ -341,6 +377,52 @@ impl CddaDriverExt for LibcdioInstance {
 			},
 		}
 	}
+}
+
+/// # Helper: Capability Flags.
+macro_rules! flag {
+	( $( $k:ident $v:literal $cap:ident, )+ ) => (
+		impl LibcdioInstance {
+			$(
+				/// # Flag.
+				const $k: u8 = $v;
+			)+
+
+			#[expect(unsafe_code, reason = "For FFI.")]
+			/// # Initialize Capabilities.
+			///
+			/// Find out whether reading ISRC and/or MCN details from the
+			/// subchannel is supported, updating the instance flags
+			/// accordingly.
+			fn check_capabilities__(&mut self) {
+				// Check capabilities.
+				// Safety: this is an FFI call…
+				let i_read_cap = unsafe {
+					let mut i_read_cap = 0;
+					let mut i_write_cap = 0;
+					let mut i_misc_cap = 0;
+					libcdio_sys::cdio_get_drive_cap(
+						self.as_ptr(),
+						&mut i_read_cap,
+						&mut i_write_cap,
+						&mut i_misc_cap
+					);
+					i_read_cap
+				};
+
+				$(
+					if $cap == i_read_cap & $cap {
+						self.flags |= Self::$k;
+					}
+				)+
+			}
+		}
+	);
+}
+
+flag! {
+	FLAG_SUPPORTS_SUBCHANNEL_ISRC 0b0001 cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
+	FLAG_SUPPORTS_SUBCHANNEL_MCN  0b0010 cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
 }
 
 impl LibcdioInstance {

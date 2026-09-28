@@ -37,6 +37,7 @@ use crate::{
 	CD_LEADIN,
 	DriveVendorModel,
 	FRAMES_PER_SECOND,
+	Isrc,
 	KillSwitch,
 	macros::log,
 	RipRipError,
@@ -126,7 +127,10 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
 
-	/// # MCN From (Leadin) Subchannel.
+	/// # ISRC From Subchannel.
+	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc>;
+
+	/// # MCN From Q-Subchannel.
 	///
 	/// Return the MCN as stored in the leadin subchannel data, if any.
 	fn mcn_subchannel(&self) -> Option<Barcode>;

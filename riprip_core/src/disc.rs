@@ -30,7 +30,10 @@ use crate::{
 	RipRipError,
 	SavedRips,
 };
-use dactyl::traits::NiceInflection;
+use dactyl::{
+	NoHash,
+	traits::NiceInflection,
+};
 use fyi_msg::{
 	fyi_ansi::{
 		ansi,
@@ -67,6 +70,9 @@ pub struct Disc {
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
+
+	/// # ISRCs.
+	isrcs: IsrcMap,
 }
 
 impl fmt::Debug for Disc {
@@ -283,6 +289,7 @@ impl Disc {
 			toc,
 			cdtext: None,
 			barcode: None,
+			isrcs: IsrcMap::with_hasher(NoHash::default()),
 		};
 
 		// Unless the user opted out of CD-Text parsing, let's handle that
@@ -291,6 +298,9 @@ impl Disc {
 			match CDText::from_bytes(&raw_cdtext) {
 				Ok(cdtext) => {
 					out.barcode = cdtext.barcode();
+					if let Some(isrcs) = cdtext.isrcs() {
+						out.isrcs.extend(isrcs.iter().map(|(k, v)| (*k, *v)));
+					}
 					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
 				},
 				Err(e) => {
@@ -302,6 +312,18 @@ impl Disc {
 		// Look for barcode in subchannel if we don't have it yet.
 		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
 			out.barcode.replace(barcode);
+		}
+		// Look for ISRCs in subchannel if we're missing any.
+		if out.isrcs.len() != out.toc.audio_len() {
+			use std::collections::hash_map::Entry;
+			for track in out.toc.audio_tracks() {
+				if
+					let Entry::Vacant(e) = out.isrcs.entry(track.number()) &&
+					let Some(isrc) = out.cdda.isrc_subchannel(track.number())
+				{
+					e.insert(isrc);
+				}
+			}
 		}
 
 		// Finally done!
@@ -331,7 +353,8 @@ impl Disc {
 	#[must_use]
 	/// # Track ISRCs.
 	pub fn isrcs(&self) -> Option<&IsrcMap> {
-		self.cdtext().and_then(CDText::isrcs)
+		if self.isrcs.is_empty() { None }
+		else { Some(&self.isrcs) }
 	}
 
 	#[must_use]

@@ -11,6 +11,7 @@ use crate::{
 	CD_LEADOUT,
 	CddaDriverExt,
 	DriveVendorModel,
+	Isrc,
 	macros::log,
 	RipRipError,
 	TrackRange,
@@ -80,6 +81,37 @@ impl<T: TransportExt + ?Sized> MmcDriverExt for T {}
 /// Relies on the underlying `TransportExt` trait to handle the hardware bus
 /// communication (e.g. USB BOT or `/dev/sg`).
 pub(super) trait MmcDriverExt: TransportExt {
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+	/// # ISRC From (Leadin) Subchannel.
+	fn isrc_subchannel__(&self, idx: u8) -> Option<Isrc> {
+		const FORMAT: u8 = 0x03;
+		const ALLOC_LEN: usize = 4 + 20; // Four bytes header, 20 bytes data.
+
+		const {
+			assert!(
+				ALLOC_LEN <= (u16::MAX as usize),
+				"BUG: `ALLOC_LEN` must fit u16."
+			);
+		}
+
+		let mut cdb = [0; 10];
+		cdb[0] = MmcCmd::ReadSubchannel as u8;
+		cdb[1] = AddressFormat::Lba as u8;
+		cdb[2] = 0x40; // Sub-Q Channel tracking bit
+		cdb[3] = FORMAT;
+		cdb[6] = idx;
+		[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
+
+		let mut buf = [0_u8; ALLOC_LEN];
+		if
+			self.submit_checked::<_, 9>(&cdb, &mut buf, "isrc_subchannel__").is_some() &&
+			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
+		{
+			Isrc::try_from(&buf[9..9 + 12]).ok()
+		}
+		else { None }
+	}
+
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel__(&self) -> Option<Barcode> {
 		const FORMAT: u8 = 0x02;
@@ -104,11 +136,9 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut buf = [0_u8; ALLOC_LEN];
 		if
 			self.submit_checked::<_, 9>(&CDB, &mut buf, "mcn_subchannel__").is_some() &&
-			buf[3] == FORMAT &&  // Expected format.
-			buf[4] == 0x01 &&    // Sub-Q valid.
 			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
 		{
-			Barcode::try_from(&buf[9..]).ok()
+			Barcode::try_from(&buf[9..9 + 13]).ok()
 		}
 		else { None }
 	}
@@ -403,9 +433,20 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		self.drive_vendor_model__().ok()
 	}
 
+	/// # ISRC From Subchannel.
+	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
+		// Subchannel reads are super unreliable. Try twice!
+		let out = self.isrc_subchannel__(idx).or_else(|| self.isrc_subchannel__(idx));
+		if out.is_none() {
+			log!(@trace "Sub-Q contains no ISRC data for track {idx}.");
+		}
+		out
+	}
+
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
-		let out = self.mcn_subchannel__();
+		// Subchannel reads are super unreliable. Try twice!
+		let out = self.mcn_subchannel__().or_else(|| self.mcn_subchannel__());
 		if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
 		out
 	}
