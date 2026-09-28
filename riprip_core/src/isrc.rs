@@ -69,7 +69,9 @@ impl fmt::Display for Isrc {
 impl TryFrom<&[u8]> for Isrc {
 	type Error = RipRipError;
 
-	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
+	fn try_from(mut src: &[u8]) -> Result<Self, Self::Error> {
+		use trimothy::TrimSliceMatches;
+
 		/// # Parse.
 		fn parse(src: &[u8]) -> Option<[u8; 12]> {
 			let mut out = [b'0'; 12];
@@ -94,6 +96,14 @@ impl TryFrom<&[u8]> for Isrc {
 			// Return, unless we have unwritten slots left over!
 			if dst.next().is_none() { Some(out) }
 			else { None }
+		}
+
+		// Trim whitespace and nulls.
+		src = src.trim_matches(|b: u8| b.is_ascii_whitespace() || b == 0_u8);
+
+		// If there's a null in the middle somewhere, cut to it and recurse.
+		if let Some(pos) = src.iter().copied().position(|b| b == 0_u8) {
+			return Self::try_from(&src[..pos]);
 		}
 
 		// Return it if valid!

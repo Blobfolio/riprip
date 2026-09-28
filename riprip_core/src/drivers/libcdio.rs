@@ -17,9 +17,11 @@ use crate::{
 	RipRipError,
 };
 use libcdio_sys::{
-	cdio_hwinfo,
 	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_ISRC,
 	cdio_drive_cap_read_t_CDIO_DRIVE_CAP_READ_MCN,
+	cdio_hwinfo,
+	cdio_subchannel_CDIO_SUBCHANNEL_MEDIA_CATALOG,
+	cdio_subchannel_CDIO_SUBCHANNEL_TRACK_ISRC,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
 	discmode_t_CDIO_DISC_MODE_CD_DA,
 	discmode_t_CDIO_DISC_MODE_CD_MIXED,
@@ -32,13 +34,14 @@ use libcdio_sys::{
 	track_format_t_TRACK_FORMAT_PSX,
 };
 use std::{
-	ffi::{
-		CStr,
-		CString,
-	},
+	ffi::CString,
 	os::unix::ffi::OsStrExt,
 	path::Path,
 	sync::Once,
+};
+use super::{
+	SUBCHANNEL_REREADS,
+	SUBCHANNEL_REREAD_DELAY,
 };
 
 
@@ -278,53 +281,81 @@ impl CddaDriverExt for LibcdioInstance {
 		else { None }
 	}
 
-	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # ISRC From Subchannel.
 	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
-		// Short circuit.
-		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_ISRC { return None; }
+		/// # ISRC From Subchannel.
+		fn fetch(cdda: &LibcdioInstance, idx: u8) -> Option<Isrc> {
+			// Give it a few tries because subchannel reads suck. Haha.
+			let mut raw = None;
+			for i in 0..SUBCHANNEL_REREADS {
+				if let Some(read) = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_TRACK_ISRC>(
+					cdda,
+					idx,
+				) {
+					raw.replace(read);
+					break;
+				}
+				// Wait before re-attempting.
+				else if i + 1 < SUBCHANNEL_REREADS {
+					std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
+				}
+			}
 
-		// Safety: this is an FFI call…
-		let raw = unsafe { libcdio_sys::cdio_get_track_isrc(self.as_ptr(), idx) };
-		if raw.is_null() {
-			log!(@trace "Sub-Q contains no ISRC data for track {idx}.");
+			// Try the whole buffer first.
+			let raw = raw?;
+			Isrc::try_from(raw.as_slice())
+				// Fall back to the punctuation-free length.
+				.or_else(|_| Isrc::try_from(&raw[..12]))
+				.ok()
+		}
+
+		// Unsupported?
+		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_ISRC {
+			std::hint::cold_path();
 			None
 		}
-		else {
-			// Safety: this is an FFI call…
-			let isrc = unsafe { CStr::from_ptr(raw) }
-				.to_str()
-				.ok()
-				.and_then(|v| Isrc::try_from(v.as_bytes()).ok());
-			// Safety: this is an FFI call…
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
-			isrc
-		}
+		else { fetch(self, idx) }
 	}
 
-	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # MCN Fallback.
 	///
 	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
-		// Short circuit.
-		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_MCN { return None; }
+		/// # ISRC From Subchannel.
+		fn fetch(cdda: &LibcdioInstance, idx: u8) -> Option<Barcode> {
+			// Give it a few tries because subchannel reads suck. Haha.
+			let mut raw = None;
+			for i in 0..SUBCHANNEL_REREADS {
+				if let Some(read) = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_MEDIA_CATALOG>(
+					cdda,
+					idx,
+				) {
+					raw.replace(read);
+					break;
+				}
+				// Wait before re-attempting.
+				else if i + 1 < SUBCHANNEL_REREADS {
+					std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
+				}
+			}
 
-		// Safety: this is an FFI call…
-		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
-		if raw.is_null() {
-			log!(@trace "Sub-Q contains no MCN data.");
+			// Try the whole buffer first.
+			let raw = raw?;
+			Barcode::try_from(raw.as_slice())
+				// Fall back to the punctuation-free length.
+				.or_else(|_| Barcode::try_from(&raw[..13]))
+				.ok()
+		}
+
+		// Unsupported?
+		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_MCN {
+			std::hint::cold_path();
 			None
 		}
 		else {
-			// Safety: this is an FFI call…
-			let mcn = unsafe { CStr::from_ptr(raw) }
-				.to_str()
-				.ok()
-				.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
-			// Safety: this is an FFI call…
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
-			mcn
+			let out = fetch(self, 0);
+			if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
+			out
 		}
 	}
 
@@ -469,4 +500,71 @@ fn init() {
 		// Safety: this is an FFI call…
 		unsafe { libcdio_sys::cdio_init(); }
 	});
+}
+
+#[expect(unsafe_code, reason = "For FFI.")]
+#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+/// # Read MCN/ISRC Subchannel Data.
+///
+/// Manually read the subchannel data, returning the payload if seemingly
+/// successful.
+fn read_isrc_mcn_subchannel<const FORMAT: u32>(
+	cdda: &LibcdioInstance,
+	idx: u8,
+) -> Option<[u8; 15]> {
+	// Stupid inconsistent integer types. Haha.
+	const {
+		assert!(
+			FORMAT <= u8::MAX as u32,
+			"BUG: Subchannel data format must fit `u8`.",
+		);
+	}
+
+	// Full size is 4 + 20, even though some bytes won't be used.
+	let mut p_buf = [0_i8; 24];
+	let mut len = 24_u32;
+
+	// Safety: this is an FFI call.
+	if driver_return_code_t_DRIVER_OP_SUCCESS == unsafe {
+		libcdio_sys::mmc_read_subchannel(
+			cdda.as_ptr(),
+			idx,
+			FORMAT as u8,
+			&raw mut len,
+			p_buf.as_mut_ptr(),
+			2000,
+		)
+	} {
+		// Validate and extract.
+		isrc_mcn_subchannel_payload::<FORMAT>(p_buf, idx)
+	}
+	// Didn't work.
+	else { None }
+}
+
+/// # Extract MCN/ISRC Subchannel Payload.
+///
+/// This method checks the MCVAL/TCVAL bit from a subchannel read buffer and
+/// if valid, converts the remaining payload to a fixed byte array.
+///
+/// Note this does not validate the payload content.
+const fn isrc_mcn_subchannel_payload<const FORMAT: u32>(buf: [i8; 24], idx: u8)
+-> Option<[u8; 15]> {
+	if
+		(buf[5].cast_unsigned() >> 4) as u32 == FORMAT && // Right format.
+		buf[6].cast_unsigned() == idx &&     // Right track.
+		(buf[8].cast_unsigned() & 0x80) != 0 // MCVAL/TCVAL bit indicates validity.
+	{
+		// Bytes 9+ are the ones of interest, but we need to convert
+		// them to normal-ass bytes.
+		Some([
+			buf[9].cast_unsigned(),  buf[10].cast_unsigned(), buf[11].cast_unsigned(),
+			buf[12].cast_unsigned(), buf[13].cast_unsigned(), buf[14].cast_unsigned(),
+			buf[15].cast_unsigned(), buf[16].cast_unsigned(), buf[17].cast_unsigned(),
+			buf[18].cast_unsigned(), buf[19].cast_unsigned(), buf[20].cast_unsigned(),
+			buf[21].cast_unsigned(), buf[22].cast_unsigned(), buf[23].cast_unsigned(),
+		])
+	}
+	// Didn't work.
+	else { None }
 }

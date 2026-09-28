@@ -16,6 +16,7 @@ use crate::{
 		TrackField,
 	},
 	Isrc,
+	IsrcMap,
 	macros::log,
 	SavedRips,
 };
@@ -48,6 +49,9 @@ pub(crate) struct RipManifest<'a> {
 	/// # Barcode.
 	barcode: Option<Barcode>,
 
+	/// # ISRCs.
+	isrcs: Option<&'a IsrcMap>,
+
 	/// # CD-Text.
 	///
 	/// This holds the CD-Text values, as well as the file name of the binary
@@ -65,6 +69,7 @@ impl<'a> RipManifest<'a> {
 		toc: &'a Toc,
 		ripped: &'a SavedRips,
 		barcode: Option<Barcode>,
+		isrcs: Option<&'a IsrcMap>,
 		cdtext: Option<(&'a Path, &'a CDText)>,
 	) -> Option<Self> {
 		// We'll get to these.
@@ -122,6 +127,7 @@ impl<'a> RipManifest<'a> {
 			htoa,
 			tracks,
 			barcode,
+			isrcs,
 			cdtext: cdtext.and_then(|(k, v)|
 				if k.is_file() {
 					k.file_name().and_then(OsStr::to_str).map(|k| (v, k))
@@ -159,8 +165,7 @@ impl RipManifest<'_> {
 	#[must_use]
 	/// # Track ISRC.
 	fn isrc(&self, idx: u8) -> Option<Isrc> {
-		let isrcs = self.cdtext().and_then(|v| v.isrcs())?;
-		isrcs.get(&idx).copied()
+		self.isrcs.and_then(|v| v.get(&idx).copied())
 	}
 
 	#[must_use]
@@ -331,7 +336,8 @@ impl RipManifest<'_> {
 				track.number(),
 			).ok()?;
 
-			// Redundant ISRC?
+			// ISRC. (This might be redundant if there's CD-Text, but cdrdao
+			// prints it twice in such cases.)
 			if let Some(v) = self.isrc(track.number()) {
 				writeln!(&mut out, "ISRC \"{v:#}\"").ok()?;
 			}

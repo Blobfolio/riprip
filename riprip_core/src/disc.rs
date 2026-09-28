@@ -309,19 +309,28 @@ impl Disc {
 			}
 		}
 
-		// Look for barcode in subchannel if we don't have it yet.
+		// Look for barcode in subchannel if missing.
 		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
 			out.barcode.replace(barcode);
 		}
+
 		// Look for ISRCs in subchannel if we're missing any.
 		if out.isrcs.len() != out.toc.audio_len() {
 			use std::collections::hash_map::Entry;
+			let mut tried = 0;
+			let mut found = 0;
 			for track in out.toc.audio_tracks() {
-				if
-					let Entry::Vacant(e) = out.isrcs.entry(track.number()) &&
-					let Some(isrc) = out.cdda.isrc_subchannel(track.number())
-				{
+				let Entry::Vacant(e) = out.isrcs.entry(track.number()) else { continue; };
+				tried += 1;
+				if let Some(isrc) = out.cdda.isrc_subchannel(track.number()) {
 					e.insert(isrc);
+					found += 1;
+				}
+				// If we get three failures before finding an ISRC, assume
+				// there's nothing to find.
+				else if found == 0 && tried == 3 {
+					log!(@trace "Sub-Q contains no ISRC data.");
+					break;
 				}
 			}
 		}
@@ -418,6 +427,7 @@ impl Disc {
 				&self.toc,
 				&saved,
 				self.barcode(),
+				self.isrcs(),
 				cdtext_paths.as_ref().map(|(v, _)| v.as_path()).zip(self.cdtext()),
 			) {
 				if let Some(file) = manifest.save_cue() {

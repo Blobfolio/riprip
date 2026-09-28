@@ -48,6 +48,10 @@ use std::{
 	},
 	time::Duration,
 };
+use super::{
+	SUBCHANNEL_REREADS,
+	SUBCHANNEL_REREAD_DELAY,
+};
 
 
 

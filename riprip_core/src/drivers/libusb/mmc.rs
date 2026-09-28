@@ -17,6 +17,10 @@ use crate::{
 	TrackRange,
 };
 use std::range::legacy::Range;
+use super::{
+	SUBCHANNEL_REREADS,
+	SUBCHANNEL_REREAD_DELAY,
+};
 
 
 
@@ -81,10 +85,8 @@ impl<T: TransportExt + ?Sized> MmcDriverExt for T {}
 /// Relies on the underlying `TransportExt` trait to handle the hardware bus
 /// communication (e.g. USB BOT or `/dev/sg`).
 pub(super) trait MmcDriverExt: TransportExt {
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # ISRC From (Leadin) Subchannel.
 	fn isrc_subchannel__(&self, idx: u8) -> Option<Isrc> {
-		const FORMAT: u8 = 0x03;
 		const ALLOC_LEN: usize = 4 + 20; // Four bytes header, 20 bytes data.
 
 		const {
@@ -94,51 +96,36 @@ pub(super) trait MmcDriverExt: TransportExt {
 			);
 		}
 
-		let mut cdb = [0; 10];
-		cdb[0] = MmcCmd::ReadSubchannel as u8;
-		cdb[1] = AddressFormat::Lba as u8;
-		cdb[2] = 0x40; // Sub-Q Channel tracking bit
-		cdb[3] = FORMAT;
-		cdb[6] = idx;
-		[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
-
+		let cdb = MmcCmd::subchannel_cdb::<ALLOC_LEN>(SubchannelFormat::Isrc, idx);
 		let mut buf = [0_u8; ALLOC_LEN];
 		if
 			self.submit_checked::<_, 9>(&cdb, &mut buf, "isrc_subchannel__").is_some() &&
-			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
+			(buf[5] >> 4) == (SubchannelFormat::Isrc as u8) &&
+			buf[6] == idx &&     // Right track.
+			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates validity.
 		{
-			Isrc::try_from(&buf[9..9 + 12]).ok()
+			Isrc::try_from(&buf[9..])
+				.or_else(|_| Isrc::try_from(&buf[9..9 + 12]))
+				.ok()
 		}
 		else { None }
 	}
 
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel__(&self) -> Option<Barcode> {
-		const FORMAT: u8 = 0x02;
 		const ALLOC_LEN: usize = 4 + 20; // Four bytes header, 20 bytes data.
 
-		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-		const CDB: [u8; 10] = {
-			assert!(
-				ALLOC_LEN <= (u16::MAX as usize),
-				"BUG: `ALLOC_LEN` must fit u16."
-			);
-
-			let mut cdb = [0; 10];
-			cdb[0] = MmcCmd::ReadSubchannel as u8;
-			cdb[1] = AddressFormat::Msf as u8;
-			cdb[2] = 0x40; // Sub-Q Channel tracking bit
-			cdb[3] = FORMAT;
-			[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
-			cdb
-		};
-
+		let cdb = MmcCmd::subchannel_cdb::<ALLOC_LEN>(SubchannelFormat::Mcn, 0);
 		let mut buf = [0_u8; ALLOC_LEN];
 		if
-			self.submit_checked::<_, 9>(&CDB, &mut buf, "mcn_subchannel__").is_some() &&
+			self.submit_checked::<_, 9>(&cdb, &mut buf, "mcn_subchannel__").is_some() &&
+			(buf[5] >> 4) == (SubchannelFormat::Mcn as u8) &&
+			buf[6] == 0 &&       // Right track.
 			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
 		{
-			Barcode::try_from(&buf[9..9 + 13]).ok()
+			Barcode::try_from(&buf[9..])
+				.or_else(|_| Barcode::try_from(&buf[9..9 + 13]))
+				.ok()
 		}
 		else { None }
 	}
@@ -435,18 +422,35 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 
 	/// # ISRC From Subchannel.
 	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
-		// Subchannel reads are super unreliable. Try twice!
-		let out = self.isrc_subchannel__(idx).or_else(|| self.isrc_subchannel__(idx));
-		if out.is_none() {
-			log!(@trace "Sub-Q contains no ISRC data for track {idx}.");
+		// Give it a few tries because subchannel reads suck. Haha.
+		for i in 0..SUBCHANNEL_REREADS {
+			if let Some(out) = self.isrc_subchannel__(idx) {
+				return Some(out);
+			}
+			// Wait before re-attempting.
+			else if i + 1 < SUBCHANNEL_REREADS {
+				std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
+			}
 		}
-		out
+
+		// Nope.
+		None
 	}
 
 	/// # MCN From (Leadin) Subchannel.
 	fn mcn_subchannel(&self) -> Option<Barcode> {
-		// Subchannel reads are super unreliable. Try twice!
-		let out = self.mcn_subchannel__().or_else(|| self.mcn_subchannel__());
+		// Give it a few tries because subchannel reads suck. Haha.
+		let mut out = None;
+		for i in 0..SUBCHANNEL_REREADS {
+			if let Some(read) = self.mcn_subchannel__() {
+				out.replace(read);
+				break;
+			}
+			// Wait before re-attempting.
+			else if i + 1 < SUBCHANNEL_REREADS {
+				std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
+			}
+		}
 		if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
 		out
 	}
@@ -490,7 +494,6 @@ macro_rules! address_fmt {
 
 address_fmt! {
 	Lba 0x00 "LBA",
-	Msf 0x02 "MSF",
 }
 
 
@@ -536,6 +539,32 @@ macro_rules! cmd {
 				[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 				cdb
 			}
+
+			#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+			/// # Subchannel Command Descriptor Block.
+			///
+			/// Return a `ReadSubchannel` Command Descriptor Block for the given
+			/// size, format, and track number.
+			///
+			/// Note the address format is always LBA.
+			const fn subchannel_cdb<const ALLOC_LEN: usize>(
+				subchannel_format: SubchannelFormat,
+				track: u8,
+			) -> [u8; 10] {
+				assert!(
+					ALLOC_LEN <= (u16::MAX as usize),
+					"BUG: `ALLOC_LEN` must fit u16."
+				);
+
+				let mut cdb = [0; 10];
+				cdb[0] = MmcCmd::ReadSubchannel as u8;
+				cdb[1] = AddressFormat::Lba as u8;
+				cdb[2] = 0x40; // Sub-Q Channel tracking bit
+				cdb[3] = subchannel_format as u8;
+				cdb[6] = track;
+				[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
+				cdb
+			}
 		}
 	);
 }
@@ -546,6 +575,30 @@ cmd! {
 	ReadCd           0xBE "Read CD",
 	ReadSubchannel   0x42 "Read Subchannel",
 	ReadToc          0x43 "Read TOC",
+}
+
+
+
+/// # Helper: Subchannel Formats.
+macro_rules! subchannel_fmt {
+	( $( $k:ident $v:literal $str:literal, )+ ) => (
+		#[repr(u8)]
+		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+		/// # (Relevant) Subchannel Data Format Codes.
+		///
+		/// This enum holds the data types for `ReadSubchannel` commands.
+		enum SubchannelFormat {
+			$(
+				#[doc = concat!("# ", $str, ".")]
+				$k = $v,
+			)+
+		}
+	);
+}
+
+subchannel_fmt! {
+	Isrc 0x03 "ISRC",
+	Mcn  0x02 "MCN",
 }
 
 

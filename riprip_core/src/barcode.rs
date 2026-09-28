@@ -69,6 +69,11 @@ impl TryFrom<&[u8]> for Barcode {
 		src = src.trim_start_matches(|b: u8| b.is_ascii_whitespace() || b == b'0');
 		src = src.trim_end_matches(|b: u8| b.is_ascii_whitespace() || b == 0);
 
+		// If there's a null byte, cut to it and recurse.
+		if let Some(pos) = src.iter().copied().position(|b| b == 0_u8) {
+			return Self::try_from(&src[..pos]);
+		}
+
 		// If there are dashes, strip and recurse.
 		if src.contains(&b'-') {
 			let new: Vec<u8> = src.iter()
@@ -80,7 +85,9 @@ impl TryFrom<&[u8]> for Barcode {
 
 		// Make sure we've got 8-13 ASCII digits and nothing else.
 		if ! (8..=13).contains(&src.len()) || ! src.iter().all(u8::is_ascii_digit) {
-			log!(@trace "Invalid barcode {:?}.", src);
+			if ! src.is_empty() {
+				log!(@trace "Invalid barcode {:?}.", src);
+			}
 			return Err(RipRipError::Barcode);
 		}
 
