@@ -36,7 +36,7 @@ Beyond that, it supports all the good things:
 * Backwards ripping
 * Good ol' WAV output
 * Cue sheet generation (when ripping the whole disc)
-* Dump CD-Text (if present)
+* CD-Text extraction
 
 Rip Rip Hooray! **does not** aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
 

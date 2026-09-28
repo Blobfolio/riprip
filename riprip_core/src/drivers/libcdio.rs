@@ -39,10 +39,6 @@ use std::{
 	path::Path,
 	sync::Once,
 };
-use super::{
-	SUBCHANNEL_REREADS,
-	SUBCHANNEL_REREAD_DELAY,
-};
 
 
 
@@ -199,8 +195,6 @@ impl CddaDriverExt for LibcdioInstance {
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # CD-Text (Raw).
-	///
-	/// Read and return the raw CD-Text data, if any.
 	fn cdtext(&self) -> Option<Vec<u8>> {
 		// Perform a raw read of the CD-Text data, if any.
 		// Safety: `libcdio` promises that if there is no data or the read
@@ -244,8 +238,6 @@ impl CddaDriverExt for LibcdioInstance {
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Drive Vendor/Model.
-	///
-	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
 		/// # Rustify Cstr Arrays.
 		///
@@ -281,81 +273,39 @@ impl CddaDriverExt for LibcdioInstance {
 		else { None }
 	}
 
-	/// # ISRC From Subchannel.
+	/// # ISRC (Sub-Q).
 	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
-		/// # ISRC From Subchannel.
-		fn fetch(cdda: &LibcdioInstance, idx: u8) -> Option<Isrc> {
-			// Give it a few tries because subchannel reads suck. Haha.
-			let mut raw = None;
-			for i in 0..SUBCHANNEL_REREADS {
-				if let Some(read) = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_TRACK_ISRC>(
-					cdda,
-					idx,
-				) {
-					raw.replace(read);
-					break;
-				}
-				// Wait before re-attempting.
-				else if i + 1 < SUBCHANNEL_REREADS {
-					std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
-				}
-			}
-
-			// Try the whole buffer first.
-			let raw = raw?;
-			Isrc::try_from(raw.as_slice())
-				// Fall back to the punctuation-free length.
-				.or_else(|_| Isrc::try_from(&raw[..12]))
-				.ok()
-		}
-
 		// Unsupported?
 		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_ISRC {
 			std::hint::cold_path();
 			None
 		}
-		else { fetch(self, idx) }
-	}
-
-	/// # MCN Fallback.
-	///
-	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
-	fn mcn_subchannel(&self) -> Option<Barcode> {
-		/// # ISRC From Subchannel.
-		fn fetch(cdda: &LibcdioInstance, idx: u8) -> Option<Barcode> {
-			// Give it a few tries because subchannel reads suck. Haha.
-			let mut raw = None;
-			for i in 0..SUBCHANNEL_REREADS {
-				if let Some(read) = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_MEDIA_CATALOG>(
-					cdda,
-					idx,
-				) {
-					raw.replace(read);
-					break;
-				}
-				// Wait before re-attempting.
-				else if i + 1 < SUBCHANNEL_REREADS {
-					std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
-				}
-			}
-
-			// Try the whole buffer first.
-			let raw = raw?;
-			Barcode::try_from(raw.as_slice())
-				// Fall back to the punctuation-free length.
-				.or_else(|_| Barcode::try_from(&raw[..13]))
+		else {
+			let raw = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_TRACK_ISRC>(
+				self,
+				idx,
+			)?;
+			Isrc::try_from(raw.as_slice())               // Max w/ punctuation.
+				.or_else(|_| Isrc::try_from(&raw[..12])) // Max w/o punctuation.
 				.ok()
 		}
+	}
 
+	/// # MCN (Sub-Q).
+	fn mcn_subchannel(&self) -> Option<Barcode> {
 		// Unsupported?
 		if 0 == self.flags & Self::FLAG_SUPPORTS_SUBCHANNEL_MCN {
 			std::hint::cold_path();
 			None
 		}
 		else {
-			let out = fetch(self, 0);
-			if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
-			out
+			let raw = read_isrc_mcn_subchannel::<cdio_subchannel_CDIO_SUBCHANNEL_MEDIA_CATALOG>(
+				self,
+				0,
+			)?;
+			Barcode::try_from(raw.as_slice())               // Max w/ punctuation.
+				.or_else(|_| Barcode::try_from(&raw[..13])) // Max w/o punctuation.
+				.ok()
 		}
 	}
 
@@ -363,14 +313,6 @@ impl CddaDriverExt for LibcdioInstance {
 	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	#[inline]
 	/// # Execute Read Command.
-	///
-	/// This private method executes the million-argument MMC read command with
-	/// values prepared and verified by the caller.
-	///
-	/// ## Errors.
-	///
-	/// This will return an error if the read fails, but provides no other
-	/// sanity checks.
 	fn read_cd(
 		&self,
 		buf: &mut [u8],
@@ -551,7 +493,6 @@ fn read_isrc_mcn_subchannel<const FORMAT: u32>(
 const fn isrc_mcn_subchannel_payload<const FORMAT: u32>(buf: [i8; 24], idx: u8)
 -> Option<[u8; 15]> {
 	if
-		(buf[5].cast_unsigned() >> 4) as u32 == FORMAT && // Right format.
 		buf[6].cast_unsigned() == idx &&     // Right track.
 		(buf[8].cast_unsigned() & 0x80) != 0 // MCVAL/TCVAL bit indicates validity.
 	{

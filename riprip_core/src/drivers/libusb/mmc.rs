@@ -17,10 +17,6 @@ use crate::{
 	TrackRange,
 };
 use std::range::legacy::Range;
-use super::{
-	SUBCHANNEL_REREADS,
-	SUBCHANNEL_REREAD_DELAY,
-};
 
 
 
@@ -100,7 +96,6 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut buf = [0_u8; ALLOC_LEN];
 		if
 			self.submit_checked::<_, 9>(&cdb, &mut buf, "isrc_subchannel__").is_some() &&
-			(buf[5] >> 4) == (SubchannelFormat::Isrc as u8) &&
 			buf[6] == idx &&     // Right track.
 			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates validity.
 		{
@@ -119,7 +114,6 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut buf = [0_u8; ALLOC_LEN];
 		if
 			self.submit_checked::<_, 9>(&cdb, &mut buf, "mcn_subchannel__").is_some() &&
-			(buf[5] >> 4) == (SubchannelFormat::Mcn as u8) &&
 			buf[6] == 0 &&       // Right track.
 			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
 		{
@@ -420,40 +414,13 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		self.drive_vendor_model__().ok()
 	}
 
-	/// # ISRC From Subchannel.
+	/// # ISRC (Sub-Q).
 	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
-		// Give it a few tries because subchannel reads suck. Haha.
-		for i in 0..SUBCHANNEL_REREADS {
-			if let Some(out) = self.isrc_subchannel__(idx) {
-				return Some(out);
-			}
-			// Wait before re-attempting.
-			else if i + 1 < SUBCHANNEL_REREADS {
-				std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
-			}
-		}
-
-		// Nope.
-		None
+		self.isrc_subchannel__(idx)
 	}
 
-	/// # MCN From (Leadin) Subchannel.
-	fn mcn_subchannel(&self) -> Option<Barcode> {
-		// Give it a few tries because subchannel reads suck. Haha.
-		let mut out = None;
-		for i in 0..SUBCHANNEL_REREADS {
-			if let Some(read) = self.mcn_subchannel__() {
-				out.replace(read);
-				break;
-			}
-			// Wait before re-attempting.
-			else if i + 1 < SUBCHANNEL_REREADS {
-				std::thread::sleep(SUBCHANNEL_REREAD_DELAY);
-			}
-		}
-		if out.is_none() { log!(@trace "Sub-Q contains no MCN data."); }
-		out
-	}
+	/// # MCN (Sub-Q).
+	fn mcn_subchannel(&self) -> Option<Barcode> { self.mcn_subchannel__() }
 
 	/// # Execute Read Command.
 	fn read_cd(

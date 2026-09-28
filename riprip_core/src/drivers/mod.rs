@@ -75,17 +75,6 @@ pub(crate) type CddaDriver = libusb::LibusbInstance;
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
-/// # Subchannel Re-Reads.
-///
-/// Subchannel reads are unreliable. When looking for MCN and ISRC, retry this
-/// many times.
-const SUBCHANNEL_REREADS: u8 = 5;
-
-/// # Subchannel Re-Read Delay.
-///
-/// The delay to implement between re-reads.
-const SUBCHANNEL_REREAD_DELAY: Duration = Duration::from_millis(250);
-
 thread_local! {
 	/// # Sector Shitlist.
 	///
@@ -139,10 +128,12 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
 
-	/// # ISRC From Subchannel.
+	/// # ISRC (Sub-Q).
+	///
+	/// Return the track ISRC as stored in the subchannel data, if any.
 	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc>;
 
-	/// # MCN From Q-Subchannel.
+	/// # MCN (Sub-Q).
 	///
 	/// Return the MCN as stored in the leadin subchannel data, if any.
 	fn mcn_subchannel(&self) -> Option<Barcode>;

@@ -51,6 +51,7 @@ use std::{
 		Path,
 		PathBuf,
 	},
+	time::Duration,
 };
 
 
@@ -309,31 +310,8 @@ impl Disc {
 			}
 		}
 
-		// Look for barcode in subchannel if missing.
-		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
-			out.barcode.replace(barcode);
-		}
-
-		// Look for ISRCs in subchannel if we're missing any.
-		if out.isrcs.len() != out.toc.audio_len() {
-			use std::collections::hash_map::Entry;
-			let mut tried = 0;
-			let mut found = 0;
-			for track in out.toc.audio_tracks() {
-				let Entry::Vacant(e) = out.isrcs.entry(track.number()) else { continue; };
-				tried += 1;
-				if let Some(isrc) = out.cdda.isrc_subchannel(track.number()) {
-					e.insert(isrc);
-					found += 1;
-				}
-				// If we get three failures before finding an ISRC, assume
-				// there's nothing to find.
-				else if found == 0 && tried == 3 {
-					log!(@trace "Sub-Q contains no ISRC data.");
-					break;
-				}
-			}
-		}
+		// Supplement missing MCN and/or ISRC data from subchannel.
+		out.backfill_subchannel();
 
 		// Finally done!
 		Ok(out)
@@ -373,6 +351,115 @@ impl Disc {
 	#[must_use]
 	/// # Internal CDIO.
 	pub(super) const fn cdda(&self) -> &CddaDriver { &self.cdda }
+}
+
+impl Disc {
+	/// # Backfill MCN/ISRC Data From Subchannel.
+	///
+	/// Check the Sub-Q for data CD-Text failed to provide.
+	fn backfill_subchannel(&mut self) {
+		self.backfill_subchannel_mcn();
+		self.backfill_subchannel_isrcs();
+	}
+
+	/// # Backfill MCN Data From Subchannel.
+	fn backfill_subchannel_mcn(&mut self) {
+		if self.barcode.is_none() {
+			// Subchannel reads are unreliable; try it twice.
+			if let Some(barcode) = self.cdda.mcn_subchannel().or_else(|| self.cdda.mcn_subchannel()) {
+				self.barcode.replace(barcode);
+			}
+			// Well, we tried. Twice!
+			else { log!(@trace "Sub-Q contains no MCN data."); }
+		}
+	}
+
+	/// # Backfill ISRC Data From Subchannel.
+	///
+	/// TODO: maybe read a block from each track first?
+	fn backfill_subchannel_isrcs(&mut self) {
+		use std::collections::hash_map::Entry;
+
+		/// # Max Consecutive Nothings.
+		///
+		/// If we haven't found any ISRCs after this many attempts, assume
+		/// there aren't any!
+		const MAX_NOTHING: u8 = 5;
+
+		/// # Max Fruitless Passes.
+		///
+		/// If successful reads are encountered after this many passes, call it
+		/// quits.
+		const MAX_FRUITLESS_PASSES: u8 = 3;
+
+		/// # Fail Delay.
+		///
+		/// When a read fails, wait this long before trying the next one, and
+		/// when a pass proves fruitless, wait twice as long again.
+		const FAIL_DELAY: Duration = Duration::from_millis(50);
+
+		// Subchannel reads can be unreliable, so let's repeat the process
+		// until the answers stop coming (or we've found them all).
+		let mut any = false;
+		let mut fruitless_passes = 0_u8;
+		loop {
+			let mut found = 0_u8;
+			let mut missing = 0_u8;
+
+			for track in self.toc.audio_tracks() {
+				let Entry::Vacant(e) = self.isrcs.entry(track.number()) else {
+					// Already known.
+					continue;
+				};
+
+				// Got one!
+				if let Some(isrc) = self.cdda.isrc_subchannel(track.number()) {
+					e.insert(isrc);
+					found += 1;
+					any = true;
+				}
+				// Nope.
+				else {
+					missing += 1;
+
+					// Short circuit: assume there's no data to be found.
+					if ! any && missing == MAX_NOTHING {
+						log!(@trace "Sub-Q contains no track ISRC data.");
+						return;
+					}
+
+					// Pause before moving onto the next track.
+					std::thread::sleep(FAIL_DELAY);
+				}
+			}
+
+			// Found everything or nothing?
+			if missing == 0 { return; }
+
+			if found == 0 {
+				fruitless_passes += 1;
+
+				// Short circuit: assume there's no more data to be found.
+				if fruitless_passes == MAX_FRUITLESS_PASSES {
+					log!(
+						@trace [missing]
+						"No Sub-Q ISRC data found across {fruitless_passes} passes; giving up.",
+					);
+					return;
+				}
+
+				// Pause before starting the next pass.
+				std::thread::sleep(FAIL_DELAY * 2);
+			}
+			// We found something; try again.
+			else { fruitless_passes = 0; }
+
+			log!(
+				@trace [found, missing, fruitless_passes]
+				"Sub-Q ISRC data is incomplete; retrying!",
+			);
+		}
+	}
 }
 
 impl Disc {
