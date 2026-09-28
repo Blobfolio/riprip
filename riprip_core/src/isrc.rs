@@ -93,8 +93,11 @@ impl TryFrom<&[u8]> for Isrc {
 				else { return None; }
 			}
 
-			// Return, unless we have unwritten slots left over!
-			if dst.next().is_none() { Some(out) }
+			// Return, unless we have unwritten slots left over or every byte
+			// is the same!
+			if dst.next().is_none() && out.array_windows::<2>().any(|[a, b]| *a != *b) {
+				Some(out)
+			}
 			else { None }
 		}
 
