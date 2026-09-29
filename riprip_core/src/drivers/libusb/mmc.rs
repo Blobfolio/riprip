@@ -267,8 +267,15 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	/// # Execute Read Command.
-	fn read_cd__(&self, buf: &mut [u8], lsn: i32, cd: bool, c2: bool, sub: u8)
-	-> Result<usize, RipRipError> {
+	fn read_cd__(
+		&self,
+		buf: &mut [u8],
+		mut lsn: i32,
+		cd: bool,
+		c2: bool,
+		sub: u8,
+		block_size: u16,
+	) -> Result<usize, RipRipError> {
 		const SECTOR_TYPE_CDDA: u8 = 0x04;
 
 		const CDB: [u8; 12] = {
@@ -283,23 +290,37 @@ pub(super) trait MmcDriverExt: TransportExt {
 			cdb
 		};
 
-		let mut cdb = CDB;
-		// Rip Rip's addressing parameters are already absolute LBAs.
-		let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
-		[cdb[2], cdb[3], cdb[4], cdb[5]] = lba.to_be_bytes();
+		if ! buf.len().is_multiple_of(usize::from(block_size)) {
+			log!(
+				@trace [buf.len(), block_size]
+				"Read CD buffer length is not multiple of block size.",
+			);
+			return Err(RipRipError::Bug("Read CD buffer length is not multiple of block size."));
+		}
 
-		// Byte 9 is the Selection Field flag byte:
-		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
-		// Bit 2..1: C2 Error Flag selection allocation (Set to 1 to include 294 bytes C2 space)
-		let user_data_flag = if cd { 0x10 } else { 0x00 };
-		let c2_flag = if c2 { 0x02 } else { 0x00 };
-		cdb[9] = user_data_flag | c2_flag;
+		let mut written = 0;
+		for chunk in buf.chunks_exact_mut(usize::from(block_size)) {
+			let mut cdb = CDB;
+			// Rip Rip's addressing parameters are already absolute LBAs.
+			let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
+			[cdb[2], cdb[3], cdb[4], cdb[5]] = lba.to_be_bytes();
 
-		// Byte 10 defines the Subchannel Selection configuration flags:
-		// 0 = none, 1 = raw P-W, 2 = formatted Q, 4 = corrected R-W.
-		cdb[10] = sub;
+			// Byte 9 is the Selection Field flag byte:
+			// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
+			// Bit 2..1: C2 Error Flag selection allocation (Set to 1 to include 294 bytes C2 space)
+			let user_data_flag = if cd { 0x10 } else { 0x00 };
+			let c2_flag = if c2 { 0x02 } else { 0x00 };
+			cdb[9] = user_data_flag | c2_flag;
 
-		self.submit(&cdb, buf, "read_cd__")
+			// Byte 10 defines the Subchannel Selection configuration flags:
+			// 0 = none, 1 = raw P-W, 2 = formatted Q, 4 = corrected R-W.
+			cdb[10] = sub;
+
+			written += self.submit(&cdb, chunk, "read_cd__")?;
+			lsn += 1;
+		}
+
+		Ok(written)
 	}
 }
 
@@ -378,9 +399,9 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		cd: bool,
 		c2: bool,
 		sub: u8,
-		_block_size: u16,
+		block_size: u16,
 	) -> Result<(), RipRipError> {
-		if self.read_cd__(buf, lsn, cd, c2, sub).is_ok() { Ok(()) }
+		if self.read_cd__(buf, lsn, cd, c2, sub, block_size).is_ok() { Ok(()) }
 		else {
 			crate::drivers::set_bad_sector(lsn);
 			Err(RipRipError::CdRead)

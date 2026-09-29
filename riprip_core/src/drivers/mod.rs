@@ -283,17 +283,22 @@ pub(crate) trait CddaDriverExt: Sized {
 			start = start.midpoint(end) - 128;
 		}
 
-		let mut already = HashSet::<[u8; 16]>::with_capacity(16);
-		let mut buf = [0_u8; CD_SUBCHANNEL_SIZE as usize];
-		for lsn in (start..end).take(256) {
-			buf.fill(0);
-			if
-				self.read_cd(buf.as_mut_slice(), lsn, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() &&
-				already.insert(buf) &&
-				let Some(isrc) = Isrc::from_subchannel_packet(&buf)
-			{
-				return Some(isrc);
+		// Should be able to read en masse for these.
+		let mut already = HashSet::<[u8; 9]>::with_capacity(256);
+		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
+		for _ in 0..16 {
+			if self.read_cd(buf.as_flattened_mut(), start, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() {
+				for chunk in buf {
+					if
+						already.insert(*chunk[..9].as_array().unwrap()) &&
+						let Some(isrc) = Isrc::from_subchannel_packet(&chunk)
+					{
+						return Some(isrc);
+					}
+				}
 			}
+
+			start += 16;
 		}
 
 		None
@@ -304,17 +309,23 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Pull Sub-Q data from the start of the disc, parsing and returning the
 	/// first valid MCN entry, if any.
 	fn read_mcn(&self) -> Option<Barcode> {
-		let mut already = HashSet::<[u8; 16]>::with_capacity(16);
-		let mut buf = [0_u8; CD_SUBCHANNEL_SIZE as usize];
-		for lsn in 256..=512 {
-			buf.fill(0);
-			if
-				self.read_cd(buf.as_mut_slice(), lsn, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() &&
-				already.insert(buf) &&
-				let Some(barcode) = Barcode::from_subchannel_packet(&buf)
-			{
-				return Some(barcode);
+		// Should be able to read en masse for these.
+		let mut start = 256;
+		let mut already = HashSet::<[u8; 8]>::with_capacity(256);
+		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
+		for _ in 0..16 {
+			if self.read_cd(buf.as_flattened_mut(), start, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() {
+				for chunk in buf {
+					if
+						already.insert(*chunk[..8].as_array().unwrap()) &&
+						let Some(barcode) = Barcode::from_subchannel_packet(&chunk)
+					{
+						return Some(barcode);
+					}
+				}
 			}
+
+			start += 16;
 		}
 
 		None

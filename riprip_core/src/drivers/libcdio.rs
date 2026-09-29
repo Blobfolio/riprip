@@ -274,6 +274,16 @@ impl CddaDriverExt for LibcdioInstance {
 		sub: u8,
 		block_size: u16,
 	) -> Result<(), RipRipError> {
+		if ! buf.len().is_multiple_of(usize::from(block_size)) {
+			log!(
+				@trace [buf.len(), block_size]
+				"Read CD buffer length is not multiple of block size.",
+			);
+			return Err(RipRipError::Bug("Read CD buffer length is not multiple of block size."));
+		}
+		let num_blocks = u32::try_from(buf.len() / usize::from(block_size))
+			.map_err(|_| RipRipError::Bug("Read CD buffer is too big!"))?;
+
 		// Safety: this is an FFI call…
 		let res = unsafe {
 			libcdio_sys::mmc_read_cd(
@@ -289,7 +299,7 @@ impl CddaDriverExt for LibcdioInstance {
 				u8::from(c2), // C2 or no C2?
 				sub,          // Subchannel? What kind?
 				block_size,   // Block size (varies by data requested).
-				1,            // Always read one block at a time.
+				num_blocks,   // Usually one.
 			)
 		};
 
