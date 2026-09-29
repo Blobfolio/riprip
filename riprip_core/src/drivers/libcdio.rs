@@ -33,6 +33,7 @@ use std::{
 	path::Path,
 	sync::Once,
 };
+use super::ReadCdOpts;
 
 
 
@@ -265,24 +266,15 @@ impl CddaDriverExt for LibcdioInstance {
 	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	#[inline]
 	/// # Execute Read Command.
-	fn read_cd(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-		cd: bool,
-		c2: bool,
-		sub: u8,
-		block_size: u16,
-	) -> Result<(), RipRipError> {
-		if ! buf.len().is_multiple_of(usize::from(block_size)) {
-			log!(
-				@trace [buf.len(), block_size]
-				"Read CD buffer length is not multiple of block size.",
-			);
-			return Err(RipRipError::Bug("Read CD buffer length is not multiple of block size."));
-		}
-		let num_blocks = u32::try_from(buf.len() / usize::from(block_size))
-			.map_err(|_| RipRipError::Bug("Read CD buffer is too big!"))?;
+	fn read_cd(&self, buf: &mut [u8], lsn: i32, opts: ReadCdOpts)
+	-> Result<(), RipRipError> {
+		let num_blocks = match opts.num_blocks(buf) {
+			Ok(v) => v,
+			Err(e) => {
+				log!(@trace [buf.len(), opts] "{e}");
+				return Err(RipRipError::Bug(e));
+			},
+		};
 
 		// Safety: this is an FFI call…
 		let res = unsafe {
@@ -290,16 +282,16 @@ impl CddaDriverExt for LibcdioInstance {
 				self.as_ptr(),
 				buf.as_mut_ptr().cast(),
 				lsn,
-				1,            // Sector type: CDDA.
-				false,        // No random data manipulation thank you kindly.
-				false,        // No header syncing.
-				0,            // No headers.
-				cd,           // CD data or no CD data?
-				false,        // No EDC.
-				u8::from(c2), // C2 or no C2?
-				sub,          // Subchannel? What kind?
-				block_size,   // Block size (varies by data requested).
-				num_blocks,   // Usually one.
+				1,                           // Sector type: CDDA.
+				false,                       // No random data manipulation thank you!
+				false,                       // No header syncing.
+				0,                           // No headers.
+				opts.cdda(),                 // CD data or no CD data?
+				false,                       // No EDC.
+				u8::from(opts.c2()),         // C2 or no C2?
+				opts.subchannel_format(),    // Subchannel? What kind?
+				opts as u16,                 // Block size.
+				u32::from(num_blocks.get()), // Usually one.
 			)
 		};
 

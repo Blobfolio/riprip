@@ -145,6 +145,7 @@ impl Barcode {
 			return None;
 		}
 
+		// Unpack the BCD.
 		let inner: [u8; 13] = std::array::from_fn(|i| {
 			let byte = raw[1 + i / 2];
 			b'0' + if i % 2 == 0 { byte >> 4 } else { byte & 0x0f }

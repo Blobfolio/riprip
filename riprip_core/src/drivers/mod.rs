@@ -23,11 +23,18 @@ compile_error!("The `libcdio` feature does not work on Apple devices. Build with
 #[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
 compile_error!("The `libusb` feature requires linux or macos.");
 
+
+
 #[cfg(feature = "libcdio")]
 mod libcdio;
 
 #[cfg(feature = "libusb")]
 mod libusb;
+
+#[cfg(feature = "libusb")]
+mod mmc;
+
+
 
 use cdtoc::Track;
 use crate::{
@@ -48,6 +55,7 @@ use dactyl::NoHash;
 use std::{
 	cell::RefCell,
 	collections::HashSet,
+	num::NonZeroU8,
 	path::Path,
 	range::legacy::Range,
 	time::{
@@ -139,15 +147,8 @@ pub(crate) trait CddaDriverExt: Sized {
 	///
 	/// This will return an error if the read fails, but provides no other
 	/// sanity checks.
-	fn read_cd(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-		cd: bool,
-		c2: bool,
-		sub: u8,
-		block_size: u16,
-	) -> Result<(), RipRipError>;
+	fn read_cd(&self, buf: &mut [u8], lsn: i32, opts: ReadCdOpts)
+	-> Result<(), RipRipError>;
 
 	/// # Cache Bust.
 	///
@@ -217,7 +218,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, true, 0, CD_DATA_C2_SIZE)
+		self.read_cd(buf, lsn, ReadCdOpts::CddaPlusC2)
 	}
 
 	/// # Read Data + Subchannel
@@ -249,7 +250,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
+		self.read_cd(buf, lsn, ReadCdOpts::CddaPlusSubchannel)?;
 
 		// We can only get timing information from ADR-1.
 		if
@@ -287,7 +288,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		let mut already = HashSet::<[u8; 9]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
-			if self.read_cd(buf.as_flattened_mut(), start, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() {
+			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
 						already.insert(*chunk[..9].as_array().unwrap()) &&
@@ -314,7 +315,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		let mut already = HashSet::<[u8; 8]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
-			if self.read_cd(buf.as_flattened_mut(), start, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() {
+			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
 						already.insert(*chunk[..8].as_array().unwrap()) &&
@@ -352,6 +353,104 @@ pub(crate) trait CddaDriverNewExt: Sized {
 
 
 
+/// # Helper: Read CD Configuration.
+macro_rules! opts {
+	(
+		$(
+			$( #[doc = $doc:expr] )*
+			$k:ident $cd:literal $c2:literal $sub:literal $block_size:ident,
+		)+
+	) => (
+		#[repr(u16)]
+		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+		/// # Read CD Options.
+		///
+		/// This enum is used to limit the number of arguments required for
+		/// CD-reading calls. (They all kinda bleed together.)
+		pub(crate) enum ReadCdOpts {
+			$(
+				$( #[doc = $doc] )*
+				$k = $block_size,
+			)+
+		}
+
+		impl ReadCdOpts {
+			#[must_use]
+			/// # CDDA/User Data?
+			const fn cdda(self) -> bool {
+				match self {
+					$( Self::$k => $cd, )+
+				}
+			}
+
+			#[must_use]
+			/// # C2?
+			const fn c2(self) -> bool {
+				match self {
+					$( Self::$k => $c2, )+
+				}
+			}
+
+			#[must_use]
+			/// # Subchannel Format?
+			const fn subchannel_format(self) -> u8 {
+				match self {
+					$( Self::$k => $sub, )+
+				}
+			}
+		}
+
+		impl ReadCdOpts {
+			#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+			/// # Number of Blocks.
+			///
+			/// Calculate and return the number of blocks required to fill the
+			/// buffer, or an error if it does not divide evenly or overflows.
+			///
+			/// ## Errors
+			///
+			/// Buffer lengths are baked-in, so any error should be treated as
+			/// a bug!
+			const fn num_blocks(self, buf: &[u8]) -> Result<NonZeroU8, &'static str> {
+				if buf.is_empty() {
+					Err("Read CD buffer is empty.")
+				}
+				else if ! buf.len().is_multiple_of(self as usize) {
+					Err("Read CD buffer length is not multiple of block size.")
+				}
+				else {
+					let num_blocks = buf.len() / (self as usize);
+					if
+						num_blocks <= (u8::MAX as usize) &&
+						let Some(num_blocks) = NonZeroU8::new(num_blocks as u8)
+					{
+						Ok(num_blocks)
+					}
+					else {
+						Err("Read CD buffer length and block size combination require too many blocks.")
+					}
+				}
+			}
+		}
+	)
+}
+
+opts! {
+	/// # CDDA.
+	Cdda               true  false 0 CD_DATA_SIZE,
+
+	/// # CDDA + C2.
+	CddaPlusC2         true  true  0 CD_DATA_C2_SIZE,
+
+	/// # CDDA + Subchannel.
+	CddaPlusSubchannel true  false 2 CD_DATA_SUBCHANNEL_SIZE,
+
+	/// # Subchannel.
+	Subchannel         false false 2 CD_SUBCHANNEL_SIZE,
+}
+
+
+
 #[must_use]
 /// # Is Bad Sector?
 ///
@@ -379,7 +478,7 @@ fn cache_bust<D: CddaDriverExt>(
 			break;
 		}
 
-		if ! bad_sector(from) && driver.read_cd(buf, from, true, false, 0, CD_DATA_SIZE).is_ok() {
+		if ! bad_sector(from) && driver.read_cd(buf, from, ReadCdOpts::Cdda).is_ok() {
 			*todo -= 1;
 		}
 

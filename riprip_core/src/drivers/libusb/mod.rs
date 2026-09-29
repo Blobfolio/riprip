@@ -7,7 +7,6 @@ Somewhat useful documentation:
 
 mod bot;
 mod device;
-mod mmc;
 
 use crate::{
 	CddaDriverNewExt,
@@ -18,7 +17,7 @@ use dactyl::{
 	NiceElapsed,
 	NiceU32,
 };
-use mmc::{
+use super::mmc::{
 	MmcDriverExt,
 	TransportExt,
 };
