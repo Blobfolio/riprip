@@ -6,12 +6,10 @@ used to inspect and read audio CDs.
 */
 
 use crate::{
-	Barcode,
 	CD_LEADIN,
 	CD_LEADOUT,
 	CddaDriverExt,
 	DriveVendorModel,
-	Isrc,
 	macros::log,
 	RipRipError,
 	TrackRange,
@@ -81,49 +79,6 @@ impl<T: TransportExt + ?Sized> MmcDriverExt for T {}
 /// Relies on the underlying `TransportExt` trait to handle the hardware bus
 /// communication (e.g. USB BOT or `/dev/sg`).
 pub(super) trait MmcDriverExt: TransportExt {
-	/// # ISRC From (Leadin) Subchannel.
-	fn isrc_subchannel__(&self, idx: u8) -> Option<Isrc> {
-		const ALLOC_LEN: usize = 4 + 20; // Four bytes header, 20 bytes data.
-
-		const {
-			assert!(
-				ALLOC_LEN <= (u16::MAX as usize),
-				"BUG: `ALLOC_LEN` must fit u16."
-			);
-		}
-
-		let cdb = MmcCmd::subchannel_cdb::<ALLOC_LEN>(SubchannelFormat::Isrc, idx);
-		let mut buf = [0_u8; ALLOC_LEN];
-		if
-			self.submit_checked::<_, 9>(&cdb, &mut buf, "isrc_subchannel__").is_some() &&
-			buf[6] == idx &&     // Right track.
-			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates validity.
-		{
-			Isrc::try_from(&buf[9..])
-				.or_else(|_| Isrc::try_from(&buf[9..9 + 12]))
-				.ok()
-		}
-		else { None }
-	}
-
-	/// # MCN From (Leadin) Subchannel.
-	fn mcn_subchannel__(&self) -> Option<Barcode> {
-		const ALLOC_LEN: usize = 4 + 20; // Four bytes header, 20 bytes data.
-
-		let cdb = MmcCmd::subchannel_cdb::<ALLOC_LEN>(SubchannelFormat::Mcn, 0);
-		let mut buf = [0_u8; ALLOC_LEN];
-		if
-			self.submit_checked::<_, 9>(&cdb, &mut buf, "mcn_subchannel__").is_some() &&
-			buf[6] == 0 &&       // Right track.
-			(buf[8] & 0x80) != 0 // MCVAL/TCVAL bit indicates a valid response.
-		{
-			Barcode::try_from(&buf[9..])
-				.or_else(|_| Barcode::try_from(&buf[9..9 + 13]))
-				.ok()
-		}
-		else { None }
-	}
-
 	/// # Check Disc Mode.
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
 		const FIRST_TRACK: u8 = 0x01;
@@ -312,7 +267,8 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	/// # Execute Read Command.
-	fn read_cd__(&self, buf: &mut [u8], lsn: i32, c2: bool, sub: u8) -> Result<usize, RipRipError> {
+	fn read_cd__(&self, buf: &mut [u8], lsn: i32, cd: bool, c2: bool, sub: u8)
+	-> Result<usize, RipRipError> {
 		const SECTOR_TYPE_CDDA: u8 = 0x04;
 
 		const CDB: [u8; 12] = {
@@ -335,7 +291,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		// Byte 9 is the Selection Field flag byte:
 		// Bit 4: User Data Selection (Set to 1 to read the 2352 bytes audio payload)
 		// Bit 2..1: C2 Error Flag selection allocation (Set to 1 to include 294 bytes C2 space)
-		let user_data_flag = 0x10;
+		let user_data_flag = if cd { 0x10 } else { 0x00 };
 		let c2_flag = if c2 { 0x02 } else { 0x00 };
 		cdb[9] = user_data_flag | c2_flag;
 
@@ -414,24 +370,17 @@ impl<T: MmcDriverExt> CddaDriverExt for T {
 		self.drive_vendor_model__().ok()
 	}
 
-	/// # ISRC (Sub-Q).
-	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc> {
-		self.isrc_subchannel__(idx)
-	}
-
-	/// # MCN (Sub-Q).
-	fn mcn_subchannel(&self) -> Option<Barcode> { self.mcn_subchannel__() }
-
 	/// # Execute Read Command.
 	fn read_cd(
 		&self,
 		buf: &mut [u8],
 		lsn: i32,
+		cd: bool,
 		c2: bool,
 		sub: u8,
 		_block_size: u16,
 	) -> Result<(), RipRipError> {
-		if self.read_cd__(buf, lsn, c2, sub).is_ok() { Ok(()) }
+		if self.read_cd__(buf, lsn, cd, c2, sub).is_ok() { Ok(()) }
 		else {
 			crate::drivers::set_bad_sector(lsn);
 			Err(RipRipError::CdRead)
@@ -449,7 +398,7 @@ macro_rules! address_fmt {
 		/// # (Relevant) Subchannel/ToC Address Formats.
 		///
 		/// This enum holds the address format codes used for
-		/// `ReadSubchannel` and `ReadToc` commands.
+		/// `ReadToc` commands.
 		enum AddressFormat {
 			$(
 				#[doc = concat!("# ", $str, ".")]
@@ -506,32 +455,6 @@ macro_rules! cmd {
 				[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
 				cdb
 			}
-
-			#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-			/// # Subchannel Command Descriptor Block.
-			///
-			/// Return a `ReadSubchannel` Command Descriptor Block for the given
-			/// size, format, and track number.
-			///
-			/// Note the address format is always LBA.
-			const fn subchannel_cdb<const ALLOC_LEN: usize>(
-				subchannel_format: SubchannelFormat,
-				track: u8,
-			) -> [u8; 10] {
-				assert!(
-					ALLOC_LEN <= (u16::MAX as usize),
-					"BUG: `ALLOC_LEN` must fit u16."
-				);
-
-				let mut cdb = [0; 10];
-				cdb[0] = MmcCmd::ReadSubchannel as u8;
-				cdb[1] = AddressFormat::Lba as u8;
-				cdb[2] = 0x40; // Sub-Q Channel tracking bit
-				cdb[3] = subchannel_format as u8;
-				cdb[6] = track;
-				[cdb[7], cdb[8]] = (ALLOC_LEN as u16).to_be_bytes();
-				cdb
-			}
 		}
 	);
 }
@@ -540,32 +463,7 @@ cmd! {
 	GetConfiguration 0x46 "Get Configuration",
 	Inquiry          0x12 "Inquiry",
 	ReadCd           0xBE "Read CD",
-	ReadSubchannel   0x42 "Read Subchannel",
 	ReadToc          0x43 "Read TOC",
-}
-
-
-
-/// # Helper: Subchannel Formats.
-macro_rules! subchannel_fmt {
-	( $( $k:ident $v:literal $str:literal, )+ ) => (
-		#[repr(u8)]
-		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-		/// # (Relevant) Subchannel Data Format Codes.
-		///
-		/// This enum holds the data types for `ReadSubchannel` commands.
-		enum SubchannelFormat {
-			$(
-				#[doc = concat!("# ", $str, ".")]
-				$k = $v,
-			)+
-		}
-	);
-}
-
-subchannel_fmt! {
-	Isrc 0x03 "ISRC",
-	Mcn  0x02 "MCN",
 }
 
 

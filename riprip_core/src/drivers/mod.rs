@@ -29,12 +29,14 @@ mod libcdio;
 #[cfg(feature = "libusb")]
 mod libusb;
 
+use cdtoc::Track;
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_DATA_SUBCHANNEL_SIZE,
 	CD_LEADIN,
+	CD_SUBCHANNEL_SIZE,
 	DriveVendorModel,
 	FRAMES_PER_SECOND,
 	Isrc,
@@ -128,16 +130,6 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
 
-	/// # ISRC (Sub-Q).
-	///
-	/// Return the track ISRC as stored in the subchannel data, if any.
-	fn isrc_subchannel(&self, idx: u8) -> Option<Isrc>;
-
-	/// # MCN (Sub-Q).
-	///
-	/// Return the MCN as stored in the leadin subchannel data, if any.
-	fn mcn_subchannel(&self) -> Option<Barcode>;
-
 	/// # Execute Read Command.
 	///
 	/// This private method executes the million-argument MMC read command with
@@ -151,6 +143,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		&self,
 		buf: &mut [u8],
 		lsn: i32,
+		cd: bool,
 		c2: bool,
 		sub: u8,
 		block_size: u16,
@@ -224,7 +217,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
+		self.read_cd(buf, lsn, true, true, 0, CD_DATA_C2_SIZE)
 	}
 
 	/// # Read Data + Subchannel
@@ -256,7 +249,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
+		self.read_cd(buf, lsn, true, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
 
 		// We can only get timing information from ADR-1.
 		if
@@ -272,6 +265,59 @@ pub(crate) trait CddaDriverExt: Sized {
 
 		// As good as we can do!
 		Ok(())
+	}
+
+	/// # Read ISRC.
+	///
+	/// Pull Sub-Q data from the track, parsing and returning the first valid
+	/// ISRC, if any.
+	fn read_isrc(&self, track: Track) -> Option<Isrc> {
+		if track.is_htoa() { return None; }
+
+		let rng = track.sector_range_normalized();
+		let mut start = i32::try_from(rng.start).ok()?;
+		let end = i32::try_from(rng.end).ok()?;
+
+		// Prefer the middle of the track.
+		if start + 512 < end {
+			start = start.midpoint(end) - 128;
+		}
+
+		let mut already = HashSet::<[u8; 16]>::with_capacity(16);
+		let mut buf = [0_u8; CD_SUBCHANNEL_SIZE as usize];
+		for lsn in (start..end).take(256) {
+			buf.fill(0);
+			if
+				self.read_cd(buf.as_mut_slice(), lsn, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() &&
+				already.insert(buf) &&
+				let Some(isrc) = Isrc::from_subchannel_packet(&buf)
+			{
+				return Some(isrc);
+			}
+		}
+
+		None
+	}
+
+	/// # Read MCN.
+	///
+	/// Pull Sub-Q data from the start of the disc, parsing and returning the
+	/// first valid MCN entry, if any.
+	fn read_mcn(&self) -> Option<Barcode> {
+		let mut already = HashSet::<[u8; 16]>::with_capacity(16);
+		let mut buf = [0_u8; CD_SUBCHANNEL_SIZE as usize];
+		for lsn in 256..=512 {
+			buf.fill(0);
+			if
+				self.read_cd(buf.as_mut_slice(), lsn, false, false, 2, CD_SUBCHANNEL_SIZE).is_ok() &&
+				already.insert(buf) &&
+				let Some(barcode) = Barcode::from_subchannel_packet(&buf)
+			{
+				return Some(barcode);
+			}
+		}
+
+		None
 	}
 }
 
@@ -322,7 +368,7 @@ fn cache_bust<D: CddaDriverExt>(
 			break;
 		}
 
-		if ! bad_sector(from) && driver.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok() {
+		if ! bad_sector(from) && driver.read_cd(buf, from, true, false, 0, CD_DATA_SIZE).is_ok() {
 			*todo -= 1;
 		}
 

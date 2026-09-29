@@ -3,6 +3,7 @@
 */
 
 use crate::{
+	CRC,
 	macros::log,
 	RipRipError,
 };
@@ -113,7 +114,63 @@ impl TryFrom<&str> for Barcode {
 	}
 }
 
+impl Barcode {
+	#[must_use]
+	/// # From Raw Subchannel Packet.
+	///
+	/// Verify the packet, and if MCN, parse and return the value.
+	///
+	/// The first byte holds the control and ADR codes. ADR-2 is MCN.
+	///
+	/// Bytes `1..=7` hold the BCD-encoded data.
+	///
+	/// A 2-byte CRC for the first ten bytes is stored in bytes 11-12, big
+	/// endian.
+	///
+	/// The remainder is irrelevant for our purposes.
+	pub(crate) fn from_subchannel_packet(raw: &[u8; 16]) -> Option<Self> {
+		// Short-circuit: only ADR-3 is relevant.
+		if 2 != raw[0] & 0b0000_1111 { return None; }
 
+		// Check the data first.
+		let chk_actual = chk10(raw);
+		let chk_expected = u16::from_be_bytes([raw[10], raw[11]]);
+		if chk_actual != chk_expected {
+			log!(
+				@trace [chk_actual, chk_expected, raw]
+				"MCN subchannel packet failed CRC verification.",
+			);
+			return None;
+		}
+
+		let inner: [u8; 13] = std::array::from_fn(|i| {
+			let byte = raw[1 + i / 2];
+			b'0' + if i % 2 == 0 { byte >> 4 } else { byte & 0x0f }
+		});
+
+		if is_ean13(&inner) { Some(Self(inner)) }
+		else {
+			std::hint::cold_path();
+			log!(@trace "Invalid barcode {inner:?}.");
+			None
+		}
+	}
+}
+
+
+
+#[must_use]
+/// # Checksum 10 Bytes.
+const fn chk10(raw: &[u8; 16]) -> u16 {
+	let mut crc = 0_u16;
+	let mut i = 0;
+	while i < 10 {
+		let idx = (((crc >> 8) ^ (raw[i] as u16)) & 0xFF) as usize;
+		crc = CRC[idx] ^ (crc << 8);
+		i += 1;
+	}
+	crc ^ 0xFFFF
+}
 
 /// # Is EAN13?
 ///

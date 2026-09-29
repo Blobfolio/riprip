@@ -51,7 +51,6 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	time::Duration,
 };
 
 
@@ -366,7 +365,7 @@ impl Disc {
 	fn backfill_subchannel_mcn(&mut self) {
 		if self.barcode.is_none() {
 			// Subchannel reads are unreliable; try it twice.
-			if let Some(barcode) = self.cdda.mcn_subchannel().or_else(|| self.cdda.mcn_subchannel()) {
+			if let Some(barcode) = self.cdda.read_mcn() {
 				self.barcode.replace(barcode);
 			}
 			// Well, we tried. Twice!
@@ -375,8 +374,6 @@ impl Disc {
 	}
 
 	/// # Backfill ISRC Data From Subchannel.
-	///
-	/// TODO: maybe read a block from each track first?
 	fn backfill_subchannel_isrcs(&mut self) {
 		use std::collections::hash_map::Entry;
 
@@ -386,78 +383,34 @@ impl Disc {
 		/// there aren't any!
 		const MAX_NOTHING: u8 = 5;
 
-		/// # Max Fruitless Passes.
-		///
-		/// If successful reads are encountered after this many passes, call it
-		/// quits.
-		const MAX_FRUITLESS_PASSES: u8 = 3;
-
-		/// # Fail Delay.
-		///
-		/// When a read fails, wait this long before trying the next one, and
-		/// when a pass proves fruitless, wait twice as long again.
-		const FAIL_DELAY: Duration = Duration::from_millis(50);
-
 		// Subchannel reads can be unreliable, so let's repeat the process
 		// until the answers stop coming (or we've found them all).
-		let mut any = false;
-		let mut fruitless_passes = 0_u8;
-		loop {
-			let mut found = 0_u8;
-			let mut missing = 0_u8;
+		let mut missing = 0;
+		let mut found = 0;
+		for track in self.toc.audio_tracks() {
+			let Entry::Vacant(e) = self.isrcs.entry(track.number()) else {
+				// Already known.
+				continue;
+			};
 
-			for track in self.toc.audio_tracks() {
-				let Entry::Vacant(e) = self.isrcs.entry(track.number()) else {
-					// Already known.
-					continue;
-				};
-
-				// Got one!
-				if let Some(isrc) = self.cdda.isrc_subchannel(track.number()) {
-					e.insert(isrc);
-					found += 1;
-					any = true;
-				}
-				// Nope.
-				else {
-					missing += 1;
-
-					// Short circuit: assume there's no data to be found.
-					if ! any && missing == MAX_NOTHING {
-						log!(@trace "Sub-Q contains no track ISRC data.");
-						return;
-					}
-
-					// Pause before moving onto the next track.
-					std::thread::sleep(FAIL_DELAY);
-				}
+			if let Some(isrc) = self.cdda.read_isrc(track) {
+				e.insert(isrc);
+				found += 1;
 			}
+			else {
+				missing += 1;
 
-			// Found everything or nothing?
-			if missing == 0 { return; }
-
-			if found == 0 {
-				fruitless_passes += 1;
-
-				// Short circuit: assume there's no more data to be found.
-				if fruitless_passes == MAX_FRUITLESS_PASSES {
-					log!(
-						@trace [missing]
-						"No Sub-Q ISRC data found across {fruitless_passes} passes; giving up.",
-					);
+				// If we keep not finding anything, assume there's nothing to
+				// find.
+				if missing == MAX_NOTHING && found == 0 {
+					log!(@trace "Sub-Q contains no track ISRC data.");
 					return;
 				}
-
-				// Pause before starting the next pass.
-				std::thread::sleep(FAIL_DELAY * 2);
 			}
-			// We found something; try again.
-			else { fruitless_passes = 0; }
+		}
 
-			log!(
-				@trace [found, missing, fruitless_passes]
-				"Sub-Q ISRC data is incomplete; retrying!",
-			);
+		if found == 0 {
+			log!(@trace "Sub-Q contains no track ISRC data.");
 		}
 	}
 }
