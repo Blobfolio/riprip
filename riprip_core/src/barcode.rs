@@ -99,7 +99,9 @@ impl TryFrom<&[u8]> for Barcode {
 		// Return it if valid!
 		if is_ean13(&buf) { Ok(Self(buf)) }
 		else {
-			log!(@trace [ buf ] "Invalid barcode {src:?}.");
+			if buf != [b'0'; 13] {
+				log!(@trace [ buf ] "Invalid barcode {src:?}.");
+			}
 			Err(RipRipError::Barcode)
 		}
 	}
@@ -150,8 +152,9 @@ impl Barcode {
 
 		if is_ean13(&inner) { Some(Self(inner)) }
 		else {
-			std::hint::cold_path();
-			log!(@trace "Invalid barcode {inner:?}.");
+			if inner != [b'0'; 13] {
+				log!(@trace "Invalid barcode {inner:?}.");
+			}
 			None
 		}
 	}
@@ -193,10 +196,9 @@ fn is_ean13(src: &[u8; 13]) -> bool {
 		}
 		// Everything else goes into the total.
 		else { total += ((k % 2) * 2 + 1) * num; }
-
 	}
 
-	10 - (total % 10) == chk
+	(10 - (total % 10) == chk) && src.array_windows::<2>().any(|[a, b]| *a != *b)
 }
 
 
