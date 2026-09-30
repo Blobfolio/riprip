@@ -50,6 +50,7 @@ use crate::{
 	KillSwitch,
 	macros::log,
 	RipRipError,
+	SubQ,
 };
 use dactyl::NoHash;
 use std::{
@@ -252,20 +253,17 @@ pub(crate) trait CddaDriverExt: Sized {
 		// Read it!
 		self.read_cd(buf, lsn, ReadCdOpts::CddaPlusSubchannel)?;
 
-		// We can only get timing information from ADR-1.
+		// If the subchannel data is valid and ADR-1 _and_ the resulting MSF
+		// mismatches what we expected, desync!
 		if
-			1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 &&
-			lsn != msf_to_lsn(
-				buf[usize::from(CD_DATA_SIZE) + 7],
-				buf[usize::from(CD_DATA_SIZE) + 8],
-				buf[usize::from(CD_DATA_SIZE) + 9],
-			)
+			let Some(subq) = buf.last_chunk::<{CD_SUBCHANNEL_SIZE as usize}>() &&
+			let Some(SubQ::Timing([_, _, _, _, _, _, m, s, f])) = SubQ::new(subq) &&
+			lsn != msf_to_lsn(m, s, f)
 		{
-			return Err(RipRipError::SubchannelDesync);
+			Err(RipRipError::SubchannelDesync)
 		}
-
 		// As good as we can do!
-		Ok(())
+		else { Ok(()) }
 	}
 
 	/// # Read ISRC.
@@ -285,14 +283,15 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Should be able to read en masse for these.
-		let mut already = HashSet::<[u8; 9]>::with_capacity(256);
+		let mut already = HashSet::<[u8; 8]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
-						already.insert(*chunk[..9].as_array().unwrap()) &&
-						let Some(isrc) = Isrc::from_subchannel_packet(&chunk)
+						let Some(SubQ::Isrc(subq)) = SubQ::new(&chunk) &&
+						already.insert(*subq[..8].as_array().unwrap()) &&
+						let Some(isrc) = Isrc::from_subq(subq)
 					{
 						return Some(isrc);
 					}
@@ -312,14 +311,15 @@ pub(crate) trait CddaDriverExt: Sized {
 	fn read_mcn(&self) -> Option<Barcode> {
 		// Should be able to read en masse for these.
 		let mut start = 256;
-		let mut already = HashSet::<[u8; 8]>::with_capacity(256);
+		let mut already = HashSet::<[u8; 7]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
-						already.insert(*chunk[..8].as_array().unwrap()) &&
-						let Some(barcode) = Barcode::from_subchannel_packet(&chunk)
+						let Some(SubQ::Mcn(subq)) = SubQ::new(&chunk) &&
+						already.insert(*subq[..7].as_array().unwrap()) &&
+						let Some(barcode) = Barcode::from_subq(subq)
 					{
 						return Some(barcode);
 					}

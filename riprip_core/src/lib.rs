@@ -71,6 +71,7 @@ mod isrc;
 mod loglog;
 pub mod macros;
 mod rip;
+mod subq;
 mod track;
 
 
@@ -121,6 +122,7 @@ use std::{
 	collections::BTreeMap,
 	path::PathBuf,
 };
+use subq::SubQ;
 use track::TrackRange;
 
 
