@@ -283,14 +283,12 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Should be able to read en masse for these.
-		let mut already = HashSet::<[u8; 8]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
 						let Some(SubQ::Isrc(subq)) = SubQ::new(&chunk) &&
-						already.insert(*subq[..8].as_array().unwrap()) &&
 						let Some(isrc) = Isrc::from_subq(subq)
 					{
 						return Some(isrc);
@@ -311,14 +309,12 @@ pub(crate) trait CddaDriverExt: Sized {
 	fn read_mcn(&self) -> Option<Barcode> {
 		// Should be able to read en masse for these.
 		let mut start = 256;
-		let mut already = HashSet::<[u8; 7]>::with_capacity(256);
 		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
 		for _ in 0..16 {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
 				for chunk in buf {
 					if
 						let Some(SubQ::Mcn(subq)) = SubQ::new(&chunk) &&
-						already.insert(*subq[..7].as_array().unwrap()) &&
 						let Some(barcode) = Barcode::from_subq(subq)
 					{
 						return Some(barcode);
