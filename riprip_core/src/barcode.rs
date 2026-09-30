@@ -147,18 +147,18 @@ impl Barcode {
 /// performs the computations to verify the check digit matches.
 const fn is_ean13(src: &[u8; 13]) -> bool {
 	// Total the digits (as decimals) using an alternating 1-or-3 multiplier.
-	let mut total = 0;
-	let mut k = 0;
+	let mut total = 0_u16;
+	let mut k = 0_u16;
 	while k < 12 {
-		let num = src[k as usize] ^ b'0';
+		let num = (src[k as usize] ^ b'0') as u16;
 		total += ((k % 2) * 2 + 1) * num;
 		k += 1;
 	}
 
 	// The last digit is the check.
-    let chk =
+    let chk: u16 =
 		if src[12] == b'0' { 10 }
-		else { src[12] ^ b'0' };
+		else { (src[12] ^ b'0') as u16 };
 
 	// Contains at least one non-zero digit and…
 	(total != 0 || chk != 10) &&
