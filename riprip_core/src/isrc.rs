@@ -87,8 +87,8 @@ impl TryFrom<&[u8]> for Isrc {
 				*v = b.to_ascii_uppercase();
 			}
 
-			// Return, unless we have unwritten slots left over or every byte
-			// is the same!
+			// If we've used up all the slots and the bytes have the right
+			// composition, return it!
 			if dst.next().is_none() && valid_bytes(out) { Some(out) }
 			else { None }
 		}
@@ -152,7 +152,7 @@ impl Isrc {
 			return None;
 		}
 
-		// Same for the serial, but in this case the max is five digits. // We checked it's 2 digits or less.
+		// Same for the serial, but in this case the max is five digits.
 		let mut serial =
 			from_bcd8(raw[5]) * 1_000 +
 			from_bcd8(raw[6]) * 10 +
@@ -165,7 +165,7 @@ impl Isrc {
 			return None;
 		}
 
-		// Convert the serial to ASCII digits.
+		// Convert the serial to zero-padded ASCII digits.
 		let s1 = serial / 10_000;
 		serial -= s1 * 10_000;
 		let s2 = serial / 1000;
@@ -207,15 +207,23 @@ impl Isrc {
 #[must_use]
 /// # Valid Inner.
 ///
-/// This checks the inner ISRC array contains valid characters at each point.
+/// This checks the inner ISRC array contains valid characters at each point:
 const fn valid_bytes(raw: [u8; 12]) -> bool {
 	matches!(
 		raw,
 		[
-			              b'A'..=b'Z',               b'A'..=b'Z',
-			b'0'..=b'9' | b'A'..=b'Z', b'0'..=b'9' | b'A'..=b'Z', b'0'..=b'9' | b'A'..=b'Z',
-			b'0'..=b'9',               b'0'..=b'9',
-			b'0'..=b'9',               b'0'..=b'9',               b'0'..=b'9',               b'0'..=b'9', b'0'..=b'9',
+			              b'A'..=b'Z', // Country code.
+			              b'A'..=b'Z', // Country code.
+			b'0'..=b'9' | b'A'..=b'Z', // Owner code.
+			b'0'..=b'9' | b'A'..=b'Z', // Owner code.
+			b'0'..=b'9' | b'A'..=b'Z', // Owner code.
+			b'0'..=b'9',               // Year.
+			b'0'..=b'9',               // Year.
+			b'0'..=b'9',               // Serial number.
+			b'0'..=b'9',               // Serial number.
+			b'0'..=b'9',               // Serial number.
+			b'0'..=b'9',               // Serial number.
+			b'0'..=b'9',               // Serial number.
 		]
 	)
 }
