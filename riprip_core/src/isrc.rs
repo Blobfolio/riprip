@@ -96,9 +96,7 @@ impl TryFrom<&[u8]> for Isrc {
 
 			// Return, unless we have unwritten slots left over or every byte
 			// is the same!
-			if dst.next().is_none() && out.array_windows::<2>().any(|[a, b]| *a != *b) {
-				Some(out)
-			}
+			if dst.next().is_none() && valid_bytes(out) { Some(out) }
 			else { None }
 		}
 
@@ -224,13 +222,8 @@ impl Isrc {
 		];
 
 		// The year and serial parts should be fine, but let's make sure the
-		// country and owner are ASCII alphanumeric.
-		if
-			inner[0..5].iter().all(u8::is_ascii_alphanumeric) &&
-			inner.array_windows::<2>().any(|[a, b]| *a != *b)
-		{
-			Some(Self(inner))
-		}
+		// country and owner character makeup is correct.
+		if valid_bytes(inner) { Some(Self(inner)) }
 		else {
 			std::hint::cold_path();
 			log!(@trace "Invalid ISRC {inner:?}.");
@@ -242,16 +235,19 @@ impl Isrc {
 
 
 #[must_use]
-/// # Checksum 10 Bytes.
-const fn chk10(raw: &[u8; 16]) -> u16 {
-	let mut crc = 0_u16;
-	let mut i = 0;
-	while i < 10 {
-		let idx = (((crc >> 8) ^ (raw[i] as u16)) & 0xFF) as usize;
-		crc = CRC[idx] ^ (crc << 8);
-		i += 1;
-	}
-	crc ^ 0xFFFF
+/// # Valid Inner.
+///
+/// This checks the inner ISRC array contains valid characters at each point.
+const fn valid_bytes(raw: [u8; 12]) -> bool {
+	matches!(
+		raw,
+		[
+			              b'A'..=b'Z',               b'A'..=b'Z',
+			b'0'..=b'9' | b'A'..=b'Z', b'0'..=b'9' | b'A'..=b'Z', b'0'..=b'9' | b'A'..=b'Z',
+			b'0'..=b'9',               b'0'..=b'9',
+			b'0'..=b'9',               b'0'..=b'9',               b'0'..=b'9',               b'0'..=b'9', b'0'..=b'9',
+		]
+	)
 }
 
 

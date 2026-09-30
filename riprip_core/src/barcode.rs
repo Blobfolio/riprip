@@ -180,26 +180,25 @@ const fn chk10(raw: &[u8; 16]) -> u16 {
 ///
 /// The content is pre-validated by the `TryFrom` implementation; this merely
 /// performs the computations to verify the check digit matches.
-fn is_ean13(src: &[u8; 13]) -> bool {
-	let mut chk = 0;
+const fn is_ean13(src: &[u8; 13]) -> bool {
+	// Total the digits (as decimals) using an alternating 1-or-3 multiplier.
 	let mut total = 0;
-	let mut k = 13;
-	for num in src.iter().copied().rev() {
-		k -= 1;
-
-		// Convert ASCII to decimal. (TryFrom verifies all values are digits.)
-		let num = num ^ b'0';
-
-		// The last entry (the first we're checking) is the check digit.
-		if k == 12 {
-			if num == 0 { chk = 10; }
-			else { chk = num; }
-		}
-		// Everything else goes into the total.
-		else { total += ((k % 2) * 2 + 1) * num; }
+	let mut k = 0;
+	while k < 12 {
+		let num = src[k as usize] ^ b'0';
+		total += ((k % 2) * 2 + 1) * num;
+		k += 1;
 	}
 
-	(10 - (total % 10) == chk) && src.array_windows::<2>().any(|[a, b]| *a != *b)
+	// The last digit is the check.
+    let chk =
+		if src[12] == b'0' { 10 }
+		else { src[12] ^ b'0' };
+
+	// Contains at least one non-zero digit and…
+	(total != 0 || chk != 10) &&
+	// Check digit matches.
+	(10 - (total % 10) == chk)
 }
 
 
@@ -229,5 +228,12 @@ mod tests {
 
 		let bc = Barcode::try_from("0018861006529").expect("Barcode failed.");
 		assert_eq!(bc.to_string(), "0-18861-00652-9");
+
+		// No matte codes should be valid.
+		let mut buf = [0_u8; 13];
+		for i in 0..=9_u8 {
+			buf.fill(i);
+			assert!(! is_ean13(&buf));
+		}
 	}
 }
