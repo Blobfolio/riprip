@@ -171,6 +171,7 @@ const fn is_ean13(src: &[u8; 13]) -> bool {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::SubQ;
 
 	#[test]
 	fn t_is_ean13() {
@@ -200,5 +201,21 @@ mod tests {
 			buf.fill(i);
 			assert!(! is_ean13(&buf));
 		}
+	}
+
+	#[test]
+	fn t_barcode_q() {
+		// A valid packet, but an invalid barcode.
+		let Some(SubQ::Mcn(chopped)) = SubQ::new(&[2, 0, 117, 103, 146, 33, 50, 96, 0, 66, 166, 244, 0, 0, 0, 0]) else {
+			panic!("Failed to parse raw sub-q packet.");
+		};
+		assert!(Barcode::from_subq(chopped).is_none());
+
+		// Valid and valid.
+		let Some(SubQ::Mcn(chopped)) = SubQ::new(&[2, 0, 117, 103, 0, 5, 82, 80, 0, 70, 190, 81, 0, 0, 0, 0]) else {
+			panic!("Failed to parse raw sub-q packet.");
+		};
+		let barcode = Barcode::from_subq(chopped).unwrap();
+		assert_eq!(barcode.to_string(), "0-75670-00552-5");
 	}
 }
