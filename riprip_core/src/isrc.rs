@@ -69,7 +69,7 @@ impl fmt::Display for Isrc {
 impl TryFrom<&[u8]> for Isrc {
 	type Error = RipRipError;
 
-	fn try_from(mut src: &[u8]) -> Result<Self, Self::Error> {
+	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		use trimothy::TrimSliceMatches;
 
 		/// # Parse.
@@ -78,13 +78,22 @@ impl TryFrom<&[u8]> for Isrc {
 			let mut dst = out.iter_mut();
 
 			for b in src.iter().copied() {
-				// Silently ignore whitespace, nulls, and dashes.
-				if b.is_ascii_whitespace() || matches!(b, b'\0' | b'-') { continue; }
+				match b {
+					// Silently ignore whitespace and dashes.
+					b'\t' | b'\n' | b'\x0C' | b'\r' | b' ' | b'-' => {},
 
-				// Pull the next slot.
-				let v = dst.next()?;
+					// Break on null.
+					b'\0' => break,
 
-				*v = b.to_ascii_uppercase();
+					// Write ASCII alphanumerics.
+					b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' => {
+						let v = dst.next()?;
+						*v = b.to_ascii_uppercase();
+					},
+
+					// Anything else is an error.
+					_ => return None,
+				}
 			}
 
 			// If we've used up all the slots and the bytes have the right
@@ -93,16 +102,8 @@ impl TryFrom<&[u8]> for Isrc {
 			else { None }
 		}
 
-		// Trim whitespace and nulls.
-		src = src.trim_matches(|b: u8| b.is_ascii_whitespace() || b == 0_u8);
-
-		// If there's a null in the middle somewhere, cut to it and recurse.
-		if let Some(pos) = src.iter().copied().position(|b| b == 0_u8) {
-			return Self::try_from(&src[..pos]);
-		}
-
 		// Return it if valid!
-		parse(src).map_or_else(
+		parse(src.trim_matches(|b: u8| b.is_ascii_whitespace() || b == 0_u8)).map_or_else(
 			|| {
 				log!(@trace "Invalid ISRC {:?}.", src);
 				Err(RipRipError::Isrc)

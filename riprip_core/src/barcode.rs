@@ -7,7 +7,6 @@ use crate::{
 	RipRipError,
 };
 use std::fmt;
-use trimothy::TrimSliceMatches;
 
 
 
@@ -64,45 +63,50 @@ impl fmt::Display for Barcode {
 
 impl TryFrom<&[u8]> for Barcode {
 	type Error = RipRipError;
-	fn try_from(mut src: &[u8]) -> Result<Self, Self::Error> {
-		// Remove whitespace, leading *ASCII* zeroes, and trailing nulls.
-		src = src.trim_start_matches(|b: u8| b.is_ascii_whitespace() || b == b'0');
-		src = src.trim_end_matches(|b: u8| b.is_ascii_whitespace() || b == 0);
+	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
+		use trimothy::TrimSliceMatches;
 
-		// If there's a null byte, cut to it and recurse.
-		if let Some(pos) = src.iter().copied().position(|b| b == 0_u8) {
-			return Self::try_from(&src[..pos]);
-		}
-
-		// If there are dashes, strip and recurse.
-		if src.contains(&b'-') {
-			let new: Vec<u8> = src.iter()
-				.copied()
-				.filter(u8::is_ascii_digit)
-				.collect();
-			return Self::try_from(new.as_slice());
-		}
-
-		// Make sure we've got 8-13 ASCII digits and nothing else.
-		if ! (8..=13).contains(&src.len()) || ! src.iter().all(u8::is_ascii_digit) {
-			if ! src.is_empty() {
-				log!(@trace "Invalid barcode {:?}.", src);
+		/// # Parse.
+		fn parse(src: &[u8]) -> Option<[u8; 13]> {
+			// If there's a null in the middle somewhere, split and recurse.
+			if let Some(pos) = src.iter().copied().position(|b| b == 0_u8) {
+				std::hint::cold_path();
+				return parse(&src[..pos]);
 			}
-			return Err(RipRipError::Barcode);
-		}
 
-		// Copy the data to the end of an ASCII-zero-padded slice.
-		let mut buf = [b'0'; 13];
-		buf[13 - src.len()..].copy_from_slice(src);
+			let mut out = [b'0'; 13];
+			let mut dst = out.iter_mut().rev();
+
+			// Write backwards.
+			for b in src.trim_start_matches(|b: u8| b == b'0').iter().copied().rev() {
+				match b {
+					// Silently ignore whitespace and dashes.
+					b'\t' | b'\n' | b'\x0C' | b'\r' | b' ' | b'-' => {},
+
+					// Write ASCII digits.
+					b'0'..=b'9' => {
+						let v = dst.next()?;
+						*v = b.to_ascii_uppercase();
+					},
+
+					// Anything else is an error.
+					_ => return None,
+				}
+			}
+
+			// Return if valid.
+			if is_ean13(&out) { Some(out) }
+			else { None }
+		}
 
 		// Return it if valid!
-		if is_ean13(&buf) { Ok(Self(buf)) }
-		else {
-			if buf != [b'0'; 13] {
-				log!(@trace [ buf ] "Invalid barcode {src:?}.");
-			}
-			Err(RipRipError::Barcode)
-		}
+		parse(src.trim_matches(|b: u8| b.is_ascii_whitespace() || b == 0_u8)).map_or_else(
+			|| {
+				log!(@trace "Invalid UPC/EAN {:?}.", src);
+				Err(RipRipError::Barcode)
+			},
+			|v| Ok(Self(v)),
+		)
 	}
 }
 
