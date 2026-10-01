@@ -14,7 +14,14 @@ use crate::{
 	RipRipError,
 	TrackRange,
 };
-use std::range::legacy::Range;
+use dactyl::NiceElapsed;
+use std::{
+	range::legacy::Range,
+	time::{
+		Duration,
+		Instant,
+	},
+};
 use super::ReadCdOpts;
 
 
@@ -84,6 +91,9 @@ pub(super) trait MmcDriverExt: TransportExt {
 	fn check_disc_mode__(&self) -> Result<(), RipRipError> {
 		const FIRST_TRACK: u8 = 0x01;
 		const ALLOC_LEN: usize = TOC_HEADER_LEN;
+
+		// Make sure the device is ready first.
+		self.test_unit_ready__()?;
 
 		// Asks only for enough bytes to discover how large the TOC is.
 		let mut buf = [0_u8; ALLOC_LEN];
@@ -315,6 +325,91 @@ pub(super) trait MmcDriverExt: TransportExt {
 
 		Ok(written)
 	}
+
+	/// # Test Unit Ready.
+	///
+	/// Poll the device to find out if/when it's ready.
+	fn test_unit_ready__(&self) -> Result<(), RipRipError> {
+		// All zeroes!
+		const CDB_TEST: [u8; 6] = [MmcCmd::TestUnitReady as u8, 0, 0, 0, 0, 0];
+
+		// Mostly zeroes, but this time there's data. Haha.
+		const CDB_SENSE: [u8; 6] = [MmcCmd::Sense as u8, 0, 0, 0, 18, 0];
+
+		// Retry delay.
+		const RETRY_DELAY: Duration = Duration::from_millis(250);
+
+		// Retry timeout.
+		const RETRY_TIMEOUT: Duration = Duration::from_secs(15);
+
+		let now = Instant::now();
+		let mut retried = false;
+		let mut limited_retry = 0;
+		loop {
+			match self.submit(&CDB_TEST, &mut [], "test_unit_ready__") {
+				// Ready!
+				Ok(_) => {
+					if retried {
+						log!(
+							@trace
+							"Device ready after {}.",
+							NiceElapsed::from(now.elapsed()),
+						);
+					}
+
+					return Ok(())
+				},
+
+				// Don't know. Let's see.
+				Err(RipRipError::TestUnitNotReady) => {
+					let mut buf = [0_u8; 18];
+					self.submit(&CDB_SENSE, &mut buf, "test_unit_ready__")?;
+
+					// Only three of those bytes are relevant.
+					let key = buf[2] & 0x0f;
+					let asc = buf[12];
+					let ascq = buf[13];
+
+					// If it's getting ready, wait and loop back around.
+					match [key, asc, ascq] {
+						// Not there yet, wait and retry.
+						[ 0x02, 0x04, 0x00 | 0x01 | 0x07 ] |
+						[ 0x06, 0x28, 0x00 ] |
+						[ 0x06, 0x29, 0x00..=0x04 ] => {},
+
+						// Conditionally retry.
+						[ 0x02, 0x04, 0x02 ] |
+						[ 0x06, 0x2A, 0x00..=0x02 ] if limited_retry < 2 => {
+							limited_retry += 1;
+						},
+
+						// An actual error, probably.
+						_ => return Err(RipRipError::DiscMode),
+					}
+
+					// Mention that we're gonna be polling, but only once.
+					if ! retried {
+						log!(@trace "Waiting for device to become ready.");
+						retried = true;
+					}
+					// If it's taking forever, return an error.
+					else if RETRY_TIMEOUT < now.elapsed() {
+						log!(
+							@trace
+							"Device still not ready after {}; giving up.",
+							NiceElapsed::from(now.elapsed()),
+						);
+						return Err(RipRipError::TestUnitTimeout);
+					}
+
+					std::thread::sleep(RETRY_DELAY);
+				},
+
+				// Something is wrong.
+				Err(e) => return Err(e),
+			}
+		}
+	}
 }
 
 impl<T: MmcDriverExt> CddaDriverExt for T {
@@ -471,6 +566,8 @@ cmd! {
 	Inquiry          0x12 "Inquiry",
 	ReadCd           0xBE "Read CD",
 	ReadToc          0x43 "Read TOC",
+	Sense            0x03 "Sense Request.",
+	TestUnitReady    0x00 "Test Unit Ready",
 }
 
 

@@ -191,6 +191,9 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
 		let data_len = buf.len();
 
+		// Normally Device-to-Host, but if there's no data phase, zero.
+		let flags = if buf.is_empty() { 0x00 } else { 0x80 };
+
 		let cbw = CommandBlockWrapper::new(
 			current_tag,
 			u32::try_from(buf.len())
@@ -198,7 +201,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 					log!(@trace [ctx, buf.len()] "Command block buffer exceeds u32::MAX.");
 					RipRipError::Bug("Command block buffer exceeds u32::MAX.")
 				})?,
-			0x80, // Device-to-Host
+			flags,
 			0,
 			cdb,
 		);
@@ -277,6 +280,14 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		// Happy!
 		if csw.status() == 0 { return Ok(transferred); }
 
+		// For TEST UNIT READY, a status value of 1 requires more digging
+		// to see what's what. Return a special error for that so the caller
+		// can call back.
+		if csw.status() == 1 && cdb.as_slice() == [0_u8; 6] {
+			return Err(RipRipError::TestUnitNotReady);
+		}
+
+		// Boo.
 		log!(
 			@trace [ctx, cbw, buf, transferred, csw]
 			"Command status ({}) did not pass.",

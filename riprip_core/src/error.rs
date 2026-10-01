@@ -228,6 +228,17 @@ pub enum RipRipError {
 	/// # Writing to disk.
 	Write(String),
 
+	#[cfg(feature = "libusb")]
+	/// # Test Unit Readiness Ambiguous.
+	///
+	/// This signals that a followup SENSE request is required to make sense
+	/// of an ambiguous test unit ready status of 1.
+	TestUnitNotReady,
+
+	#[cfg(feature = "libusb")]
+	/// # Test Unit Ready Timeout.
+	TestUnitTimeout,
+
 	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
 	CliArg(String),
@@ -299,6 +310,12 @@ impl fmt::Display for RipRipError {
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
+
+			#[cfg(feature = "libusb")]
+			Self::TestUnitNotReady => Ok(()), // Internal only.
+
+			#[cfg(feature = "libusb")]
+			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
 			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
