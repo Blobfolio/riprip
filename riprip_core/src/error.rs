@@ -106,9 +106,9 @@ MISCELLANEOUS:
                       choosing, e.g. `riprip -v > out.log`. May be specified up
                       to four times for more detail.
     -V, --version     Print version information to STDOUT and exit.
-        --no-cdtext   Do not try to read/parse CD-Text data from the disc. Can
-                      speed things up if the disc is damaged in just the wrong
-                      way.
+        --no-metadata Do not try to read/parse CD-Text, MCN, and track ISRC
+                      metadata from the disc. This can speed up initialization,
+                      particularly for discs with a lot of damage.
         --no-rip      Print the basic drive and disc information to STDERR and
                       exit (without ripping anything).
         --no-summary  Skip the drive and disc summary and jump straight to

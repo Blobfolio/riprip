@@ -248,7 +248,7 @@ impl Disc {
 	///
 	/// This will return an error if there's a problem communicating with the
 	/// drive, the disc is unsupported, etc.
-	pub fn new<P>(dev: Option<P>, cdtext: bool)
+	pub fn new<P>(dev: Option<P>, metadata: bool)
 	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
 		if let Some(v) = dev.as_ref() {
@@ -282,6 +282,10 @@ impl Disc {
 		// Grab the leadout, then build the ToC.
 		let leadout = cdda.leadout_lba()?;
 		let toc = Toc::from_parts(audio, data, leadout)?;
+		let isrcs = IsrcMap::with_capacity_and_hasher(
+			toc.audio_len(),
+			NoHash::default(),
+		);
 
 		// We have most of it.
 		let mut out = Self {
@@ -289,28 +293,30 @@ impl Disc {
 			toc,
 			cdtext: None,
 			barcode: None,
-			isrcs: IsrcMap::with_hasher(NoHash::default()),
+			isrcs,
 		};
 
 		// Unless the user opted out of CD-Text parsing, let's handle that
 		// now.
-		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
-			match CDText::from_bytes(&raw_cdtext) {
-				Ok(cdtext) => {
-					out.barcode = cdtext.barcode();
-					if let Some(isrcs) = cdtext.isrcs() {
-						out.isrcs.extend(isrcs.iter().map(|(k, v)| (*k, *v)));
-					}
-					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
-				},
-				Err(e) => {
-					out.cdtext.replace((raw_cdtext, Err(e)));
-				},
+		if metadata {
+			if let Some(raw_cdtext) = out.cdda.cdtext() {
+				match CDText::from_bytes(&raw_cdtext) {
+					Ok(cdtext) => {
+						out.barcode = cdtext.barcode();
+						if let Some(isrcs) = cdtext.isrcs() {
+							out.isrcs.extend(isrcs.iter().map(|(k, v)| (*k, *v)));
+						}
+						out.cdtext.replace((raw_cdtext, Ok(cdtext)));
+					},
+					Err(e) => {
+						out.cdtext.replace((raw_cdtext, Err(e)));
+					},
+				}
 			}
-		}
 
-		// Supplement missing MCN and/or ISRC data from subchannel.
-		out.backfill_subchannel();
+			// Supplement missing MCN and/or ISRC data from subchannel.
+			out.backfill_subchannel();
+		}
 
 		// Finally done!
 		Ok(out)
