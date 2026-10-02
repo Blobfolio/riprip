@@ -18,6 +18,7 @@ use dactyl::{
 	NiceU32,
 };
 use super::mmc::{
+	CommandDescriptorBlock,
 	MmcDriverExt,
 	TransportExt,
 };
@@ -172,20 +173,17 @@ impl<C: UsbContext> LibusbInstance<C> {
 
 impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 	/// # Submit.
-	fn submit<const N: usize>(&self, cdb: &[u8; N], buf: &mut [u8], ctx: &'static str)
-	-> Result<usize, RipRipError> {
+	fn submit(
+		&self,
+		cdb: &CommandDescriptorBlock,
+		buf: &mut [u8],
+		ctx: &'static str,
+	) -> Result<usize, RipRipError> {
 		use bot::{
 			CommandBlockWrapper,
 			CommandStatusWrapper,
 			CSW_LEN,
 		};
-
-		const {
-			assert!(
-				N == 6 || N == 10 || N == 12,
-				"BUG: CDB must have length of 6, 10, or 12.",
-			);
-		}
 
 		// Read and increment the local counter attached directly to this specific drive.
 		let current_tag = self.cbw_tag.fetch_add(1, Ordering::Relaxed);
@@ -283,7 +281,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		// For TEST UNIT READY, a status value of 1 requires more digging
 		// to see what's what. Return a special error for that so the caller
 		// can call back.
-		if csw.status() == 1 && cdb.as_slice() == [0_u8; 6] {
+		if csw.status() == 1 && cdb.is_test_unit_ready() {
 			return Err(RipRipError::TestUnitNotReady);
 		}
 
