@@ -1,6 +1,6 @@
 [package]
 name = "riprip"
-version = "0.9.0"
+version = "0.9.1"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -45,8 +45,8 @@ long = "--help"
 description = "Print help information to STDOUT and exit."
 
 [[package.metadata.bashman.switches]]
-long = "--no-cdtext"
-description = "Do not try to read/parse CD-Text data from the disc. Can speed things up if the disc is damaged in just the wrong way."
+long = "--no-metadata"
+description = "Do not try to read/parse CD-Text, MCN, and track ISRC metadata from the disc. This can speed up initialization, particularly for discs with a lot of damage."
 
 [[package.metadata.bashman.switches]]
 long = "--no-resume"
@@ -131,9 +131,9 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [dependencies]
-argyle = "0.15.*"
-dactyl = "0.13.*"
-oxford_join = "0.7.*"
+argyle = "0.16.*"
+dactyl = "0.14.*"
+oxford_join = "0.8.*"
 
 [dependencies.fyi_msg]
 version = "2.7.*"

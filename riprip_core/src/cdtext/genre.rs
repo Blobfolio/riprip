@@ -78,56 +78,62 @@ macro_rules! genre_code {
 			#[must_use]
 			/// # Split Raw Value.
 			///
-			/// CD-Text GENRE values store the code in the first byte and
-			/// a freeform representation in the rest. Both parts are optional.
+			/// Raw genre values comprise either or both of a single-byte code
+			/// and freeform ASCII representation. This method normalizes that
+			/// nonsense, returning both, using `Self::Unused` and an empty
+			/// `String`, respectively, when missing
 			pub(super) fn split_raw(raw: &[u8]) -> (Self, String) {
-				if let [ code, rest @ .. ] = raw {
-					let code = Self::from_u8(*code).unwrap_or(Self::Unused);
-					let mut rest = super::Encoding::Ascii.decode(rest);
+				// The possible code values are non-printable, so we can deduce
+				// their use if the first byte matches a code.
+				let (code, text) = match raw {
+					[ a @ 0..=0x1C, rest @ .. ] => (*a, rest),
+					_ => (0, raw),
+				};
 
-					// Treat literal "not defined" and "not used" as empty.
-					if
-						rest.eq_ignore_ascii_case("not defined") ||
-						rest.eq_ignore_ascii_case("not used")
-					{
-						rest.clear();
-					}
+				let code = Self::from_u8(code).unwrap_or(Self::Unused);
+				let mut text = super::Encoding::Ascii.decode(text);
 
-					// Done!
-					(code, rest)
+				// Ignore redundant freeform labels.
+				if
+					text.eq_ignore_ascii_case("not defined") ||
+					text.eq_ignore_ascii_case("not used") ||
+					text.eq_ignore_ascii_case(code.as_str())
+				{
+					text.clear();
 				}
-				else { (Self::Unused, String::new()) }
+
+				(code, text)
 			}
 		}
 	);
 }
 
 genre_code! {
-	Unused                0x00 "",
-	Unspecified           0x01 "Unspecified",
+	Unused                0x00 "Not Used",
+	Unspecified           0x01 "Not Defined",
 	AdultContemporary     0x02 "Adult Contemporary",
 	AlternativeRock       0x03 "Alternative Rock",
 	Childrens             0x04 "Children's Music",
 	Classical             0x05 "Classical",
-	ChristianContemporary 0x06 "Christian Contemporary",
+	ChristianContemporary 0x06 "Contemporary Christian",
 	Country               0x07 "Country",
 	Dance                 0x08 "Dance",
 	EasyListening         0x09 "Easy Listening",
 	Erotic                0x0A "Erotic",
 	Folk                  0x0B "Folk",
 	Gospel                0x0C "Gospel",
-	HipHop                0x0D "Hip-Hop",
+	HipHop                0x0D "Hip Hop",
 	Jazz                  0x0E "Jazz",
 	Latin                 0x0F "Latin",
 	Musical               0x10 "Musical",
 	NewAge                0x11 "New Age",
 	Opera                 0x12 "Opera",
 	Operetta              0x13 "Operetta",
-	Pop                   0x14 "Pop",
+	Pop                   0x14 "Pop Music",
 	Rap                   0x15 "Rap",
 	Reggae                0x16 "Reggae",
-	Rock                  0x17 "Rock",
-	RhythmAndBlues        0x18 "R&B",
+	Rock                  0x17 "Rock Music",
+	RhythmAndBlues        0x18 "Rhythm & Blues",
 	SoundEffects          0x19 "Sound Effects",
 	// Note: the end of the list is inconsistent across libcdio; if possible,
 	// try to find a CD matching any of these last three to confirm.

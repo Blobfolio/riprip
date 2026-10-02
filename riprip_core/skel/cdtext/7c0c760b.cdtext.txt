@@ -1,0 +1,26 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Pretty Hate Machine
+	PERFORMER: Nine Inch Nails
+TRACK 01:
+	TITLE: Head Like A Hole
+TRACK 02:
+	TITLE: Terrible Lie
+TRACK 03:
+	TITLE: Down In It
+TRACK 04:
+	TITLE: Sanctified
+TRACK 05:
+	TITLE: Something I Can Never Have
+TRACK 06:
+	TITLE: Kinda I Want To
+TRACK 07:
+	TITLE: Sin
+TRACK 08:
+	TITLE: That's What I Get
+TRACK 09:
+	TITLE: The Only Time
+TRACK 10:
+	TITLE: Ringfinger
+TRACK 11:
+	TITLE: Get Down, Make Love

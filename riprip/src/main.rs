@@ -71,6 +71,7 @@ use fyi_msg::{
 use oxford_join::JoinFmt;
 use riprip_core::{
 	Disc,
+	DriveVendorModel,
 	KillSwitch,
 	macros::log,
 	RipOptions,
@@ -88,7 +89,19 @@ use std::{
 ///
 /// This is used to encase the drive vendor/model during summary. We'll slice
 /// it to match the length rather than `"-".repeat()` or whatever.
-const DIVIDER: &str = "------------------------";
+const DIVIDER: &str = "-------------------------------";
+
+/// # Sanity Check.
+const _: () = {
+	assert!(
+		DIVIDER.len() ==
+			DriveVendorModel::VENDOR_LEN +
+			DriveVendorModel::MODEL_LEN +
+			DriveVendorModel::REVISION_LEN +
+			" []".len(), // Revision wrapper.
+		"BUG: `DIVIDER` length != (maximum) `DriveVendorModel` length.",
+	);
+};
 
 
 
@@ -130,13 +143,12 @@ fn main__() -> Result<(), RipRipError> {
 			if ! vm.is_empty() {
 				eprintln!(
 					concat!(
-						ansi!((dim, cyan) "{}\n"),
+						ansi!((dim, cyan) "{divider}\n"),
 						ansi!((bold, cyan) "{vm}\n"),
-						ansi!((dim, cyan) "{}\n"),
+						ansi!((dim, cyan) "{divider}\n"),
 					),
-					&DIVIDER[..vm.len()],
-					&DIVIDER[..vm.len()],
-					vm=vm
+					divider=&DIVIDER[..vm.len()],
+					vm=vm,
 				);
 			}
 		}

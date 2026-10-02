@@ -7,7 +7,6 @@ Resources:
 */
 
 use crate::{
-	Barcode,
 	CD_LEADIN,
 	CddaDriverExt,
 	CddaDriverNewExt,
@@ -15,7 +14,6 @@ use crate::{
 	macros::log,
 	RipRipError,
 };
-use dactyl::traits::SaturatingFrom;
 use libcdio_sys::{
 	cdio_hwinfo,
 	cdio_track_enums_CDIO_CDROM_LEADOUT_TRACK,
@@ -30,14 +28,12 @@ use libcdio_sys::{
 	track_format_t_TRACK_FORMAT_PSX,
 };
 use std::{
-	ffi::{
-		CStr,
-		CString,
-	},
+	ffi::CString,
 	os::unix::ffi::OsStrExt,
 	path::Path,
 	sync::Once,
 };
+use super::ReadCdOpts;
 
 
 
@@ -188,8 +184,6 @@ impl CddaDriverExt for LibcdioInstance {
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # CD-Text (Raw).
-	///
-	/// Read and return the raw CD-Text data, if any.
 	fn cdtext(&self) -> Option<Vec<u8>> {
 		// Perform a raw read of the CD-Text data, if any.
 		// Safety: `libcdio` promises that if there is no data or the read
@@ -233,122 +227,71 @@ impl CddaDriverExt for LibcdioInstance {
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Drive Vendor/Model.
-	///
-	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel> {
-		/// # Parse String.
+		/// # Rustify Cstr Arrays.
 		///
-		/// Convert raw vendor/model bytes to a string slice, trimming trailing
-		/// null bytes, but otherwise not worrying about the logical sanity of
-		/// the value.
-		const fn to_str<const N: usize>(raw: &[u8; N]) -> Option<&str> {
-			const { assert!(N != 0, "BUG: N cannot be zero."); }
-
-			// The members of `cdio_hwinfo` are one byte longer than the actual
-			// data so there should always be a trailing null byte.
-			let Ok(cstr) = CStr::from_bytes_until_nul(raw.as_slice()) else {
-				std::hint::cold_path();
-				return None;
-			};
-
-			// UTF-8 validity is less certain. Haha.
-			let Ok(out) = cstr.to_str() else { return None; };
-			Some(out)
+		/// The `libcdio` member arrays are `i8` for reasons…
+		const fn normalize<const N: usize>(src: [i8; N]) -> [u8; N] {
+			let mut out = [0_u8; N];
+			let mut i = 0;
+			while i < out.len() {
+				if src[i] <= 0 { out[i] = 0; }
+				else { out[i] = src[i].cast_unsigned(); }
+				i += 1;
+			}
+			out
 		}
 
 		let mut raw = cdio_hwinfo {
-			psz_vendor:   [0; 9],
-			psz_model:    [0; 17],
-			psz_revision: [0; 5],
+			psz_vendor:   [0; DriveVendorModel::VENDOR_LEN + 1],
+			psz_model:    [0; DriveVendorModel::MODEL_LEN + 1],
+			psz_revision: [0; DriveVendorModel::REVISION_LEN + 1],
 		};
 
 		// The return code is a bool, true for good, instead of the usual
 		// 0 FFI normally kicks back.
 		// Safety: this is an FFI call…
 		if unsafe { libcdio_sys::cdio_get_hwinfo(self.as_ptr(), &raw mut raw) } {
-			// Rather than deal with the uncertainty of pointers, let's recast
-			// the signs since we have everything right here.
-			let vendor_id = raw.psz_vendor.map(u8::saturating_from);
-			let model_id = raw.psz_model.map(u8::saturating_from);
-			let revision = raw.psz_revision.map(u8::saturating_from);
+			// Recast as normal-ass bytes.
+			let vendor = normalize(raw.psz_vendor);
+			let model = normalize(raw.psz_model);
+			let revision = normalize(raw.psz_revision);
 
-			// If we have a revision, debug it.
-			if let Some(revision) = to_str(&revision) {
-				log!(@debug "Drive revision: {revision}.");
-			}
-
-			let Some(vendor) = to_str(&vendor_id) else {
-				log!(@trace [vendor_id] "Invalid drive vendor.");
-				return None;
-			};
-			let Some(model) = to_str(&model_id) else {
-				log!(@trace [model_id] "Invalid drive model.");
-				return None;
-			};
-			DriveVendorModel::new(vendor, model).ok()
+			DriveVendorModel::new(&vendor, &model, &revision).ok()
 		}
 		else { None }
-	}
-
-	#[expect(unsafe_code, reason = "For FFI.")]
-	/// # MCN Fallback.
-	///
-	/// Try pulling MCN via `cdio_get_mcn` in cases where CD-Text fails.
-	fn mcn_subchannel(&self) -> Option<Barcode> {
-		// Safety: this is an FFI call…
-		let raw = unsafe { libcdio_sys::cdio_get_mcn(self.as_ptr()) };
-		if raw.is_null() {
-			log!(@trace "Subchannel contains no MCN data.");
-			None
-		}
-		else {
-			// Safety: this is an FFI call…
-			let mcn = unsafe { CStr::from_ptr(raw) }
-				.to_str()
-				.ok()
-				.and_then(|v| Barcode::try_from(v.as_bytes()).ok());
-			// Safety: this is an FFI call…
-			unsafe { libcdio_sys::cdio_free(raw.cast()); }
-			mcn
-		}
 	}
 
 	#[expect(unsafe_code, reason = "For FFI.")]
 	#[expect(non_upper_case_globals, reason = "We don't control these.")]
 	#[inline]
 	/// # Execute Read Command.
-	///
-	/// This private method executes the million-argument MMC read command with
-	/// values prepared and verified by the caller.
-	///
-	/// ## Errors.
-	///
-	/// This will return an error if the read fails, but provides no other
-	/// sanity checks.
-	fn read_cd(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-		c2: bool,
-		sub: u8,
-		block_size: u16,
-	) -> Result<(), RipRipError> {
+	fn read_cd(&self, buf: &mut [u8], lsn: i32, opts: ReadCdOpts)
+	-> Result<(), RipRipError> {
+		let num_blocks = match opts.num_blocks(buf) {
+			Ok(v) => v,
+			Err(e) => {
+				log!(@trace [buf.len(), opts] "{e}");
+				return Err(RipRipError::Bug(e));
+			},
+		};
+
 		// Safety: this is an FFI call…
 		let res = unsafe {
 			libcdio_sys::mmc_read_cd(
 				self.as_ptr(),
 				buf.as_mut_ptr().cast(),
 				lsn,
-				1,            // Sector type: CDDA.
-				false,        // No random data manipulation thank you kindly.
-				false,        // No header syncing.
-				0,            // No headers.
-				true,         // YES audio block!
-				false,        // No EDC.
-				u8::from(c2), // C2 or no C2?
-				sub,          // Subchannel? What kind?
-				block_size,   // Block size (varies by data requested).
-				1,            // Always read one block at a time.
+				1,                           // Sector type: CDDA.
+				false,                       // No random data manipulation thank you!
+				false,                       // No header syncing.
+				0,                           // No headers.
+				opts.cdda(),                 // CD data or no CD data?
+				false,                       // No EDC.
+				u8::from(opts.c2()),         // C2 or no C2?
+				opts.subchannel_format(),    // Subchannel? What kind?
+				opts as u16,                 // Block size.
+				u32::from(num_blocks.get()), // Usually one.
 			)
 		};
 

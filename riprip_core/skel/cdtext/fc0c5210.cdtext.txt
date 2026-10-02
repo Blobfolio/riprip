@@ -1,0 +1,53 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Lost Weekend
+	PERFORMER: Phoebe Bridgers
+	BARCODE: 6-56605-17002-2
+TRACK 01:
+	TITLE: The Outside
+	PERFORMER: Phoebe Bridgers
+TRACK 02:
+	TITLE: Lost Boys
+	PERFORMER: Phoebe Bridgers
+TRACK 03:
+	TITLE: Kill Me
+	PERFORMER: Phoebe Bridgers
+TRACK 04:
+	TITLE: The Governor's Waltz
+	PERFORMER: Phoebe Bridgers
+TRACK 05:
+	TITLE: Bobby
+	PERFORMER: Phoebe Bridgers
+TRACK 06:
+	TITLE: Lost Weekend
+	PERFORMER: Phoebe Bridgers
+TRACK 07:
+	TITLE: Haunted
+	PERFORMER: Phoebe Bridgers
+TRACK 08:
+	TITLE: Panorama
+	PERFORMER: Phoebe Bridgers
+TRACK 09:
+	TITLE: Still Standing
+	PERFORMER: Phoebe Bridgers
+TRACK 10:
+	TITLE: Liberty Tree
+	PERFORMER: Phoebe Bridgers
+TRACK 11:
+	TITLE: Never Going Back!
+	PERFORMER: Phoebe Bridgers
+TRACK 12:
+	TITLE: Other Plans
+	PERFORMER: Phoebe Bridgers
+TRACK 13:
+	TITLE: Lost Parade
+	PERFORMER: Phoebe Bridgers
+TRACK 14:
+	TITLE: I Can't Wait
+	PERFORMER: Phoebe Bridgers
+TRACK 15:
+	TITLE: As Above
+	PERFORMER: Phoebe Bridgers
+TRACK 16:
+	TITLE: Lost Weekend (Reprise)
+	PERFORMER: Phoebe Bridgers

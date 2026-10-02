@@ -23,28 +23,40 @@ compile_error!("The `libcdio` feature does not work on Apple devices. Build with
 #[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
 compile_error!("The `libusb` feature requires linux or macos.");
 
+
+
 #[cfg(feature = "libcdio")]
 mod libcdio;
 
 #[cfg(feature = "libusb")]
 mod libusb;
 
+#[cfg(feature = "libusb")]
+mod mmc;
+
+
+
+use cdtoc::Track;
 use crate::{
 	Barcode,
 	CD_DATA_C2_SIZE,
 	CD_DATA_SIZE,
 	CD_DATA_SUBCHANNEL_SIZE,
 	CD_LEADIN,
+	CD_SUBCHANNEL_SIZE,
 	DriveVendorModel,
 	FRAMES_PER_SECOND,
+	Isrc,
 	KillSwitch,
 	macros::log,
 	RipRipError,
+	SubQ,
 };
 use dactyl::NoHash;
 use std::{
 	cell::RefCell,
 	collections::HashSet,
+	num::NonZeroU8,
 	path::Path,
 	range::legacy::Range,
 	time::{
@@ -68,6 +80,7 @@ pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 /// This type alias is how the rest of the library references the chosen
 /// driver.
 pub(crate) type CddaDriver = libusb::LibusbInstance;
+
 
 
 /// # Cache Bust Timeout.
@@ -126,11 +139,6 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Fetch the drive vendor and/or model, if possible.
 	fn drive_vendor_model(&self) -> Option<DriveVendorModel>;
 
-	/// # MCN From (Leadin) Subchannel.
-	///
-	/// Return the MCN as stored in the leadin subchannel data, if any.
-	fn mcn_subchannel(&self) -> Option<Barcode>;
-
 	/// # Execute Read Command.
 	///
 	/// This private method executes the million-argument MMC read command with
@@ -140,14 +148,8 @@ pub(crate) trait CddaDriverExt: Sized {
 	///
 	/// This will return an error if the read fails, but provides no other
 	/// sanity checks.
-	fn read_cd(
-		&self,
-		buf: &mut [u8],
-		lsn: i32,
-		c2: bool,
-		sub: u8,
-		block_size: u16,
-	) -> Result<(), RipRipError>;
+	fn read_cd(&self, buf: &mut [u8], lsn: i32, opts: ReadCdOpts)
+	-> Result<(), RipRipError>;
 
 	/// # Cache Bust.
 	///
@@ -217,7 +219,7 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, true, 0, CD_DATA_C2_SIZE)
+		self.read_cd(buf, lsn, ReadCdOpts::CddaPlusC2)
 	}
 
 	/// # Read Data + Subchannel
@@ -249,22 +251,81 @@ pub(crate) trait CddaDriverExt: Sized {
 		}
 
 		// Read it!
-		self.read_cd(buf, lsn, false, 2, CD_DATA_SUBCHANNEL_SIZE)?;
+		self.read_cd(buf, lsn, ReadCdOpts::CddaPlusSubchannel)?;
 
-		// We can only get timing information from ADR-1.
+		// If the subchannel data is valid and ADR-1 _and_ the resulting MSF
+		// mismatches what we expected, desync!
 		if
-			1 == buf[usize::from(CD_DATA_SIZE)] & 0b0000_1111 &&
-			lsn != msf_to_lsn(
-				buf[usize::from(CD_DATA_SIZE) + 7],
-				buf[usize::from(CD_DATA_SIZE) + 8],
-				buf[usize::from(CD_DATA_SIZE) + 9],
-			)
+			let Some(subq) = buf.last_chunk::<{CD_SUBCHANNEL_SIZE as usize}>() &&
+			let Some(SubQ::Timing([_, _, _, _, _, _, m, s, f])) = SubQ::new(subq) &&
+			lsn != msf_to_lsn(m, s, f)
 		{
-			return Err(RipRipError::SubchannelDesync);
+			Err(RipRipError::SubchannelDesync)
+		}
+		// As good as we can do!
+		else { Ok(()) }
+	}
+
+	/// # Read ISRC.
+	///
+	/// Pull Sub-Q data from the track, parsing and returning the first valid
+	/// ISRC, if any.
+	fn read_isrc(&self, track: Track) -> Option<Isrc> {
+		if track.is_htoa() { return None; }
+
+		let rng = track.sector_range_normalized();
+		let mut start = i32::try_from(rng.start).ok()?;
+		let end = i32::try_from(rng.end).ok()?;
+
+		// Prefer the middle of the track.
+		if start + 512 < end {
+			start = start.midpoint(end) - 128;
 		}
 
-		// As good as we can do!
-		Ok(())
+		// Should be able to read en masse for these.
+		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
+		for _ in 0..16 {
+			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
+				for chunk in buf {
+					if
+						let Some(SubQ::Isrc(subq)) = SubQ::new(&chunk) &&
+						let Some(isrc) = Isrc::from_subq(subq)
+					{
+						return Some(isrc);
+					}
+				}
+			}
+
+			start += 16;
+		}
+
+		None
+	}
+
+	/// # Read MCN.
+	///
+	/// Pull Sub-Q data from the start of the disc, parsing and returning the
+	/// first valid MCN entry, if any.
+	fn read_mcn(&self) -> Option<Barcode> {
+		// Should be able to read en masse for these.
+		let mut start = 256;
+		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
+		for _ in 0..16 {
+			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
+				for chunk in buf {
+					if
+						let Some(SubQ::Mcn(subq)) = SubQ::new(&chunk) &&
+						let Some(barcode) = Barcode::from_subq(subq)
+					{
+						return Some(barcode);
+					}
+				}
+			}
+
+			start += 16;
+		}
+
+		None
 	}
 }
 
@@ -284,6 +345,104 @@ pub(crate) trait CddaDriverNewExt: Sized {
 	/// device path is obviously wrong.
 	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
 	where P: AsRef<Path>;
+}
+
+
+
+/// # Helper: Read CD Configuration.
+macro_rules! opts {
+	(
+		$(
+			$( #[doc = $doc:expr] )*
+			$k:ident $cd:literal $c2:literal $sub:literal $block_size:ident,
+		)+
+	) => (
+		#[repr(u16)]
+		#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+		/// # Read CD Options.
+		///
+		/// This enum is used to limit the number of arguments required for
+		/// CD-reading calls. (They all kinda bleed together.)
+		pub(crate) enum ReadCdOpts {
+			$(
+				$( #[doc = $doc] )*
+				$k = $block_size,
+			)+
+		}
+
+		impl ReadCdOpts {
+			#[must_use]
+			/// # CDDA/User Data?
+			const fn cdda(self) -> bool {
+				match self {
+					$( Self::$k => $cd, )+
+				}
+			}
+
+			#[must_use]
+			/// # C2?
+			const fn c2(self) -> bool {
+				match self {
+					$( Self::$k => $c2, )+
+				}
+			}
+
+			#[must_use]
+			/// # Subchannel Format?
+			const fn subchannel_format(self) -> u8 {
+				match self {
+					$( Self::$k => $sub, )+
+				}
+			}
+		}
+
+		impl ReadCdOpts {
+			#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+			/// # Number of Blocks.
+			///
+			/// Calculate and return the number of blocks required to fill the
+			/// buffer, or an error if it does not divide evenly or overflows.
+			///
+			/// ## Errors
+			///
+			/// Buffer lengths are baked-in, so any error should be treated as
+			/// a bug!
+			const fn num_blocks(self, buf: &[u8]) -> Result<NonZeroU8, &'static str> {
+				if buf.is_empty() {
+					Err("Read CD buffer is empty.")
+				}
+				else if ! buf.len().is_multiple_of(self as usize) {
+					Err("Read CD buffer length is not multiple of block size.")
+				}
+				else {
+					let num_blocks = buf.len() / (self as usize);
+					if
+						num_blocks <= (u8::MAX as usize) &&
+						let Some(num_blocks) = NonZeroU8::new(num_blocks as u8)
+					{
+						Ok(num_blocks)
+					}
+					else {
+						Err("Read CD buffer length and block size combination require too many blocks.")
+					}
+				}
+			}
+		}
+	)
+}
+
+opts! {
+	/// # CDDA.
+	Cdda               true  false 0 CD_DATA_SIZE,
+
+	/// # CDDA + C2.
+	CddaPlusC2         true  true  0 CD_DATA_C2_SIZE,
+
+	/// # CDDA + Subchannel.
+	CddaPlusSubchannel true  false 2 CD_DATA_SUBCHANNEL_SIZE,
+
+	/// # Subchannel.
+	Subchannel         false false 2 CD_SUBCHANNEL_SIZE,
 }
 
 
@@ -315,7 +474,7 @@ fn cache_bust<D: CddaDriverExt>(
 			break;
 		}
 
-		if ! bad_sector(from) && driver.read_cd(buf, from, false, 0, CD_DATA_SIZE).is_ok() {
+		if ! bad_sector(from) && driver.read_cd(buf, from, ReadCdOpts::Cdda).is_ok() {
 			*todo -= 1;
 		}
 

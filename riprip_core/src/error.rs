@@ -106,9 +106,9 @@ MISCELLANEOUS:
                       choosing, e.g. `riprip -v > out.log`. May be specified up
                       to four times for more detail.
     -V, --version     Print version information to STDOUT and exit.
-        --no-cdtext   Do not try to read/parse CD-Text data from the disc. Can
-                      speed things up if the disc is damaged in just the wrong
-                      way.
+        --no-metadata Do not try to read/parse CD-Text, MCN, and track ISRC
+                      metadata from the disc. This can speed up initialization,
+                      particularly for discs with a lot of damage.
         --no-rip      Print the basic drive and disc information to STDERR and
                       exit (without ripping anything).
         --no-summary  Skip the drive and disc summary and jump straight to
@@ -174,6 +174,9 @@ pub enum RipRipError {
 	/// # Invalid drive model.
 	DriveModel,
 
+	/// # Invalid drive revision.
+	DriveRevision,
+
 	/// # Invalid drive vendor.
 	DriveVendor,
 
@@ -224,6 +227,17 @@ pub enum RipRipError {
 
 	/// # Writing to disk.
 	Write(String),
+
+	#[cfg(feature = "libusb")]
+	/// # Test Unit Readiness Ambiguous.
+	///
+	/// This signals that a followup SENSE request is required to make sense
+	/// of an ambiguous test unit ready status of 1.
+	TestUnitNotReady,
+
+	#[cfg(feature = "libusb")]
+	/// # Test Unit Ready Timeout.
+	TestUnitTimeout,
 
 	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
@@ -276,6 +290,7 @@ impl fmt::Display for RipRipError {
 				},
 			Self::DiscMode => f.write_str("Missing or unsupported disc type."),
 			Self::DriveModel => f.write_str("Invalid drive model."),
+			Self::DriveRevision => f.write_str("Invalid drive revision."),
 			Self::DriveVendor => f.write_str("Invalid drive vendor."),
 			Self::FirstTrackNum => f.write_str("Unable to obtain the first track index."),
 			Self::Isrc => f.write_str("Invalid ISRC."),
@@ -295,6 +310,12 @@ impl fmt::Display for RipRipError {
 			Self::TrackLba(n) => write!(f, "Unable to obtain LBA ({n})."),
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
+
+			#[cfg(feature = "libusb")]
+			Self::TestUnitNotReady => Ok(()), // Internal only.
+
+			#[cfg(feature = "libusb")]
+			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
 			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),

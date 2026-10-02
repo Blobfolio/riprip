@@ -1,0 +1,27 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: A Day In New York
+	PERFORMER: Ryuichi Sakamoto, Jaques Morelenbaum, Paula Morelenbaum
+	DISC ID: SK80018
+TRACK 01:
+	TITLE: Desafinado
+TRACK 02:
+	TITLE: Bim Bom
+TRACK 03:
+	TITLE: Insensatez
+TRACK 04:
+	TITLE: Coracao Vagabundo
+TRACK 05:
+	TITLE: Falando de Amor
+TRACK 06:
+	TITLE: Chora Coracao
+TRACK 07:
+	TITLE: Sabia
+TRACK 08:
+	TITLE: Tango Versao em Portugues
+TRACK 09:
+	TITLE: Chega de Saudade
+TRACK 10:
+	TITLE: Samba Do Aviao
+TRACK 11:
+	TITLE: Fotografia

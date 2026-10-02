@@ -2,8 +2,7 @@
 DISC:
 	TITLE: Suck My Shirt
 	PERFORMER: The Coathangers
-	GENRE: Rock Music
-	GENRE CODE: 23 (Rock)
+	GENRE CODE: 23 (Rock Music)
 TRACK 01:
 	TITLE: Follow Me
 	PERFORMER: The Coathangers

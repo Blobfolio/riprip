@@ -92,12 +92,36 @@ impl CDText {
 	pub(crate) const fn barcode(&self) -> Option<Barcode> { self.barcode }
 
 	#[must_use]
+	/// # Blocks.
+	pub(crate) const fn blocks(&self) -> &[CDTextInner] { self.blocks.as_slice() }
+
+	#[must_use]
 	/// # ISRCs.
 	///
 	/// Return the track ISRCs defined by the first block, if any.
 	pub(crate) fn isrcs(&self) -> Option<&IsrcMap> {
 		if self.isrcs.is_empty() { None }
 		else { Some(&self.isrcs) }
+	}
+
+	#[must_use]
+	/// # Disc Field.
+	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
+		if self.blocks.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else { self.blocks[0].disc(field) }
+	}
+
+	#[must_use]
+	/// # Track Field.
+	pub(crate) fn track(&self, field: TrackField, idx: u8) -> Option<&str> {
+		if self.blocks.is_empty() {
+			std::hint::cold_path();
+			None
+		}
+		else { self.blocks[0].track(field, idx) }
 	}
 }
 
@@ -132,6 +156,7 @@ impl CDText {
 			let tracks = size_info.tracks();
 			let mut catalog = HashMap::default();
 			let mut genre_code = GenreCode::Unused;
+			let mut raw_genre = Vec::new();
 
 			for ((field, track), buf) in block.into_buffers() {
 				// Disc-level data.
@@ -160,6 +185,11 @@ impl CDText {
 							DiscField::Genre => {
 								let (v1, v2) = GenreCode::split_raw(&buf);
 								genre_code = v1;
+								raw_genre.push(0); // This is lost in translation.
+								raw_genre.extend_from_slice(&buf);
+								if 2 < raw_genre.len() {
+									raw_genre.push(0); // Ditto.
+								}
 
 								// Skip freeform insertion if empty.
 								if v2.is_empty() { continue; }
@@ -209,7 +239,13 @@ impl CDText {
 
 			// Save it!
 			catalog.shrink_to_fit(); // This won't change.
-			inner.push(CDTextInner { tracks, language, genre_code, catalog });
+			inner.push(CDTextInner {
+				tracks,
+				language,
+				genre_code,
+				raw_genre,
+				catalog,
+			});
 		}
 
 		// Done!
@@ -274,7 +310,7 @@ err! {
 /// # CD-Text (Inner).
 ///
 /// This struct holds disc and track CD-Text in a single language.
-struct CDTextInner {
+pub(crate) struct CDTextInner {
 	/// # First and Last Tracks.
 	tracks: TrackRange,
 
@@ -283,6 +319,9 @@ struct CDTextInner {
 
 	/// # Genre Code.
 	genre_code: GenreCode,
+
+	/// # Raw Genre.
+	raw_genre: Vec<u8>,
 
 	/// # Data.
 	catalog: HashMap<u16, String, NoHash>,
@@ -347,22 +386,42 @@ impl fmt::Display for CDTextInner {
 impl CDTextInner {
 	#[must_use]
 	/// # Disc Value.
-	fn disc(&self, field: DiscField) -> Option<&str> {
+	pub(crate) fn disc(&self, field: DiscField) -> Option<&str> {
 		let v = self.catalog.get(&u16::from_le_bytes([field as u8, 0]))?.trim();
 		if v.is_empty() { None }
 		else { Some(v) }
 	}
 
 	#[must_use]
+	/// # Genre Code.
+	const fn genre_code(&self) -> Option<GenreCode> {
+		if self.genre_code.is_some() { Some(self.genre_code) }
+		else { None }
+	}
+
+	#[must_use]
 	/// # Language.
-	const fn language(&self) -> Option<Language> {
+	pub(crate) const fn language(&self) -> Option<Language> {
 		if self.language.is_some() { Some(self.language) }
 		else { None }
 	}
 
 	#[must_use]
+	/// # Language Code.
+	pub(crate) const fn language_code(&self) -> u8 { self.language as u8 }
+
+	#[must_use]
+	/// # Raw Genre.
+	///
+	/// This is used when generating a `.toc` for the rip.
+	pub(crate) const fn raw_genre(&self) -> Option<&[u8]> {
+		if self.raw_genre.is_empty() { None }
+		else { Some(self.raw_genre.as_slice()) }
+	}
+
+	#[must_use]
 	/// # Track Value.
-	fn track(&self, field: TrackField, track: u8) -> Option<&str> {
+	pub(crate) fn track(&self, field: TrackField, track: u8) -> Option<&str> {
 		if
 			0 != track &&
 			let Some(v) = self.catalog.get(&u16::from_le_bytes([field as u8, track]))
@@ -371,13 +430,6 @@ impl CDTextInner {
 			if v.is_empty() { None }
 			else { Some(v) }
 		}
-		else { None }
-	}
-
-	#[must_use]
-	/// # Genre Code.
-	const fn genre_code(&self) -> Option<GenreCode> {
-		if self.genre_code.is_some() { Some(self.genre_code) }
 		else { None }
 	}
 }
@@ -472,6 +524,7 @@ impl Encoding {
 mod test {
 	use super::*;
 	use std::{
+		collections::BTreeMap,
 		ffi::OsStr,
 		path::PathBuf,
 	};
@@ -484,8 +537,8 @@ mod test {
 		}
 
 		// Find all the files. Haha.
-		let mut bins = HashMap::<String, PathBuf>::new();
-		let mut txts = HashMap::<String, PathBuf>::new();
+		let mut bins = BTreeMap::<String, PathBuf>::new();
+		let mut txts = BTreeMap::<String, PathBuf>::new();
 		for e in std::fs::read_dir(&dir).expect("Unable to open cdtext test directory.") {
 			let e = e.unwrap();
 			let path = e.path();

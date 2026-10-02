@@ -4,8 +4,8 @@ DISC:
 	PERFORMER: United Cat Orchestra
 	SONGWRITER: Various Songwriters
 	COMPOSER: Various Composers
-	MESSAGE: For all our fans
 	ARRANGER: Tom Cat
+	MESSAGE: For all our fans
 	DISC ID: 1234567890
 	GENRE: Feline classic music
 	GENRE CODE: 5 (Classical)
@@ -14,16 +14,16 @@ TRACK 01:
 	PERFORMER: Felix and The Purrs
 	SONGWRITER: Friedrich Schiller
 	COMPOSER: Ludwig van Beethoven
-	MESSAGE: Fritz and Louie once were punks
 	ARRANGER: Tom Cat
+	MESSAGE: Fritz and Louie once were punks
 	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: Humpty Dumpty
 	PERFORMER: Catwalk Beauties
 	SONGWRITER: Mother Goose
 	COMPOSER: unknown
-	MESSAGE: Pluck the goose
 	ARRANGER: Tom Cat
+	MESSAGE: Pluck the goose
 	ISRC: XY-BLG-11-00005
 TRACK 03:
 	TITLE: Mee Owwww
@@ -39,8 +39,8 @@ DISC:
 	PERFORMER: Vereinigtes Katzenorchester
 	SONGWRITER: Verschiedene Liedschreiber
 	COMPOSER: Verschiedene Komponisten
-	MESSAGE: Für alle unsere Fans
 	ARRANGER: Tom Cat
+	MESSAGE: Für alle unsere Fans
 	DISC ID: 1234567890
 	GENRE: Katzenhafte Klassik
 	GENRE CODE: 5 (Classical)
@@ -49,16 +49,16 @@ TRACK 01:
 	PERFORMER: Felix und Die Schnurrer
 	SONGWRITER: Friedrich Schiller
 	COMPOSER: Ludwig van Beethoven
-	MESSAGE: Fritz und Louie waren einmal Punks
 	ARRANGER: Tom Cat
+	MESSAGE: Fritz und Louie waren einmal Punks
 	ISRC: XY-BLG-11-01234
 TRACK 02:
 	TITLE: Rubbeldiekatz
 	PERFORMER: Katzengang Schönheiten
 	SONGWRITER: Mutter Gans
 	COMPOSER: unbekannt
-	MESSAGE: Rupft die Gans
 	ARRANGER: Tom Cat
+	MESSAGE: Rupft die Gans
 	ISRC: XY-BLG-11-00005
 TRACK 03:
 	TITLE: Mie auu

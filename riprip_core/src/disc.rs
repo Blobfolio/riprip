@@ -24,12 +24,16 @@ use crate::{
 	IsrcMap,
 	KillSwitch,
 	macros::log,
+	RipManifest,
 	RipOptions,
 	Ripper,
 	RipRipError,
 	SavedRips,
 };
-use dactyl::traits::NiceInflection;
+use dactyl::{
+	NoHash,
+	traits::NiceInflection,
+};
 use fyi_msg::{
 	fyi_ansi::{
 		ansi,
@@ -41,7 +45,6 @@ use fyi_msg::{
 };
 use std::{
 	borrow::Cow,
-	ffi::OsStr,
 	fmt,
 	io::StderrLock,
 	path::{
@@ -67,6 +70,9 @@ pub struct Disc {
 
 	/// # Barcode.
 	barcode: Option<Barcode>,
+
+	/// # ISRCs.
+	isrcs: IsrcMap,
 }
 
 impl fmt::Debug for Disc {
@@ -242,7 +248,7 @@ impl Disc {
 	///
 	/// This will return an error if there's a problem communicating with the
 	/// drive, the disc is unsupported, etc.
-	pub fn new<P>(dev: Option<P>, cdtext: bool)
+	pub fn new<P>(dev: Option<P>, metadata: bool)
 	-> Result<Self, RipRipError>
 	where P: AsRef<Path> {
 		if let Some(v) = dev.as_ref() {
@@ -276,6 +282,10 @@ impl Disc {
 		// Grab the leadout, then build the ToC.
 		let leadout = cdda.leadout_lba()?;
 		let toc = Toc::from_parts(audio, data, leadout)?;
+		let isrcs = IsrcMap::with_capacity_and_hasher(
+			toc.audio_len(),
+			NoHash::default(),
+		);
 
 		// We have most of it.
 		let mut out = Self {
@@ -283,25 +293,29 @@ impl Disc {
 			toc,
 			cdtext: None,
 			barcode: None,
+			isrcs,
 		};
 
 		// Unless the user opted out of CD-Text parsing, let's handle that
 		// now.
-		if cdtext && let Some(raw_cdtext) = out.cdda.cdtext() {
-			match CDText::from_bytes(&raw_cdtext) {
-				Ok(cdtext) => {
-					out.barcode = cdtext.barcode();
-					out.cdtext.replace((raw_cdtext, Ok(cdtext)));
-				},
-				Err(e) => {
-					out.cdtext.replace((raw_cdtext, Err(e)));
-				},
+		if metadata {
+			if let Some(raw_cdtext) = out.cdda.cdtext() {
+				match CDText::from_bytes(&raw_cdtext) {
+					Ok(cdtext) => {
+						out.barcode = cdtext.barcode();
+						if let Some(isrcs) = cdtext.isrcs() {
+							out.isrcs.extend(isrcs.iter().map(|(k, v)| (*k, *v)));
+						}
+						out.cdtext.replace((raw_cdtext, Ok(cdtext)));
+					},
+					Err(e) => {
+						out.cdtext.replace((raw_cdtext, Err(e)));
+					},
+				}
 			}
-		}
 
-		// Look for barcode in subchannel if we don't have it yet.
-		if out.barcode.is_none() && let Some(barcode) = out.cdda.mcn_subchannel() {
-			out.barcode.replace(barcode);
+			// Supplement missing MCN and/or ISRC data from subchannel.
+			out.backfill_subchannel();
 		}
 
 		// Finally done!
@@ -331,7 +345,8 @@ impl Disc {
 	#[must_use]
 	/// # Track ISRCs.
 	pub fn isrcs(&self) -> Option<&IsrcMap> {
-		self.cdtext().and_then(CDText::isrcs)
+		if self.isrcs.is_empty() { None }
+		else { Some(&self.isrcs) }
 	}
 
 	#[must_use]
@@ -341,6 +356,69 @@ impl Disc {
 	#[must_use]
 	/// # Internal CDIO.
 	pub(super) const fn cdda(&self) -> &CddaDriver { &self.cdda }
+}
+
+impl Disc {
+	/// # Backfill MCN/ISRC Data From Subchannel.
+	///
+	/// Check the Sub-Q for data CD-Text failed to provide.
+	fn backfill_subchannel(&mut self) {
+		self.backfill_subchannel_mcn();
+		self.backfill_subchannel_isrcs();
+	}
+
+	/// # Backfill MCN Data From Subchannel.
+	fn backfill_subchannel_mcn(&mut self) {
+		if self.barcode.is_none() {
+			// Subchannel reads are unreliable; try it twice.
+			if let Some(barcode) = self.cdda.read_mcn() {
+				self.barcode.replace(barcode);
+			}
+			// Well, we tried. Twice!
+			else { log!(@trace "Sub-Q contains no MCN data."); }
+		}
+	}
+
+	/// # Backfill ISRC Data From Subchannel.
+	fn backfill_subchannel_isrcs(&mut self) {
+		use std::collections::hash_map::Entry;
+
+		/// # Max Consecutive Nothings.
+		///
+		/// If we haven't found any ISRCs after this many attempts, assume
+		/// there aren't any!
+		const MAX_NOTHING: u8 = 5;
+
+		// Subchannel reads can be unreliable, so let's repeat the process
+		// until the answers stop coming (or we've found them all).
+		let mut missing = 0;
+		let mut found = 0;
+		for track in self.toc.audio_tracks() {
+			let Entry::Vacant(e) = self.isrcs.entry(track.number()) else {
+				// Already known.
+				continue;
+			};
+
+			if let Some(isrc) = self.cdda.read_isrc(track) {
+				e.insert(isrc);
+				found += 1;
+			}
+			else {
+				missing += 1;
+
+				// If we keep not finding anything, assume there's nothing to
+				// find.
+				if missing == MAX_NOTHING && found == 0 {
+					log!(@trace "Sub-Q contains no track ISRC data.");
+					return;
+				}
+			}
+		}
+
+		if found == 0 {
+			log!(@trace "Sub-Q contains no track ISRC data.");
+		}
+	}
 }
 
 impl Disc {
@@ -375,7 +453,8 @@ impl Disc {
 
 			// A header of sorts.
 			let _res = writeln!(&mut handle, "\nThe fruits of your labor:");
-			if let Some((cdtext1, cdtext2)) = self.cdtext_paths() {
+			let cdtext_paths = self.cdtext_paths();
+			if let Some((cdtext1, cdtext2)) = cdtext_paths.as_ref() {
 				if cdtext1.is_file() {
 					let _res = writeln!(&mut handle, dim!("  {}"), cdtext1.display());
 					log!(@info "Saved CD-Text (raw).\n  {}", cdtext1.display());
@@ -390,9 +469,21 @@ impl Disc {
 			log!(@info "Finished rip.{}", LoggableFruits(&saved));
 
 			// If we did all tracks, make a cue sheet and print its path.
-			if let Some(file) = save_cuesheet(&self.toc, &saved) {
-				let _res = writeln!(&mut handle, dim!("  {}"), file.display());
-				log!(@info "Saved cuesheet.\n  {}", file.display());
+			if let Some(manifest) = RipManifest::new(
+				&self.toc,
+				&saved,
+				self.barcode(),
+				self.isrcs(),
+				cdtext_paths.as_ref().map(|(v, _)| v.as_path()).zip(self.cdtext()),
+			) {
+				if let Some(file) = manifest.save_cue() {
+					let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+					log!(@info "Saved cuesheet (CUE).\n  {}", file.display());
+				}
+				if let Some(file) = manifest.save_toc() {
+					let _res = writeln!(&mut handle, dim!("  {}"), file.display());
+					log!(@info "Saved cuesheet (TOC).\n  {}", file.display());
+				}
 			}
 
 			// Print the verification status for all track(s).
@@ -601,77 +692,6 @@ fn fmt_ctdb(ctdb: Option<u16>, color: bool) -> Cow<'static, str> {
 		))
 	}
 	else { Cow::Borrowed("          ") }
-}
-
-/// # Generate CUE Sheet if Complete.
-fn save_cuesheet(toc: &Toc, ripped: &SavedRips) -> Option<PathBuf> {
-	use std::fmt::Write;
-
-	// Make sure all tracks on the disc have been ripped, and pair their file
-	// names with the corresponding Track object.
-	let mut all = Vec::with_capacity(ripped.len());
-	for track in toc.audio_tracks() {
-		let Some((dst, _, _)) = ripped.get(&track.number()) else {
-			log!(@debug "Missing track {}; skipping cuesheet.", track.number());
-			return None;
-		};
-		let Some(dst) = dst.file_name().and_then(OsStr::to_str) else {
-			log!(
-				@trace [dst]
-				"Unable to obtain output file name for track {}; skipping cuesheet.",
-				track.number(),
-			);
-			return None;
-		};
-		all.push((track, dst));
-	}
-
-	// The output folder.
-	let Some(parent) = ripped.get(&1).and_then(|(dst, _, _)| dst.parent()) else {
-		log!(@trace "Failed to find parent directory of first track; skipping cuesheet.");
-		return None;
-	};
-
-	let mut cue = String::new();
-	for (track, src) in all {
-		// If there's an HTOA, it needs to be grouped with the first track.
-		if track.position().is_first() && toc.htoa().is_some() {
-			// This should have been ripped with everything else.
-			let Some(src0) = ripped.get(&0)
-				.and_then(|(dst, _, _)| dst.file_name())
-				.and_then(OsStr::to_str) else {
-				log!(@trace "Unable to obtain output file name for HTOA; skipping cuesheet.");
-				return None;
-			};
-
-			// Add the lines to our cue!
-			writeln!(&mut cue, "FILE \"{src0}\" WAVE").ok()?;
-			cue.push_str("  TRACK 01 AUDIO\n");
-			cue.push_str("    INDEX 00 00:00:00\n");
-			writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
-			cue.push_str("    INDEX 01 00:00:00\n");
-
-			// We're done with tracks zero/one.
-			continue;
-		}
-
-		// All other tracks are just file/track/index.
-		writeln!(&mut cue, "FILE \"{src}\" WAVE").ok()?;
-		writeln!(&mut cue, "  TRACK {:02} AUDIO", track.number()).ok()?;
-		cue.push_str("    INDEX 01 00:00:00\n");
-	}
-
-	// Save the cue sheet!
-	let dst = parent.join(format!("{}.cue", cache_prefix(toc)));
-	{
-		use std::io::Write;
-		let mut writer = CacheWriter::new(&dst).ok()?;
-		writer.writer().write_all(cue.as_bytes()).ok()?;
-		writer.finish().ok()?;
-	}
-
-	// Return the path.
-	Some(dst)
 }
 
 /// # Write HTOA (Likely).

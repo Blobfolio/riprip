@@ -1,0 +1,65 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: The Moon & Antarctica
+	PERFORMER: Modest Mouse
+	DISC ID: EK63871
+TRACK 01:
+	TITLE: 3rd Planet
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04738
+TRACK 02:
+	TITLE: Gravity Rides Everything
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04737
+TRACK 03:
+	TITLE: Dark Center Of The Universe
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04736
+TRACK 04:
+	TITLE: Perfect Disguise
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04739
+TRACK 05:
+	TITLE: Tiny Cities Made Of Ashes
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04740
+TRACK 06:
+	TITLE: A Different City
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04741
+TRACK 07:
+	TITLE: The Cold Part
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04742
+TRACK 08:
+	TITLE: Alone Down There
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04743
+TRACK 09:
+	TITLE: The Stars Are Projectors
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04744
+TRACK 10:
+	TITLE: Wild Packs Of Family Dogs
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04753
+TRACK 11:
+	TITLE: Paper Thin Walls
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04745
+TRACK 12:
+	TITLE: I Came As A Rat
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04748
+TRACK 13:
+	TITLE: Lives
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04746
+TRACK 14:
+	TITLE: Life Like Weeds
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04747
+TRACK 15:
+	TITLE: What People Are Made Of
+	PERFORMER: Modest Mouse
+	ISRC: US-SM1-00-04749

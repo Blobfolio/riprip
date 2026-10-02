@@ -1,0 +1,76 @@
+[BLOCK 0]
+DISC:
+	TITLE: Blueberry Hill
+	PERFORMER: Glenn Miller
+TRACK 01:
+	TITLE: The Nearness Of You
+	PERFORMER: Glenn Miller
+TRACK 02:
+	TITLE: Mister Meadowlark
+	PERFORMER: Glenn Miller
+TRACK 03:
+	TITLE: My Blue Heaven
+	PERFORMER: Glenn Miller
+TRACK 04:
+	TITLE: When The Swallows Come Back To Capristrano
+	PERFORMER: Glenn Miller
+TRACK 05:
+	TITLE: Blueberry Hill
+	PERFORMER: Glenn Miller
+TRACK 06:
+	TITLE: Be Happy
+	PERFORMER: Glenn Miller
+TRACK 07:
+	TITLE: Five O'Clock Whistle
+	PERFORMER: Glenn Miller
+TRACK 08:
+	TITLE: Beat Me Daddy Eight To The Bar
+	PERFORMER: Glenn Miller
+TRACK 09:
+	TITLE: Make Believe Ballroom Time
+	PERFORMER: Glenn Miller
+TRACK 10:
+	TITLE: A Nightingale Sang In Berkeley Square
+	PERFORMER: Glenn Miller
+TRACK 11:
+	TITLE: Along The Santa Fe Trail
+	PERFORMER: Glenn Miller
+TRACK 12:
+	TITLE: Yes, My Darling Daughter
+	PERFORMER: Glenn Miller
+TRACK 13:
+	TITLE: Anvil Chorus, Pts 1 & 2
+	PERFORMER: Glenn Miller
+TRACK 14:
+	TITLE: Frenesi
+	PERFORMER: Glenn Miller
+TRACK 15:
+	TITLE: Ida! Sweet As Apple Cider
+	PERFORMER: Glenn Miller
+TRACK 16:
+	TITLE: Song Of The Volga Boatmen
+	PERFORMER: Glenn Miller
+TRACK 17:
+	TITLE: You Stepped Out Of A Dream
+	PERFORMER: Glenn Miller
+TRACK 18:
+	TITLE: I Dream't I Dwelt In Harlem
+	PERFORMER: Glenn Miller
+TRACK 19:
+	TITLE: Sun Valley Jump
+	PERFORMER: Glenn Miller
+TRACK 20:
+	TITLE: The Spirit Is Willing
+	PERFORMER: Glenn Miller
+TRACK 21:
+	TITLE: Perfidia
+	PERFORMER: Glenn Miller
+TRACK 22:
+	TITLE: It's Always You
+	PERFORMER: Glenn Miller
+TRACK 23:
+	TITLE: Spring Will Be So Sad (When She Comes This Year)
+	PERFORMER: Glenn Miller
+TRACK 24:
+	TITLE: Boulder Buff
+	PERFORMER: Glenn Miller

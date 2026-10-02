@@ -1,6 +1,6 @@
 # Rip Rip Hooray!
 
-[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/riprip/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/riprip/actions)
+[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/riprip/linux.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/riprip/actions)
 [![deps.rs](https://deps.rs/repo/github/blobfolio/riprip/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/riprip)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
@@ -36,7 +36,7 @@ Beyond that, it supports all the good things:
 * Backwards ripping
 * Good ol' WAV output
 * Cue sheet generation (when ripping the whole disc)
-* Dump CD-Text (if present)
+* CD-Text extraction
 
 Rip Rip Hooray! **does not** aspire to manage your media library, so doesn't muck about with track metadata, format conversion, album art, etc.
 

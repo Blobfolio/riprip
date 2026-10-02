@@ -6,6 +6,7 @@ required to transport SCSI MMC commands over USB.
 */
 
 use std::fmt;
+use super::CommandDescriptorBlock;
 
 
 
@@ -51,35 +52,27 @@ pub(super) struct CommandBlockWrapper {
 	cb_length: u8,
 
 	/// # Command Descriptor Block.
-	cdb: [u8; 16],
+	cdb: [u8; 12],
 }
 
 impl CommandBlockWrapper {
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	#[must_use]
 	/// # New.
-	pub(super) fn new<const N: usize>(
+	pub(super) const fn new(
 		tag: u32,
 		data_transfer_length: u32,
 		flags: u8,
 		lun: u8,
-		cdb: &[u8; N],
+		cdb: &CommandDescriptorBlock,
 	) -> Self {
-		const {
-			assert!(
-				N == 6 || N == 10 || N == 12,
-				"BUG: CDB must have length of 6, 10, or 12.",
-			);
-		}
-
 		Self {
 			signature: CBW_SIGNATURE,
 			tag,
 			data_transfer_length,
 			flags,
 			lun,
-			cb_length: N as u8,
-			cdb: std::array::from_fn(|i| cdb.get(i).copied().unwrap_or(0)),
+			cb_length: cdb.len(),
+			cdb: cdb.as_fixed(),
 		}
 	}
 
@@ -93,7 +86,7 @@ impl CommandBlockWrapper {
 		buf[12] = self.flags;
 		buf[13] = self.lun;
 		buf[14] = self.cb_length;
-		buf[15..31].copy_from_slice(&self.cdb);
+		buf[15..27].copy_from_slice(&self.cdb);
 		buf
 	}
 }

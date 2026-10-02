@@ -1,0 +1,49 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Monsters Of Folk
+	PERFORMER: Monsters Of Folk
+TRACK 01:
+	TITLE: Dear God (Sincerely M.O.F.)
+	PERFORMER: Monsters Of Folk
+TRACK 02:
+	TITLE: Say Please
+	PERFORMER: Monsters Of Folk
+TRACK 03:
+	TITLE: Whole Lotta Losin'
+	PERFORMER: Monsters Of Folk
+TRACK 04:
+	TITLE: Temazcal
+	PERFORMER: Monsters Of Folk
+TRACK 05:
+	TITLE: The Right Place
+	PERFORMER: Monsters Of Folk
+TRACK 06:
+	TITLE: Baby Boomer
+	PERFORMER: Monsters Of Folk
+TRACK 07:
+	TITLE: Man Named Truth
+	PERFORMER: Monsters Of Folk
+TRACK 08:
+	TITLE: Goodway
+	PERFORMER: Monsters Of Folk
+TRACK 09:
+	TITLE: Ahead Of The Curve
+	PERFORMER: Monsters Of Folk
+TRACK 10:
+	TITLE: Slow Down Joe
+	PERFORMER: Monsters Of Folk
+TRACK 11:
+	TITLE: Losin' Yo' Head
+	PERFORMER: Monsters Of Folk
+TRACK 12:
+	TITLE: Magic Marker
+	PERFORMER: Monsters Of Folk
+TRACK 13:
+	TITLE: Map Of The World
+	PERFORMER: Monsters Of Folk
+TRACK 14:
+	TITLE: Sandman, The Brakeman And Me
+	PERFORMER: Monsters Of Folk
+TRACK 15:
+	TITLE: His Master's Voice
+	PERFORMER: Monsters Of Folk

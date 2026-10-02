@@ -36,7 +36,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 		Backward       "--backward"    "--backwards",
 		FlipFlop       "--flip-flop",
 		Help      "-h" "--help",
-		NoCdText       "--no-cdtext",
+		NoMetadata     "--no-metadata" "--no-meta",
 		NoResume       "--no-resume",
 		NoRip          "--no-rip",
 		NoSummary      "--no-summary",
@@ -58,7 +58,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	}
 
 	let mut opts = RipOptions::default();
-	let mut no_cdtext = false;
+	let mut no_metadata = false;
 	let mut no_rip = false;
 	let mut no_summary = false;
 	let mut status = false;
@@ -69,17 +69,17 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	let mut verbosity = 0_u8;
 	for arg in Argument::args_os() {
 		match arg {
-			Argument::Backward =>  { opts = opts.with_backwards(true); },
-			Argument::FlipFlop =>  { opts = opts.with_flip_flop(true); },
-			Argument::NoCdText =>  { no_cdtext = true; },
-			Argument::NoResume =>  { opts = opts.with_resume(false); },
-			Argument::NoRip =>     { no_rip = true; },
-			Argument::NoSummary => { no_summary = true; },
-			Argument::Reset =>     { opts = opts.with_reset(true); },
-			Argument::Status =>    { status = true; },
-			Argument::Strict =>    { opts = opts.with_strict(true); },
-			Argument::Sync =>      { opts = opts.with_sync(true); },
-			Argument::Verbose =>   {
+			Argument::Backward =>   { opts = opts.with_backwards(true); },
+			Argument::FlipFlop =>   { opts = opts.with_flip_flop(true); },
+			Argument::NoMetadata => { no_metadata = true; },
+			Argument::NoResume =>   { opts = opts.with_resume(false); },
+			Argument::NoRip =>      { no_rip = true; },
+			Argument::NoSummary =>  { no_summary = true; },
+			Argument::Reset =>      { opts = opts.with_reset(true); },
+			Argument::Status =>     { status = true; },
+			Argument::Strict =>     { opts = opts.with_strict(true); },
+			Argument::Sync =>       { opts = opts.with_sync(true); },
+			Argument::Verbose =>    {
 				verbosity += 1;
 				opts = opts.with_verbose(true);
 			},
@@ -132,7 +132,7 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	}
 
 	// Figure out the disc and drive.
-	let disc = Disc::new(dev, ! no_cdtext)?;
+	let disc = Disc::new(dev, ! no_metadata)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if level.is_some() {
 		if let Some(v) = drivevendormodel { log!(@info "{v}"); }

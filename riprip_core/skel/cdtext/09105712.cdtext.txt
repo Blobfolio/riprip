@@ -1,0 +1,58 @@
+[BLOCK 0: English]
+DISC:
+	TITLE: Live at Le Mans, 3rd November 1979
+	PERFORMER: Motörhead
+TRACK 01:
+	TITLE: Overkill
+	PERFORMER: Motörhead
+TRACK 02:
+	TITLE: Stay Clean
+	PERFORMER: Motörhead
+TRACK 03:
+	TITLE: No Class
+	PERFORMER: Motörhead
+TRACK 04:
+	TITLE: Metropolis
+	PERFORMER: Motörhead
+TRACK 05:
+	TITLE: All the Aces
+	PERFORMER: Motörhead
+TRACK 06:
+	TITLE: Dead Men Tell No Tales
+	PERFORMER: Motörhead
+TRACK 07:
+	TITLE: I'll Be Your Sister
+	PERFORMER: Motörhead
+TRACK 08:
+	TITLE: Lawman
+	PERFORMER: Motörhead
+TRACK 09:
+	TITLE: Too Late, Too Late
+	PERFORMER: Motörhead
+TRACK 10:
+	TITLE: Poison
+	PERFORMER: Motörhead
+TRACK 11:
+	TITLE: (I Won't) Pay Your Price
+	PERFORMER: Motörhead
+TRACK 12:
+	TITLE: Sharpshooter
+	PERFORMER: Motörhead
+TRACK 13:
+	TITLE: Capricorn
+	PERFORMER: Motörhead
+TRACK 14:
+	TITLE: Train Kept A-Rollin'
+	PERFORMER: Motörhead
+TRACK 15:
+	TITLE: Bomber
+	PERFORMER: Motörhead
+TRACK 16:
+	TITLE: Limb From Limb
+	PERFORMER: Motörhead
+TRACK 17:
+	TITLE: White Line Fever
+	PERFORMER: Motörhead
+TRACK 18:
+	TITLE: Motörhead
+	PERFORMER: Motörhead

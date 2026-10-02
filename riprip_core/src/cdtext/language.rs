@@ -15,7 +15,7 @@ macro_rules! lang {
 		///
 		/// The language codes are specified in ANNEX 1..5 of EBU Tech 32 58 -E
 		/// (1991).
-		pub(super) enum Language {
+		pub(crate) enum Language {
 			$(
 				#[doc = concat!("# ", stringify!($k), ".")]
 				$k = $v,
