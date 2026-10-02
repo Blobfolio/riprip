@@ -402,6 +402,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 						return Err(RipRipError::TestUnitTimeout);
 					}
 
+					// Wait a bit before looping back around.
 					std::thread::sleep(RETRY_DELAY);
 				},
 
