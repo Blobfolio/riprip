@@ -133,7 +133,7 @@ duplicate = true
 [dependencies]
 argyle = "0.15.*"
 dactyl = "0.13.*"
-oxford_join = "0.7.*"
+oxford_join = "0.8.*"
 
 [dependencies.fyi_msg]
 version = "2.7.*"

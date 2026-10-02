@@ -42,7 +42,7 @@ default-features = false
 features = [ "https" ]
 
 [dependencies.oxford_join]
-version = "0.7.*"
+version = "0.8.*"
 optional = true
 
 [target.'cfg(target_os = "macos")'.dependencies.objc2-io-kit]
@@ -56,7 +56,7 @@ optional = true
 
 [build-dependencies]
 dactyl = "0.13.*"
-oxford_join = "0.7.*"
+oxford_join = "0.8.*"
 
 [build-dependencies.cdtoc]
 version = "0.14.*"
