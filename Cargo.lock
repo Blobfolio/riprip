@@ -13,9 +13,9 @@ dependencies = [
 
 [[package]]
 name = "argyle"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf893d9bf5d80e61998d27cc42ce55c38d7160aea56c6f457396ca1526a33f8"
+checksum = "cba4e8d559e4d79fb5ca001300baa024381126ed033f16a60c628e5b95054c69"
 
 [[package]]
 name = "aws-lc-rs"
@@ -86,9 +86,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.4.7"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54413ede23c2daf518f35156dfde027feb2374004d63bd497f983c8db9c0e313"
+checksum = "f360145194ee8e21db5ee7f3fcd4fe52210864c75c985dae33218202c8bbe040"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -98,9 +98,9 @@ dependencies = [
 
 [[package]]
 name = "cdtoc"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba2b48c0e1fa4ef043ac9cbd4d3a252a5663d2f304c7cfd61f31e14f885b282"
+checksum = "d5a264efeb5ae8acf68da2d860524c5148e9665e92c599166422a3471488c0cc"
 dependencies = [
  "dactyl",
  "sha1",
@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.20.9"
+version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe4ece8474b5f766c63426647e7b4b316b67431ade1036a8313cee24a03ae917"
+checksum = "9ba9e9ec16c447027685b1f897b720e18e9a8afd00bd7332c483537e38086c9f"
 dependencies = [
  "smallvec",
  "target-lexicon",
@@ -198,9 +198,9 @@ dependencies = [
 
 [[package]]
 name = "dactyl"
-version = "0.13.2"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ade8623d8c08069f9532c934feca6c576008e4278ac43fb035412a7721b89f1"
+checksum = "7b00e58b65e45cab8123c5a8fe36ba400980c2e21511b4e5de11fed065207071"
 
 [[package]]
 name = "digest"
@@ -274,9 +274,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef25905e51abafe4dcea6c15fec58c57b601cdbd0ee53d22ea1d3016c587d39b"
+checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
 name = "fs_extra"
@@ -286,15 +286,15 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fyi_ansi"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f4d9c3c50a9eb19094bed69a93b0b777f2c1aecd1bb0dcd27d5c7ac982f23fc"
+checksum = "7291205005adb6f057a2678eb17844dc05f7aea7280c5d614c6b739f90988f07"
 
 [[package]]
 name = "fyi_msg"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ffb28456ccf37a288770d974e6e2bdbe40ee4a534b448fe9de6ef799a87c1b"
+checksum = "2f43e436ef8ea75a71d7cc04bcbafd45391801987ab2b88e8945be10dd6929f4"
 dependencies = [
  "dactyl",
  "fyi_ansi",
@@ -533,9 +533,9 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "oxford_join"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4fe1a12d07d640b474f5610cbfde8cf85291cde8be9170cc48ec2e7f90cb5d9"
+checksum = "ff5df7ff649858341f4da1a44eb9b290acc06ec2e8f104b982cc3b13dbe689d8"
 
 [[package]]
 name = "pkg-config"
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "riprip"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "argyle",
  "dactyl",
@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "riprip_core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "cdtoc",
  "crc32fast",
@@ -810,9 +810,9 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "smallvec"
-version = "1.16.1"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
+checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
 
 [[package]]
 name = "subtle"
@@ -925,9 +925,9 @@ checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "trimothy"
-version = "0.9.2"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3980e2e11a19ea9ad33ab88ae68a49eefdaf20c8ef9b95f3a2550251defab0fe"
+checksum = "f42ea99170f2ae73680d849f7a8f5bb8fb0b39c34bdf9c2ae3200cdc7f18180d"
 
 [[package]]
 name = "typenum"
@@ -955,9 +955,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "utc2k"
-version = "0.21.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b128fd6488b2e66e103dfda3d0ba8f16258fb9d7de35af56fd7f92fc64f5564"
+checksum = "011da905f2f14f5abdb83df16ad3056a333f7eed5948854edbfd13ec8df393b1"
 
 [[package]]
 name = "vcpkg"
