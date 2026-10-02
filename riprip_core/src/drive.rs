@@ -237,7 +237,7 @@ impl DriveVendorModel {
 		};
 		log!(
 			@debug
-			"Found cache size of {}KiB.",
+			"Found cache size in Rip Rip DB ({}KiB).",
 			NiceU16::from(DRIVE_CACHES[idx].1),
 		);
 		Some(DRIVE_CACHES[idx].1)
@@ -254,7 +254,7 @@ impl DriveVendorModel {
 		};
 		log!(
 			@debug
-			"Found read offset of {} samples.",
+			"Found read offset in AccurateRip DB ({} samples).",
 			DRIVE_OFFSETS[idx].1.samples(),
 		);
 		Some(DRIVE_OFFSETS[idx].1)
