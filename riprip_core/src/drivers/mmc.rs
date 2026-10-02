@@ -16,6 +16,7 @@ use crate::{
 };
 use dactyl::NiceElapsed;
 use std::{
+	num::NonZeroU8,
 	range::legacy::Range,
 	time::{
 		Duration,
@@ -274,24 +275,20 @@ pub(super) trait MmcDriverExt: TransportExt {
 	}
 
 	/// # Execute Read Command.
-	fn read_cd__(&self, buf: &mut [u8], mut lsn: i32, opts: ReadCdOpts)
+	fn read_cd__(&self, buf: &mut [u8], lsn: i32, opts: ReadCdOpts)
 	-> Result<usize, RipRipError> {
-		// Make sure the buffer and block size works out.
-		if let Err(e) = opts.num_blocks(buf) {
-			log!(@trace [buf.len(), opts] "{e}");
-			return Err(RipRipError::Bug(e));
-		}
+		let num_blocks = match opts.num_blocks(buf) {
+			Ok(v) => v,
+			Err(e) => {
+				log!(@trace [buf.len(), opts] "{e}");
+				return Err(RipRipError::Bug(e));
+			},
+		};
 
-		let mut written = 0;
-		for chunk in buf.chunks_exact_mut(opts as usize) {
-			// Rip Rip's addressing parameters are already absolute LBAs.
-			let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
-			let cdb = CommandDescriptorBlock::read_cd::<1>(lba, opts);
-			written += self.submit(&cdb, chunk, "read_cd__")?;
-			lsn += 1;
-		}
-
-		Ok(written)
+		// Rip Rip's addressing parameters are already absolute LBAs.
+		let lba = u32::try_from(lsn).map_err(|_| RipRipError::CdRead)?;
+		let cdb = CommandDescriptorBlock::read_cd(lba, num_blocks, opts);
+		self.submit(&cdb, buf, "read_cd__")
 	}
 
 	/// # Test Unit Ready.
@@ -608,19 +605,10 @@ impl CommandDescriptorBlock {
 
 /// ## Twelve-Byte Commands.
 impl CommandDescriptorBlock {
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	#[must_use]
 	/// # Read CD.
-	const fn read_cd<const TRANSFER_LEN: usize>(lba: u32, opts: ReadCdOpts)
+	const fn read_cd(lba: u32, num_blocks: NonZeroU8, opts: ReadCdOpts)
 	-> Self {
-		const {
-			assert!(
-				TRANSFER_LEN & 0x00FF_FFFF == TRANSFER_LEN,
-				"BUG: `TRANSFER_LEN` must fit three bytes.",
-			);
-		}
-
-		let [_, len_a, len_b, len_c] = (TRANSFER_LEN as u32).to_be_bytes();
 		let [lba_a, lba_b, lba_c, lba_d] = lba.to_be_bytes();
 
 		let flag_cdda = if opts.cdda() { 0x10 } else { 0x00 };
@@ -633,9 +621,9 @@ impl CommandDescriptorBlock {
 			lba_b,
 			lba_c,
 			lba_d,
-			len_a,
-			len_b,
-			len_c,
+			0x00,                     // Number of sectors to read.
+			0x00,                     // Number of sectors to read.
+			num_blocks.get(),         // Number of sectors to read.
 			flag_cdda | flag_c2,      // Data selection.
 			opts.subchannel_format(), // Subchannel.
 			0x00, // Control.
