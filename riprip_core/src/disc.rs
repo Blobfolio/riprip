@@ -47,10 +47,7 @@ use std::{
 	borrow::Cow,
 	fmt,
 	io::StderrLock,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::PathBuf,
 };
 
 
@@ -248,11 +245,9 @@ impl Disc {
 	///
 	/// This will return an error if there's a problem communicating with the
 	/// drive, the disc is unsupported, etc.
-	pub fn new<P>(dev: Option<P>, metadata: bool)
-	-> Result<Self, RipRipError>
-	where P: AsRef<Path> {
+	pub fn new(dev: Option<PathBuf>, metadata: bool) -> Result<Self, RipRipError> {
 		if let Some(v) = dev.as_ref() {
-			log!(@debug "Device path {}.", v.as_ref().display());
+			log!(@debug "Device path {}.", v.display());
 		}
 		let cdda = CddaDriver::new(dev)?;
 

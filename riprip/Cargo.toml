@@ -149,8 +149,11 @@ default = [ "libcdio-static" ]
 # Use libcdio driver. (Currently required.)
 libcdio = [ "riprip_core/libcdio" ]
 
-# Build and link libcdio statically.
+# Same as above, but build and link libcdio statically.
 libcdio-static = [ "riprip_core/libcdio-static" ]
 
 # Use libusb driver.
 libusb = [ "riprip_core/libusb" ]
+
+# Use SG IO driver.
+sg_io = [ "riprip_core/sg_io" ]

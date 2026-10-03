@@ -30,10 +30,14 @@ use libcdio_sys::{
 use std::{
 	ffi::CString,
 	os::unix::ffi::OsStrExt,
-	path::Path,
+	path::PathBuf,
 	sync::Once,
 };
-use super::ReadCdOpts;
+use super::{
+	open_err,
+	path_is_block_char_device,
+	ReadCdOpts,
+};
 
 
 
@@ -73,21 +77,16 @@ impl Drop for LibcdioInstance {
 impl CddaDriverNewExt for LibcdioInstance {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # New!
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where P: AsRef<Path> {
+	fn new(dev: Option<PathBuf>) -> Result<Self, RipRipError> {
 		// Make sure the library has been initialized.
 		init();
 
 		// Take a look at the desired device.
 		let dev =
 			if let Some(dev) = dev {
-				let dev = dev.as_ref();
-				let original: String = dev.to_string_lossy().into_owned();
-				if ! dev.exists() {
-					return Err(RipRipError::Device(original));
-				}
+				path_is_block_char_device(&dev)?;
 				let dev = CString::new(dev.as_os_str().as_bytes())
-					.map_err(|_| RipRipError::Device(original))?;
+					.map_err(|_| open_err(Some(dev.as_path())))?;
 				Some(dev)
 			}
 			else { None };

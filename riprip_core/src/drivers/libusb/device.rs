@@ -76,6 +76,7 @@ mod macos {
 	#[expect(unsafe_code, reason = "For FFI.")]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
+		if path_is_block_char_device(dev).is_err() { return Ok(None) };
 		let Some(bsd_name) = dev.file_name()
 			.and_then(|name| CString::new(name.as_bytes()).ok())
 		else {
@@ -141,29 +142,15 @@ mod macos {
 mod linux {
 	use crate::macros::log;
 	use std::{
-		os::unix::fs::{
-			MetadataExt,
-			FileTypeExt,
-		},
+		os::unix::fs::MetadataExt,
 		path::Path,
 	};
+	use crate::drivers::path_is_block_char_device;
 
 	#[must_use]
 	/// # Get Vendor and Product Descriptors.
 	pub(super) fn get_desc(dev: &Path) -> Option<(u16, u16)> {
-		// The path was canonicalized during argument parsing so we should be
-		// able to pull its metadata…
-		let Ok(meta) = std::fs::metadata(dev) else {
-			log!(@trace [dev] "Unable to read device metadata.");
-			return None;
-		};
-
-		// Make sure it is a block or char device.
-		let kind = meta.file_type();
-		if ! kind.is_block_device() && ! kind.is_char_device() {
-			log!(@trace [dev] "Path is not for block or character device.");
-			return None;
-		}
+		let meta = path_is_block_char_device(dev).ok()?;
 
 		// Convert to a more authoritative sysfs path.
 		let dev_num = meta.rdev();

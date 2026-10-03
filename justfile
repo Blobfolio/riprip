@@ -79,7 +79,7 @@ clippy:
 	set -e
 
 	clear
-	for features in libcdio-static libcdio libusb; do
+	for features in libcdio-static libcdio libusb sg_io; do
 		fyi info "riprip/$features"
 		cargo clippy \
 			--release \
@@ -88,7 +88,7 @@ clippy:
 			--features="$features" \
 			--target-dir "{{ cargo_dir }}"
 	done
-	for features in libcdio-static libcdio libusb; do
+	for features in libcdio-static libcdio libusb sg_io; do
 		fyi info "riprip_core/$features"
 		cargo clippy \
 			--release \
@@ -150,7 +150,7 @@ clippy:
 	set -e
 
 	clear
-	for features in libcdio-static libcdio libusb; do
+	for features in libcdio-static libcdio libusb sg_io; do
 		fyi info "riprip/$features"
 		cargo test \
 			--release \
@@ -159,7 +159,7 @@ clippy:
 			--features="$features" \
 			--target-dir "{{ cargo_dir }}"
 	done
-	for features in libcdio-static libcdio libusb; do
+	for features in libcdio-static libcdio libusb sg_io; do
 		fyi info "riprip_core/$features"
 		cargo test \
 			--release \

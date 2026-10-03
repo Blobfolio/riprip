@@ -228,14 +228,16 @@ pub enum RipRipError {
 	/// # Writing to disk.
 	Write(String),
 
-	#[cfg(feature = "libusb")]
+	#[cfg(any(feature = "libusb", feature = "sg_io"))]
 	/// # Test Unit Readiness Ambiguous.
 	///
-	/// This signals that a followup SENSE request is required to make sense
-	/// of an ambiguous test unit ready status of 1.
-	TestUnitNotReady,
+	/// This is a special signal used to indicate that a device might not be
+	/// ready to do its thing yet.
+	///
+	/// Optionally includes the `key`, `asc`, and `ascq` sense data.
+	TestUnitNotReady(Option<[u8; 3]>),
 
-	#[cfg(feature = "libusb")]
+	#[cfg(any(feature = "libusb", feature = "sg_io"))]
 	/// # Test Unit Ready Timeout.
 	TestUnitTimeout,
 
@@ -311,10 +313,10 @@ impl fmt::Display for RipRipError {
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
 
-			#[cfg(feature = "libusb")]
-			Self::TestUnitNotReady => Ok(()), // Internal only.
+			#[cfg(any(feature = "libusb", feature = "sg_io"))]
+			Self::TestUnitNotReady(_) => Ok(()), // Internal only.
 
-			#[cfg(feature = "libusb")]
+			#[cfg(any(feature = "libusb", feature = "sg_io"))]
 			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
 			#[cfg(feature = "bin")]

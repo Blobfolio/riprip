@@ -11,17 +11,32 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-#[cfg(not(any(feature = "libcdio", feature = "libusb")))]
-compile_error!("A driver feature is required. Enable `libcdio` or `libusb`.");
+cfg_select! {
+	// Too many.
+	any(
+		all(feature = "libcdio", feature = "libusb"),
+		all(feature = "libcdio", feature = "sg_io"),
+		all(feature = "libusb", feature = "sg_io"),
+	) => {
+		compile_error!("Conflicting driver features enabled. Choose *one* of `libcdio`, `libusb`, or `sg_io`.");
+	},
 
-#[cfg(all(feature = "libcdio", feature = "libusb"))]
-compile_error!("Conflicting driver features detected. Choose either `libcdio` or `libusb`.");
+	// Not enough.
+	not(any(feature = "libcdio", feature = "libusb", feature = "sg_io")) => {
+		compile_error!("No driver features enabled. Choose *one* of `libcdio`, `libusb`, or `sg_io`.");
+	},
 
-#[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("The `libcdio` feature does not work on Apple devices. Build with `cargo build --no-default-features --features libusb` instead.");
+	_ => {}
+}
+
+#[cfg(all(target_os = "macos", any(feature = "libcdio", feature = "sg_io")))]
+compile_error!("The only driver feature compatible with MacOS is `libusb`.");
 
 #[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
-compile_error!("The `libusb` feature requires linux or macos.");
+compile_error!("The `libusb` feature requires linux or MacOS.");
+
+#[cfg(all(not(target_os = "linux"), feature = "sg_io"))]
+compile_error!("The `sg_io` driver feature requires linux.");
 
 
 
@@ -31,8 +46,11 @@ mod libcdio;
 #[cfg(feature = "libusb")]
 mod libusb;
 
-#[cfg(feature = "libusb")]
+#[cfg(any(feature = "libusb", feature = "sg_io"))]
 mod mmc;
+
+#[cfg(feature = "sg_io")]
+mod sg_io;
 
 
 
@@ -56,8 +74,12 @@ use dactyl::NoHash;
 use std::{
 	cell::RefCell,
 	collections::HashSet,
+	fs::Metadata,
 	num::NonZeroU8,
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	},
 	range::legacy::Range,
 	time::{
 		Duration,
@@ -68,7 +90,7 @@ use std::{
 
 
 #[cfg(feature = "libcdio")]
-/// # CD/IO Driver Middleware.
+/// # Libcdio Driver.
 ///
 /// This type alias is how the rest of the library references the chosen
 /// driver.
@@ -80,6 +102,13 @@ pub(crate) type CddaDriver = libcdio::LibcdioInstance;
 /// This type alias is how the rest of the library references the chosen
 /// driver.
 pub(crate) type CddaDriver = libusb::LibusbInstance;
+
+#[cfg(feature = "sg_io")]
+/// # SG IO Driver.
+///
+/// This type alias is how the rest of the library references the chosen
+/// driver.
+pub(crate) type CddaDriver = sg_io::SgIoInstance;
 
 
 
@@ -343,8 +372,7 @@ pub(crate) trait CddaDriverNewExt: Sized {
 	///
 	/// This will return an error if initialization fails, or if the provided
 	/// device path is obviously wrong.
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where P: AsRef<Path>;
+	fn new(dev: Option<PathBuf>) -> Result<Self, RipRipError>;
 }
 
 
@@ -502,6 +530,34 @@ const fn msf_to_lsn(m: u8, s: u8, f: u8) -> i32 {
 
 	// Convert to LSN.
 	lba - (CD_LEADIN as i32)
+}
+
+/// # Open Error.
+///
+/// Most points of failure return a `DeviceOpen` error. This method handles the
+/// somewhat tedious conversion of the path for use with that variant.
+fn open_err(dev: Option<&Path>) -> RipRipError {
+	RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
+}
+
+/// # Is Block/Char Device.
+///
+/// Verify a path exists and maps to a block or character device.
+fn path_is_block_char_device(dev: &Path) -> Result<Metadata, RipRipError> {
+	use std::os::unix::fs::FileTypeExt;
+
+	let Ok(meta) = std::fs::metadata(dev) else {
+		log!(@trace [dev] "Unable to read device metadata.");
+		return Err(open_err(Some(dev)));
+	};
+
+	// Make sure it is a block or char device.
+	let kind = meta.file_type();
+	if kind.is_block_device() || kind.is_char_device() { Ok(meta) }
+	else {
+		log!(@trace [dev] "Path is not for block or character device.");
+		Err(open_err(Some(dev)))
+	}
 }
 
 /// # Set Bad Sector.

@@ -17,10 +17,13 @@ use dactyl::{
 	NiceElapsed,
 	NiceU32,
 };
-use super::mmc::{
-	CommandDescriptorBlock,
-	MmcDriverExt,
-	TransportExt,
+use super::{
+	mmc::{
+		CommandDescriptorBlock,
+		MmcDriverExt,
+		TransportExt,
+	},
+	open_err,
 };
 use nix::unistd::{
 	Uid,
@@ -101,31 +104,27 @@ impl<C: UsbContext> LibusbInstance<C> {
 	/// Probe the device for more specific information about itself and the
 	/// loaded disc, if any, returning `Self` (with those details) if
 	/// successful.
-	pub(super) fn with_context<P>(context: &C, dev: Option<P>)
-	-> Result<Self, RipRipError>
-	where P: AsRef<Path> {
-		// AsRef gets really fucking annoying. Haha.
-		let dev: Option<PathBuf> = dev.map(|v| v.as_ref().to_path_buf());
-
+	pub(super) fn with_context(context: &C, dev: Option<&Path>)
+	-> Result<Self, RipRipError> {
 		log!(@debug "Initializing `libusb` driver.");
 
 		// Find and open the device.
 		let devices = context.devices().map_err(|e| {
 			log!(@trace [dev] "{e}");
-			open_err(dev.as_deref())
+			open_err(dev)
 		})?;
-		let device = find_device(&devices, dev.as_deref())?;
+		let device = find_device(&devices, dev)?;
 		log!(@debug "Found optical drive ({device:?}).");
-		let device_handle = open_device(&device, dev.as_deref())?;
+		let device_handle = open_device(&device, dev)?;
 		let endpoints = Endpoints::from_device(&device_handle.device())
-			.ok_or_else(|| open_err(dev.as_deref()))?;
+			.ok_or_else(|| open_err(dev))?;
 
 		// Check if kernel driver is owning our device and detach it if so.
 		let interface_id = 0;
 		if device_handle.kernel_driver_active(interface_id) == Ok(true) {
 			device_handle.detach_kernel_driver(interface_id).map_err(|e| {
 				log!(@trace [dev] "{e}");
-				open_err(dev.as_deref())
+				open_err(dev)
 			})?;
 		}
 
@@ -282,7 +281,7 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 		// to see what's what. Return a special error for that so the caller
 		// can call back.
 		if csw.status() == 1 && cdb.is_test_unit_ready() {
-			return Err(RipRipError::TestUnitNotReady);
+			return Err(RipRipError::TestUnitNotReady(None));
 		}
 
 		// Boo.
@@ -301,9 +300,8 @@ impl<T: UsbContext> TransportExt for LibusbInstance<T> {
 
 impl CddaDriverNewExt for LibusbInstance<GlobalContext> {
 	/// # New Instance.
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where P: AsRef<Path> {
-		Self::with_context(&GlobalContext::default(), dev)
+	fn new(dev: Option<PathBuf>) -> Result<Self, RipRipError> {
+		Self::with_context(&GlobalContext::default(), dev.as_deref())
 	}
 }
 
@@ -495,12 +493,4 @@ fn open_device<C: UsbContext>(device: &Device<C>, path: Option<&Path>)
 	}
 
 	Err(open_err(path))
-}
-
-/// # Open Error.
-///
-/// Most points of failure return a `DeviceOpen` error. This method handles the
-/// somewhat tedious conversion of the path for use with that variant.
-fn open_err(dev: Option<&Path>) -> RipRipError {
-	RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
 }
