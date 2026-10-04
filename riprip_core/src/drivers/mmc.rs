@@ -475,7 +475,7 @@ pub(super) enum CommandDescriptorBlock {
 }
 
 impl CommandDescriptorBlock {
-	#[cfg(feature = "libusb")]
+	#[cfg(target_os = "macos")]
 	#[expect(clippy::many_single_char_names, reason = "It's fine…")]
 	#[must_use]
 	/// # Fixed Array.
@@ -490,7 +490,7 @@ impl CommandDescriptorBlock {
 		}
 	}
 
-	#[cfg(feature = "sg_io")]
+	#[cfg(target_os = "linux")]
 	#[must_use]
 	/// # As Slice.
 	pub(super) const fn as_slice(&self) -> &[u8] {

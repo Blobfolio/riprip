@@ -3,21 +3,20 @@
 */
 
 use cdtoc::TocError;
-use fyi_msg::Msg;
+use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+	},
+	Msg,
+};
 use std::{
 	error::Error,
 	fmt,
 };
 
-#[cfg(feature = "bin")]
-use fyi_msg::fyi_ansi::{
-	ansi,
-	csi,
-};
 
 
-
-#[cfg(feature = "bin")]
 /// # Help Text.
 const HELP: &str = concat!(r#"
     n__n_
@@ -228,7 +227,6 @@ pub enum RipRipError {
 	/// # Writing to disk.
 	Write(String),
 
-	#[cfg(any(feature = "libusb", feature = "sg_io"))]
 	/// # Test Unit Readiness Ambiguous.
 	///
 	/// This is a special signal used to indicate that a device might not be
@@ -237,23 +235,18 @@ pub enum RipRipError {
 	/// Optionally includes the `key`, `asc`, and `ascq` sense data.
 	TestUnitNotReady(Option<[u8; 3]>),
 
-	#[cfg(any(feature = "libusb", feature = "sg_io"))]
 	/// # Test Unit Ready Timeout.
 	TestUnitTimeout,
 
-	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
 	CliArg(String),
 
-	#[cfg(feature = "bin")]
 	/// # CLI Parsing failure.
 	CliParse(&'static str),
 
-	#[cfg(feature = "bin")]
 	/// # Print Help (Not an Error).
 	PrintHelp,
 
-	#[cfg(feature = "bin")]
 	/// # Print Version (Not an Error).
 	PrintVersion,
 }
@@ -313,22 +306,13 @@ impl fmt::Display for RipRipError {
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
 
-			#[cfg(any(feature = "libusb", feature = "sg_io"))]
 			Self::TestUnitNotReady(_) => Ok(()), // Internal only.
-
-			#[cfg(any(feature = "libusb", feature = "sg_io"))]
 			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
-			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
-
-			#[cfg(feature = "bin")]
 			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
 
-			#[cfg(feature = "bin")]
 			Self::PrintHelp => f.write_str(HELP),
-
-			#[cfg(feature = "bin")]
 			Self::PrintVersion => f.write_str(concat!("Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"))),
 		}
 	}

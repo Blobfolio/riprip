@@ -45,23 +45,14 @@ jobs:
 
     - name: Build
       run: |
-        cargo build --no-default-features --features=libusb --target ${{ matrix.target }}
-        cargo build --release --no-default-features --features=libusb --target ${{ matrix.target }}
+        cargo build --target ${{ matrix.target }}
+        cargo build --release --target ${{ matrix.target }}
 
     - name: Clippy
       run: |
-        cargo clippy --release -p riprip --no-default-features --features=libusb --target ${{ matrix.target }}
-        cargo clippy --release -p riprip_core --features=libusb --target ${{ matrix.target }}
-        cargo clippy --release -p riprip_core --features=libusb,bin --target ${{ matrix.target }}
+        cargo clippy --workspace --release --target ${{ matrix.target }}
 
-    - name: Tests (Debug)
+    - name: Tests
       run: |
-        cargo test -p riprip --no-default-features --features=libusb --target ${{ matrix.target }}
-        cargo test -p riprip_core --features=libusb --target ${{ matrix.target }}
-        cargo test -p riprip_core --features=libusb,bin --target ${{ matrix.target }}
-
-    - name: Tests (Release)
-      run: |
-        cargo test --release -p riprip --no-default-features --features=libusb --target ${{ matrix.target }}
-        cargo test --release -p riprip_core --features=libusb --target ${{ matrix.target }}
-        cargo test --release -p riprip_core --features=libusb,bin --target ${{ matrix.target }}
+        cargo test --workspace --target ${{ matrix.target }}
+        cargo test --workspace --release --target ${{ matrix.target }}

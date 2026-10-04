@@ -11,46 +11,10 @@ Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-cfg_select! {
-	// Too many.
-	any(
-		all(feature = "libcdio", feature = "libusb"),
-		all(feature = "libcdio", feature = "sg_io"),
-		all(feature = "libusb", feature = "sg_io"),
-	) => {
-		compile_error!("Conflicting driver features enabled. Choose *one* of `libcdio`, `libusb`, or `sg_io`.");
-	},
 
-	// Not enough.
-	not(any(feature = "libcdio", feature = "libusb", feature = "sg_io")) => {
-		compile_error!("No driver features enabled. Choose *one* of `libcdio`, `libusb`, or `sg_io`.");
-	},
-
-	_ => {}
-}
-
-#[cfg(all(target_os = "macos", any(feature = "libcdio", feature = "sg_io")))]
-compile_error!("The only driver feature compatible with MacOS is `libusb`.");
-
-#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
-compile_error!("The `libusb` feature requires linux or MacOS.");
-
-#[cfg(all(not(target_os = "linux"), feature = "sg_io"))]
-compile_error!("The `sg_io` driver feature requires linux.");
-
-
-
-#[cfg(feature = "libcdio")]
-mod libcdio;
-
-#[cfg(feature = "libusb")]
-mod libusb;
-
-#[cfg(any(feature = "libusb", feature = "sg_io"))]
 mod mmc;
-
-#[cfg(feature = "sg_io")]
-mod sg_io;
+#[cfg(target_os = "macos")] mod libusb;
+#[cfg(target_os = "linux")] mod sg_io;
 
 
 
@@ -89,26 +53,12 @@ use std::{
 
 
 
-#[cfg(feature = "libcdio")]
-/// # Libcdio Driver.
-///
-/// This type alias is how the rest of the library references the chosen
-/// driver.
-pub(crate) type CddaDriver = libcdio::LibcdioInstance;
-
-#[cfg(feature = "libusb")]
-/// # USB Driver.
-///
-/// This type alias is how the rest of the library references the chosen
-/// driver.
-pub(crate) type CddaDriver = libusb::LibusbInstance;
-
-#[cfg(feature = "sg_io")]
-/// # SG IO Driver.
-///
-/// This type alias is how the rest of the library references the chosen
-/// driver.
-pub(crate) type CddaDriver = sg_io::SgIoInstance;
+/// # I/O Driver.
+pub(crate) type CddaDriver = cfg_select!{
+	target_os = "linux" => sg_io::SgIoInstance,
+	target_os = "macos" => libusb::LibusbInstance,
+	_ => compile_error!("Rip Rip requires Linux or MacOS."),
+};
 
 
 
