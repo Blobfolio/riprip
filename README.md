@@ -182,9 +182,10 @@ Pre-built x86-64-v3 `.deb` packages are available for Debian and Ubuntu users on
 
 To get Rip Rip up and running on other 64-bit Linux and Mac systems, it just needs to be built from source.
 
-There are only two pre-requisites:
+There are only three pre-requisites:
 
 * [Rust](https://rustup.rs/) (latest stable)
+* `clang` or `gcc`
 * [`cmake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
 
 > [!NOTE]
