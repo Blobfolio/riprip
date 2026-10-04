@@ -24,6 +24,7 @@ use super::{
 		TransportExt,
 	},
 	open_err,
+	path_is_block_char_device,
 };
 use nix::unistd::{
 	Uid,
