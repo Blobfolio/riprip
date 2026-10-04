@@ -423,7 +423,7 @@ fn find_device<C: UsbContext>(devices: &DeviceList<C>, path: Option<&Path>)
 	// If we have a path, we'll want to match the specific video/product IDs.
 	let ids: Option<(u16, u16)> =
 		if let Some(p) = path {
-			match device::get_desc(&p)? {
+			match device::get_desc(p)? {
 				Some(v) => Some(v),
 				None => return Err(open_err(path)),
 			}

@@ -77,7 +77,7 @@ fn get_numeric_property(media_service: u32, key: &str) -> Option<u16> {
 /// This will return an error if `IOServiceGetMatchingServices` fails for a
 /// Mac target.
 pub(super) fn get_desc(dev: &Path) -> Result<Option<(u16, u16)>, RipRipError> {
-	if path_is_block_char_device(dev).is_err() { return Ok(None) };
+	if path_is_block_char_device(dev).is_err() { return Ok(None) }
 	let Some(bsd_name) = dev.file_name()
 		.and_then(|name| CString::new(name.as_bytes()).ok())
 	else {
