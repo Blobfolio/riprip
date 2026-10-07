@@ -1,4 +1,4 @@
-name: Build
+name: Build (Linux / SG_IO)
 
 on:
   push:

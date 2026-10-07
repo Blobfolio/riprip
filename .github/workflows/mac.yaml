@@ -1,4 +1,4 @@
-name: Build
+name: Build (macOS / Libusb)
 
 on:
   push:
