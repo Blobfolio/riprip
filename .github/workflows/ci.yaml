@@ -1,4 +1,4 @@
-name: Build (macOS / Libusb)
+name: Build
 
 on:
   push:
@@ -15,13 +15,18 @@ env:
 
 jobs:
   all:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
     name: All
 
     strategy:
       matrix:
         target:
+        - x86_64-unknown-linux-gnu
         - aarch64-apple-darwin
         include:
+        - target: x86_64-unknown-linux-gnu
+          os:     ubuntu-latest
         - target: aarch64-apple-darwin
           os:     macos-latest
 
@@ -42,17 +47,24 @@ jobs:
         rustup --version
         cargo --version
         cargo clippy --version
-
-    - name: Build
+    
+    - name: Build (Debug)
       run: |
         cargo build --target ${{ matrix.target }}
+
+    - name: Build (Release)
+      run: |
         cargo build --release --target ${{ matrix.target }}
 
     - name: Clippy
       run: |
         cargo clippy --workspace --release --target ${{ matrix.target }}
 
-    - name: Tests
+    - name: Test (Debug)
+      run: |
+        cargo test --workspace --target ${{ matrix.target }}
+
+    - name: Test (Release)
       run: |
         cargo test --workspace --target ${{ matrix.target }}
         cargo test --workspace --release --target ${{ matrix.target }}

@@ -1,6 +1,6 @@
 # Rip Rip Hooray!
 
-[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/riprip/linux.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/riprip/actions)
+[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/riprip/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/riprip/actions)
 [![deps.rs](https://deps.rs/repo/github/blobfolio/riprip/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/riprip)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
@@ -178,7 +178,7 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 ## Installation
 
-Pre-built x86-64-v3 `.deb` packages are available for Debian and Ubuntu users on the [release](https://github.com/Blobfolio/riprip/releases) page, and Arch Linux users can install it through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
+Pre-built x86-64-v3 `.deb` packages for Debian and Ubuntu are attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
 To get Rip Rip up and running on other 64-bit Linux and Mac systems, it just needs to be built from source.
 
