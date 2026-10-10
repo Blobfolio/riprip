@@ -58,13 +58,20 @@ jobs:
 
     - name: Clippy
       run: |
-        cargo clippy --workspace --release --target ${{ matrix.target }}
+        cargo clippy --release --target ${{ matrix.target }}
 
     - name: Test (Debug)
       run: |
-        cargo test --workspace --target ${{ matrix.target }}
+        cargo test --target ${{ matrix.target }}
 
     - name: Test (Release)
       run: |
-        cargo test --workspace --target ${{ matrix.target }}
-        cargo test --workspace --release --target ${{ matrix.target }}
+        cargo test --target ${{ matrix.target }}
+        cargo test --release --target ${{ matrix.target }}
+
+    - name: Build (Vendored)
+      run: |
+        cargo clean
+        mkdir .cargo
+        cargo vendor --locked > .cargo/config.toml
+        cargo build --locked --offline --target ${{ matrix.target }}
