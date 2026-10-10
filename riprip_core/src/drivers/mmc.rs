@@ -303,7 +303,7 @@ pub(super) trait MmcDriverExt: TransportExt {
 		let mut retried = false;
 		let mut limited_retry = 0;
 		loop {
-			match self.submit(&CommandDescriptorBlock::TEST_UNIT_READY, &mut [], "test_unit_ready__") {
+			let sense = match self.submit(&CommandDescriptorBlock::TEST_UNIT_READY, &mut [], "test_unit_ready__") {
 				// Ready!
 				Ok(_) => {
 					if retried {
@@ -317,55 +317,63 @@ pub(super) trait MmcDriverExt: TransportExt {
 					return Ok(())
 				},
 
-				// Don't know. Let's see.
-				Err(RipRipError::TestUnitNotReady) => {
+				// Don't know, but the drive gave us the sense we need to make
+				// sense of it.
+				Err(RipRipError::TestUnitNotReady(Some(v))) => v,
+
+				// Don't know and don't have any sense; we'll have to
+				// explicitly it.
+				Err(RipRipError::TestUnitNotReady(None)) => {
 					let mut buf = [0_u8; 18];
 					self.submit(&CommandDescriptorBlock::REQUEST_SENSE, &mut buf, "test_unit_ready__")?;
 
-					// Only three of those bytes are relevant.
-					let key = buf[2] & 0x0f;
-					let asc = buf[12];
-					let ascq = buf[13];
-
-					// If it's getting ready, wait and loop back around.
-					match [key, asc, ascq] {
-						// Not there yet, wait and retry.
-						[ 0x02, 0x04, 0x00 | 0x01 | 0x07 ] |
-						[ 0x06, 0x28, 0x00 ] |
-						[ 0x06, 0x29, 0x00..=0x04 ] => {},
-
-						// Conditionally retry.
-						[ 0x02, 0x04, 0x02 ] |
-						[ 0x06, 0x2A, 0x00..=0x02 ] if limited_retry < 2 => {
-							limited_retry += 1;
-						},
-
-						// An actual error, probably.
-						_ => return Err(RipRipError::DiscMode),
-					}
-
-					// Mention that we're gonna be polling, but only once.
-					if ! retried {
-						log!(@trace "Waiting for device to become ready.");
-						retried = true;
-					}
-					// If it's taking forever, return an error.
-					else if RETRY_TIMEOUT < now.elapsed() {
-						log!(
-							@trace
-							"Device still not ready after {}; giving up.",
-							NiceElapsed::from(now.elapsed()),
-						);
-						return Err(RipRipError::TestUnitTimeout);
-					}
-
-					// Wait a bit before looping back around.
-					std::thread::sleep(RETRY_DELAY);
+					// Key, ASC, and ASCQ, respectively.
+					[buf[2] & 0x0F, buf[12], buf[13]]
 				},
 
-				// Something is wrong.
+				// A more traditional error deserves more traditional handling.
 				Err(e) => return Err(e),
+			};
+
+			// If it's getting ready, wait and loop back around.
+			match sense {
+				// Not there yet, wait and retry.
+				[ 0x02, 0x04, 0x00 | 0x01 | 0x07 ] |
+				[ 0x06, 0x28, 0x00 ] |
+				[ 0x06, 0x29, 0x00..=0x04 ] => {},
+
+				// Conditionally retry.
+				[ 0x02, 0x04, 0x02 ] |
+				[ 0x06, 0x2A, 0x00..=0x02 ] if limited_retry < 2 => {
+					limited_retry += 1;
+				},
+
+				// An actual error, probably.
+				_ => {
+					if retried {
+						log!(@trace [sense] "The wait was for naught!");
+					}
+					return Err(RipRipError::DiscMode)
+				},
 			}
+
+			// Mention that we're gonna be polling, but only once.
+			if ! retried {
+				log!(@trace "Waiting for device to become ready.");
+				retried = true;
+			}
+			// If it's taking forever, quit and return an error.
+			else if RETRY_TIMEOUT < now.elapsed() {
+				log!(
+					@trace
+					"Device still not ready after {}; giving up.",
+					NiceElapsed::from(now.elapsed()),
+				);
+				return Err(RipRipError::TestUnitTimeout);
+			}
+
+			// Wait a bit before looping back around.
+			std::thread::sleep(RETRY_DELAY);
 		}
 	}
 }
@@ -467,6 +475,7 @@ pub(super) enum CommandDescriptorBlock {
 }
 
 impl CommandDescriptorBlock {
+	#[cfg(target_os = "macos")]
 	#[expect(clippy::many_single_char_names, reason = "It's fine…")]
 	#[must_use]
 	/// # Fixed Array.
@@ -477,7 +486,18 @@ impl CommandDescriptorBlock {
 		match self {
 			Self::Six([a, b, c, d, e, f]) =>             [a, b, c, d, e, f, 0, 0, 0, 0, 0, 0],
 			Self::Ten([a, b, c, d, e, f, g, h, i, j]) => [a, b, c, d, e, f, g, h, i, j, 0, 0],
-			Self::Twelve(inner) => inner,
+			Self::Twelve(v) => v,
+		}
+	}
+
+	#[cfg(target_os = "linux")]
+	#[must_use]
+	/// # As Slice.
+	pub(super) const fn as_slice(&self) -> &[u8] {
+		match self {
+			Self::Six(v) => v.as_slice(),
+			Self::Ten(v) => v.as_slice(),
+			Self::Twelve(v) => v.as_slice(),
 		}
 	}
 

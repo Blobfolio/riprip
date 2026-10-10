@@ -3,21 +3,20 @@
 */
 
 use cdtoc::TocError;
-use fyi_msg::Msg;
+use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+	},
+	Msg,
+};
 use std::{
 	error::Error,
 	fmt,
 };
 
-#[cfg(feature = "bin")]
-use fyi_msg::fyi_ansi::{
-	ansi,
-	csi,
-};
 
 
-
-#[cfg(feature = "bin")]
 /// # Help Text.
 const HELP: &str = concat!(r#"
     n__n_
@@ -228,30 +227,26 @@ pub enum RipRipError {
 	/// # Writing to disk.
 	Write(String),
 
-	#[cfg(feature = "libusb")]
 	/// # Test Unit Readiness Ambiguous.
 	///
-	/// This signals that a followup SENSE request is required to make sense
-	/// of an ambiguous test unit ready status of 1.
-	TestUnitNotReady,
+	/// This is a special signal used to indicate that a device might not be
+	/// ready to do its thing yet.
+	///
+	/// Optionally includes the `key`, `asc`, and `ascq` sense data.
+	TestUnitNotReady(Option<[u8; 3]>),
 
-	#[cfg(feature = "libusb")]
 	/// # Test Unit Ready Timeout.
 	TestUnitTimeout,
 
-	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
 	CliArg(String),
 
-	#[cfg(feature = "bin")]
 	/// # CLI Parsing failure.
 	CliParse(&'static str),
 
-	#[cfg(feature = "bin")]
 	/// # Print Help (Not an Error).
 	PrintHelp,
 
-	#[cfg(feature = "bin")]
 	/// # Print Version (Not an Error).
 	PrintVersion,
 }
@@ -311,22 +306,13 @@ impl fmt::Display for RipRipError {
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
 
-			#[cfg(feature = "libusb")]
-			Self::TestUnitNotReady => Ok(()), // Internal only.
-
-			#[cfg(feature = "libusb")]
+			Self::TestUnitNotReady(_) => Ok(()), // Internal only.
 			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
-			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
-
-			#[cfg(feature = "bin")]
 			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
 
-			#[cfg(feature = "bin")]
 			Self::PrintHelp => f.write_str(HELP),
-
-			#[cfg(feature = "bin")]
 			Self::PrintVersion => f.write_str(concat!("Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"))),
 		}
 	}

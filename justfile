@@ -36,12 +36,11 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 
 # Build Release!
-@build DRIVER="libcdio-static":
+@build:
 	env SHOW_TOTALS=1 cargo auditable build \
 		--bin "{{ pkg_id }}" \
 		-p "{{ pkg_id }}" \
 		--release \
-		--no-default-features --features="{{DRIVER}}" \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -74,60 +73,18 @@ export RUSTFLAGS := "-Dwarnings -Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=t
 
 
 # Clippy.
-clippy:
-	#!/usr/bin/env bash
-	set -e
-
+@clippy:
 	clear
-	for features in libcdio-static libcdio libusb; do
-		fyi info "riprip/$features"
-		cargo clippy \
-			--release \
-			-p "riprip" \
-			--no-default-features \
-			--features="$features" \
-			--target-dir "{{ cargo_dir }}"
-	done
-	for features in libcdio-static libcdio libusb; do
-		fyi info "riprip_core/$features"
-		cargo clippy \
-			--release \
-			-p "riprip_core" \
-			--no-default-features \
-			--features="$features" \
-			--target-dir "{{ cargo_dir }}"
-
-		fyi info "riprip_core/$features,bin"
-		cargo clippy \
-			--release \
-			-p "riprip_core" \
-			--no-default-features \
-			--features="$features,bin" \
-			--target-dir "{{ cargo_dir }}"
-	done
+	cargo clippy \
+		--release \
+		--workspace \
+		--target-dir "{{ cargo_dir }}"
 
 
 # Generate CREDITS.
 @credits:
 	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml" -t x86_64-unknown-linux-gnu
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
-
-
-# Build Docs.
-@doc:
-	# Make the docs.
-	cargo doc \
-		--release \
-		--workspace \
-		--no-deps \
-		--target-dir "{{ cargo_dir }}"
-
-	# Move the docs and clean up ownership.
-	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
-	mv "{{ cargo_dir }}/doc" "{{ justfile_directory() }}"
-	just _fix-chown "{{ doc_dir }}"
-
-	exit 0
 
 
 # Fetch AccurateRip Drive Offsets.
@@ -146,36 +103,17 @@ clippy:
 
 # Unit tests!
 @test:
-	#!/usr/bin/env bash
-	set -e
-
 	clear
-	for features in libcdio-static libcdio libusb; do
-		fyi info "riprip/$features"
-		cargo test \
-			--release \
-			-p "riprip" \
-			--no-default-features \
-			--features="$features" \
-			--target-dir "{{ cargo_dir }}"
-	done
-	for features in libcdio-static libcdio libusb; do
-		fyi info "riprip_core/$features"
-		cargo test \
-			--release \
-			-p "riprip_core" \
-			--no-default-features \
-			--features="$features" \
-			--target-dir "{{ cargo_dir }}"
+	fyi info "Debug"
+	cargo test \
+		--workspace \
+		--target-dir "{{ cargo_dir }}"
 
-		fyi info "riprip_core/$features,bin"
-		cargo test \
-			--release \
-			-p "riprip_core" \
-			--no-default-features \
-			--features="$features,bin" \
-			--target-dir "{{ cargo_dir }}"
-	done
+	fyi info "Release"
+	cargo test \
+		--release \
+		--workspace \
+		--target-dir "{{ cargo_dir }}"
 
 
 # Get/Set version.

@@ -135,7 +135,10 @@ pub(super) fn parse() -> Result<Parsed, RipRipError> {
 	let disc = Disc::new(dev, ! no_metadata)?;
 	let drivevendormodel = disc.drive_vendor_model();
 	if level.is_some() {
-		if let Some(v) = drivevendormodel { log!(@info "{v}"); }
+		if let Some(v) = drivevendormodel {
+			log!(@info "{v}");
+			log!(@trace "Raw vendor/model: {:?}", v.as_slice());
+		}
 		log!(@info "{disc:#?}");
 		log!(@info "{disc:#}");
 		if let Some(cdtext) = disc.cdtext() {
