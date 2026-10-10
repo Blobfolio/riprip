@@ -213,3 +213,24 @@ riprip --version
 ```
 
 If you run into any issues or would like to help make Rip Rip available on more platforms, [let us know](https://github.com/Blobfolio/riprip/issues/new)!
+
+### Offline/Vendored Builds
+
+If your build environment lacks networking support, pre-download the `Source code (tar.gz)` and `vendored-sources.tar.zst` assets attached to the [release](https://github.com/Blobfolio/riprip/releases/latest), then:
+
+```bash
+# Extract the source code.
+tar -xf riprip-VERSION.tar.gz
+
+# Move into the source root.
+cd riprip-VERSION
+
+# Extract the vendored sources (into the source root).
+tar -xf ../vendored-sources.tar.zst
+
+# Build! See `cargo build --help` for more options.
+cargo build \
+    --release \
+    --locked \
+    --offline
+```
