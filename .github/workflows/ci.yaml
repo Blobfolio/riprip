@@ -36,7 +36,7 @@ jobs:
       RUSTFLAGS: "-D warnings"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
@@ -47,7 +47,7 @@ jobs:
         rustup --version
         cargo --version
         cargo clippy --version
-    
+
     - name: Build (Debug)
       run: |
         cargo build --target ${{ matrix.target }}
