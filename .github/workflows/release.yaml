@@ -35,8 +35,9 @@ jobs:
 
     - name: Vendored Sources
       run: |
-        cargo vendor --locked
-        tar -I 'zstd --ultra -22 --long' -cvf vendored-sources.tar.zst vendor          
+        mkdir .cargo
+        cargo vendor --locked > .cargo/config.toml
+        tar -I 'zstd --ultra -22 --long' -cvf vendored-sources.tar.zst vendor .cargo
 
     - name: Attach
       env:
