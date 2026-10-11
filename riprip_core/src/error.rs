@@ -85,10 +85,10 @@ DRIVE SETTINGS:
 UNUSUAL SETTINGS:
         --confidence <NUM>
                       Consider a track accurately ripped — i.e. stop working on
-                      it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. Raise this value if you
-                      personally fucked up the database(s) with prior bad rips,
-                      otherwise the default should be fine. Haha.
+                      it — when AccurateRip and/or CUETools matches are found
+                      with a confidence of at least <NUM>. Raise this value if
+                      you personally fucked up the database(s) with prior bad
+                      rips, otherwise the default should be fine. Haha.
                       [default: 3; range: 1..=10]
         --sync        Confirm sector positioning with subchannel data (when
                       available) to make sure the drive is actually reading
