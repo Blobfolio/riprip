@@ -1,11 +1,7 @@
 /*!
 # Rip Rip Hooray: CD I/O Drivers.
 
-This module abstracts CD I/O drivers — currently just `libcdio` — to make it
-easier for new ones to be added in the future.
-
-At present, this simply exports a single type alias — `CddaDriver` — for use
-within the rest of the library, and a corresponding `CddaDriverExt` trait.
+This module abstracts the different CD I/O drivers for Linux and macOS.
 
 Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
