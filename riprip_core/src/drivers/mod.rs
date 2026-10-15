@@ -61,6 +61,23 @@ pub(crate) type CddaDriver = cfg_select!{
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// # Default Sub-Q Buffer.
+///
+/// This is used when querying ISRC/MCN data.
+const SUBQ_BUF: [[u8; CD_SUBCHANNEL_SIZE as usize]; SUBQ_CHUNK_SIZE as usize] = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; SUBQ_CHUNK_SIZE as usize];
+
+/// # Sub-Q Blocks to Read at Once.
+///
+/// We normally read blocks one at a time, but the subchannel queries for ISRC
+/// and MCN data are really small and endlessly repeated, so we can grab a few
+/// at a time without much risk.
+const SUBQ_CHUNK_SIZE: u8 = 16;
+
+/// # Sub-Q Reads.
+///
+/// The number of `SUBQ_CHUNK_SIZE` chunks to read.
+const SUBQ_NUM_CHUNKS: u8 = 16;
+
 thread_local! {
 	/// # Sector Shitlist.
 	///
@@ -246,24 +263,40 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Pull Sub-Q data from the track, parsing and returning the first valid
 	/// ISRC, if any.
 	fn read_isrc(&self, track: Track) -> Option<Isrc> {
+		// The total number of sectors we'd possibly be reading from.
+		const TOTAL_BLOCKS: i32 = SUBQ_CHUNK_SIZE as i32 * SUBQ_NUM_CHUNKS as i32;
+
 		if track.is_htoa() { return None; }
 
 		let rng = track.sector_range_normalized();
 		let mut start = i32::try_from(rng.start).ok()?;
 		let end = i32::try_from(rng.end).ok()?;
 
-		// Prefer the middle of the track.
-		if start + 512 < end {
-			start = start.midpoint(end) - 128;
+		// It's highly unlikely a track would ever be shorter than our chunk
+		// size, but if it is, there'd be nothing for us to do.
+		if end <= start + i32::from(SUBQ_CHUNK_SIZE) {
+			std::hint::cold_path();
+			return None;
 		}
 
-		// Should be able to read en masse for these.
-		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
-		for _ in 0..16 {
+		// Subchannel data can get muddled near the boundaries. Prefer reading
+		// from the middle if we can.
+		if start + TOTAL_BLOCKS * 2 <= end {
+			start = start.midpoint(end) - TOTAL_BLOCKS / 2;
+		}
+
+		let mut buf = SUBQ_BUF;
+		for _ in 0..SUBQ_NUM_CHUNKS {
+			// Make sure the next read is within the track bounds.
+			if end <= start + i32::from(SUBQ_CHUNK_SIZE) {
+				std::hint::cold_path();
+				return None;
+			}
+
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
-				for chunk in buf {
+				for chunk in &buf {
 					if
-						let Some(SubQ::Isrc(subq)) = SubQ::new(&chunk) &&
+						let Some(SubQ::Isrc(subq)) = SubQ::new(chunk) &&
 						let Some(isrc) = Isrc::from_subq(subq)
 					{
 						return Some(isrc);
@@ -271,7 +304,7 @@ pub(crate) trait CddaDriverExt: Sized {
 				}
 			}
 
-			start += 16;
+			start += i32::from(SUBQ_CHUNK_SIZE);
 		}
 
 		None
@@ -282,14 +315,15 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Pull Sub-Q data from the start of the disc, parsing and returning the
 	/// first valid MCN entry, if any.
 	fn read_mcn(&self) -> Option<Barcode> {
-		// Should be able to read en masse for these.
+		// Start with a small offset.
 		let mut start = 256;
-		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
-		for _ in 0..16 {
+
+		let mut buf = SUBQ_BUF;
+		for _ in 0..SUBQ_NUM_CHUNKS {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
-				for chunk in buf {
+				for chunk in &buf {
 					if
-						let Some(SubQ::Mcn(subq)) = SubQ::new(&chunk) &&
+						let Some(SubQ::Mcn(subq)) = SubQ::new(chunk) &&
 						let Some(barcode) = Barcode::from_subq(subq)
 					{
 						return Some(barcode);
@@ -297,7 +331,7 @@ pub(crate) trait CddaDriverExt: Sized {
 				}
 			}
 
-			start += 16;
+			start += i32::from(SUBQ_CHUNK_SIZE);
 		}
 
 		None
