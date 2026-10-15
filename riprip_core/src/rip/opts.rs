@@ -8,13 +8,11 @@ use crate::{
 	TrackRange,
 };
 use std::{
+	fmt,
 	num::NonZeroU16,
 	range::legacy::RangeInclusive,
 };
 use super::track_idx_to_bits;
-
-#[cfg(feature = "bin")]
-use std::fmt;
 
 
 
@@ -117,7 +115,6 @@ impl Default for RipOptions {
 	}
 }
 
-#[cfg(feature = "bin")]
 impl fmt::Display for RipOptions {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use oxford_join::JoinFmt;

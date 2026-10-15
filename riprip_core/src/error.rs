@@ -3,21 +3,21 @@
 */
 
 use cdtoc::TocError;
-use fyi_msg::Msg;
+use fyi_msg::{
+	fyi_ansi::{
+		ansi,
+		csi,
+		dim,
+	},
+	Msg,
+};
 use std::{
 	error::Error,
 	fmt,
 };
 
-#[cfg(feature = "bin")]
-use fyi_msg::fyi_ansi::{
-	ansi,
-	csi,
-};
 
 
-
-#[cfg(feature = "bin")]
 /// # Help Text.
 const HELP: &str = concat!(r#"
     n__n_
@@ -28,11 +28,15 @@ const HELP: &str = concat!(r#"
   \      ( \_,--""""--.
  ,-`.___,-` )-.______.'
  `-,'   `-_-'
-
-USAGE:
+"#, ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+USAGE:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
     riprip [OPTIONS]
-
-BASIC SETTINGS:
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+BASIC SETTINGS:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), r#"
     -r, --rereads <[ABS],[MUL]>
                       Re-read sectors on subsequent passes until A) they have
                       been independently verified with AccurateRip or CUETools;
@@ -41,85 +45,113 @@ BASIC SETTINGS:
                       contradictory "good" values. The value may omit the
                       number on either side of the comma to keep the default,
                       or be a single number to alter only the <ABS>.
-                      [default: 2,2; range: 1..=20,1..=10]
+                      [default: 2,2; range: 1..=20,1..=10]"#, ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
     -p, --passes <NUM>
                       Automate re-ripping by executing up to <NUM> passes for
                       each track while any samples remain unread or
-                      unconfirmed. [default: 1; max: 16]
+                      unconfirmed. [default: 1; max: 16]", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
     -t, --tracks <NUM(s),RNG>
                       Rip one or more specific tracks (rather than the whole
-                      disc). Multiple tracks can be separated by commas (2,3),
-                      specified as an inclusive range (2-3), and/or given their
-                      own -t/--track (-t 2 -t 3). Track 0 can be used to rip
-                      the HTOA, if any. [default: the whole disc]
-
-WHEN ALL ELSE FAILS:
+                      disc). Values can be expressed as a comma-separated
+                      list, inclusive range, and/or individually, like", dim!("
+                          -t2,3,4
+                          -t2-4
+                          -t2 -t3 -t4
+                      "), "Track 0 can be used to rip the HTOA, if any.
+                      [default: the whole disc]
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+WHEN ALL ELSE FAILS:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
         --backwards   Reverse the sector read order when ripping a track,
-                      starting at end, and ending at the start.
+                      starting at end, and ending at the start.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --flip-flop   Alternate the sector read order between passes, forwards
                       then backwards then forwards then backwards… This has no
-                      effect unless -p/--passes is at least two.
+                      effect unless ", dim!("-p"), "/", dim!("--passes"), " is at least two.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --no-resume   Ignore any previous rip states, starting over from
-                      scratch.
+                      scratch.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), r#"
         --reset       Flip "likely" samples back to "maybe", keeping their
                       values, but resetting all counts to one. This is a softer
-                      alternative to --no-resume, and will not affect tracks
-                      confirmed by AccurateRip/CUETools.
+                      alternative to "#, dim!("--no-resume"), ", and will not affect tracks
+                      confirmed by AccurateRip/CUETools.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --strict      Consider C2 errors an all-or-nothing proposition for the
                       sector as a whole, marking all samples bad if any of them
                       are bad. This is most effective when applied consistently
                       from the initial rip and onward.
-
-DRIVE SETTINGS:
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+DRIVE SETTINGS:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
     -c, --cache <NUM> Drive cache can interfere with re-read accuracy. If your
                       drive caches data, use this option to specify its buffer
                       size so Rip Rip can try to mitigate it. Values with an
                       M suffix are treated as MiB, otherwise KiB are assumed.
-                      [default: auto or 0; max: 65,535]
+                      [default: auto or 0; max: 65,535]", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
     -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom. [default: auto]
+                      of interest, like /dev/cdrom. [default: auto]", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to
                       data retrieved from the drive.
                       [default: auto or 0; range: ±5880]
-
-UNUSUAL SETTINGS:
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+UNUSUAL SETTINGS:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
         --confidence <NUM>
                       Consider a track accurately ripped — i.e. stop working on
-                      it — AccurateRip and/or CUETools matches are found with a
-                      confidence of at least <NUM>. Raise this value if you
-                      personally fucked up the database(s) with prior bad rips,
-                      otherwise the default should be fine. Haha.
-                      [default: 3; range: 1..=10]
+                      it — when AccurateRip and/or CUETools matches are found
+                      with a confidence of at least <NUM>. Raise this value if
+                      you personally fucked up the database(s) with prior bad
+                      rips, otherwise the default should be fine. Haha.
+                      [default: 3; range: 1..=10]", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --sync        Confirm sector positioning with subchannel data (when
                       available) to make sure the drive is actually reading
                       from the right place, and ignore the data if not. This is
                       prone to false-positives — subchannel data is easily
                       corrupted — so only recommended when disc rot, rather
                       than wear-and-tear, is the sole cause of your woes.
-
-MISCELLANEOUS:
-    -h, --help        Print help information to STDOUT and exit.
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+MISCELLANEOUS:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
+    -h, --help        Print help information to STDOUT and exit.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
     -v, --verbose     Print a detailed log of the proceedings — including
                       which specific samples and sectors are having trouble —
                       to STDOUT so you can redirect it to a location of your
-                      choosing, e.g. `riprip -v > out.log`. May be specified up
-                      to four times for more detail.
-    -V, --version     Print version information to STDOUT and exit.
+                      choosing, e.g. ", ansi!((cyan) "riprip -v > out.log"), ". May be specified up
+                      to four times for more detail.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
+    -V, --version     Print version information to STDOUT and exit.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --no-metadata Do not try to read/parse CD-Text, MCN, and track ISRC
                       metadata from the disc. This can speed up initialization,
-                      particularly for discs with a lot of damage.
+                      particularly for discs with a lot of damage.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --no-rip      Print the basic drive and disc information to STDERR and
-                      exit (without ripping anything).
+                      exit (without ripping anything).", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --no-summary  Skip the drive and disc summary and jump straight to
-                      ripping.
+                      ripping.", ansi!((dim, violet) "
+                      ---------------------------------------------------------"), "
         --status      Print the status of the individual track rips (that you
                       presumably already started) to STDERR and exit. Note that
-                      only the --no-summary, --confidence, and -r/--rereads
+                      only the ", dim!("--no-summary"), ", ", dim!("--confidence"), ", and ", dim!("-r"), "/", dim!("--rereads"), "
                       options have any meaning in this mode.
-
-EARLY EXIT:
-    If you don't have time to let a rip finish naturally, press "#, ansi!((dark_orange) "CTRL"), "+", ansi!((dark_orange) "C"), " to stop
+", ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), ansi!((violet) "
+EARLY EXIT:"), ansi!((dim, violet) "
+-------------------------------------------------------------------------------"), "
+    If you don't have time to let a rip finish naturally, press ", ansi!((dark_orange) "CTRL"), "+", ansi!((dark_orange) "C"), " to stop
     it early. Your progress will still be saved, there just won't be as much of
     it. Haha.
 ");
@@ -228,30 +260,26 @@ pub enum RipRipError {
 	/// # Writing to disk.
 	Write(String),
 
-	#[cfg(feature = "libusb")]
 	/// # Test Unit Readiness Ambiguous.
 	///
-	/// This signals that a followup SENSE request is required to make sense
-	/// of an ambiguous test unit ready status of 1.
-	TestUnitNotReady,
+	/// This is a special signal used to indicate that a device might not be
+	/// ready to do its thing yet.
+	///
+	/// Optionally includes the `key`, `asc`, and `ascq` sense data.
+	TestUnitNotReady(Option<[u8; 3]>),
 
-	#[cfg(feature = "libusb")]
 	/// # Test Unit Ready Timeout.
 	TestUnitTimeout,
 
-	#[cfg(feature = "bin")]
 	/// # Invalid CLI arg.
 	CliArg(String),
 
-	#[cfg(feature = "bin")]
 	/// # CLI Parsing failure.
 	CliParse(&'static str),
 
-	#[cfg(feature = "bin")]
 	/// # Print Help (Not an Error).
 	PrintHelp,
 
-	#[cfg(feature = "bin")]
 	/// # Print Version (Not an Error).
 	PrintVersion,
 }
@@ -311,22 +339,13 @@ impl fmt::Display for RipRipError {
 			Self::TrackNumber(n) => write!(f, "Invalid track number ({n})."),
 			Self::Write(s) => write!(f, "Unable to write to {s}."),
 
-			#[cfg(feature = "libusb")]
-			Self::TestUnitNotReady => Ok(()), // Internal only.
-
-			#[cfg(feature = "libusb")]
+			Self::TestUnitNotReady(_) => Ok(()), // Internal only.
 			Self::TestUnitTimeout => f.write_str("Timed out while waiting for device to become ready."),
 
-			#[cfg(feature = "bin")]
 			Self::CliArg(s) => write!(f, "Invalid CLI option: {s}"),
-
-			#[cfg(feature = "bin")]
 			Self::CliParse(s) => write!(f, "Unable to parse {s}."),
 
-			#[cfg(feature = "bin")]
 			Self::PrintHelp => f.write_str(HELP),
-
-			#[cfg(feature = "bin")]
 			Self::PrintVersion => f.write_str(concat!("Rip Rip Hooray! v", env!("CARGO_PKG_VERSION"))),
 		}
 	}

@@ -226,6 +226,10 @@ impl DriveVendorModel {
 	}
 
 	#[must_use]
+	/// # Raw Vendor/Model.
+	pub const fn as_slice(&self) -> &VendorModel { &self.vm }
+
+	#[must_use]
 	/// # Detect Cache Size.
 	///
 	/// If the vendor/model pair have a known cache size, the value is returned

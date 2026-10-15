@@ -1,38 +1,16 @@
 /*!
 # Rip Rip Hooray: CD I/O Drivers.
 
-This module abstracts CD I/O drivers — currently just `libcdio` — to make it
-easier for new ones to be added in the future.
-
-At present, this simply exports a single type alias — `CddaDriver` — for use
-within the rest of the library, and a corresponding `CddaDriverExt` trait.
+This module abstracts the different CD I/O drivers for Linux and macOS.
 
 Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
 */
 
-#[cfg(not(any(feature = "libcdio", feature = "libusb")))]
-compile_error!("A driver feature is required. Enable `libcdio` or `libusb`.");
 
-#[cfg(all(feature = "libcdio", feature = "libusb"))]
-compile_error!("Conflicting driver features detected. Choose either `libcdio` or `libusb`.");
-
-#[cfg(all(target_os = "macos", feature = "libcdio"))]
-compile_error!("The `libcdio` feature does not work on Apple devices. Build with `cargo build --no-default-features --features libusb` instead.");
-
-#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), feature = "libusb"))]
-compile_error!("The `libusb` feature requires linux or macos.");
-
-
-
-#[cfg(feature = "libcdio")]
-mod libcdio;
-
-#[cfg(feature = "libusb")]
-mod libusb;
-
-#[cfg(feature = "libusb")]
 mod mmc;
+#[cfg(target_os = "macos")] mod libusb;
+#[cfg(target_os = "linux")] mod sg_io;
 
 
 
@@ -56,8 +34,12 @@ use dactyl::NoHash;
 use std::{
 	cell::RefCell,
 	collections::HashSet,
+	fs::Metadata,
 	num::NonZeroU8,
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	},
 	range::legacy::Range,
 	time::{
 		Duration,
@@ -67,24 +49,34 @@ use std::{
 
 
 
-#[cfg(feature = "libcdio")]
-/// # CD/IO Driver Middleware.
-///
-/// This type alias is how the rest of the library references the chosen
-/// driver.
-pub(crate) type CddaDriver = libcdio::LibcdioInstance;
-
-#[cfg(feature = "libusb")]
-/// # USB Driver.
-///
-/// This type alias is how the rest of the library references the chosen
-/// driver.
-pub(crate) type CddaDriver = libusb::LibusbInstance;
+/// # I/O Driver.
+pub(crate) type CddaDriver = cfg_select!{
+	target_os = "linux" => sg_io::SgIoInstance,
+	target_os = "macos" => libusb::LibusbInstance,
+	_ => compile_error!("Rip Rip requires Linux or MacOS."),
+};
 
 
 
 /// # Cache Bust Timeout.
 const CACHE_BUST_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// # Default Sub-Q Buffer.
+///
+/// This is used when querying ISRC/MCN data.
+const SUBQ_BUF: [[u8; CD_SUBCHANNEL_SIZE as usize]; SUBQ_CHUNK_SIZE as usize] = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; SUBQ_CHUNK_SIZE as usize];
+
+/// # Sub-Q Blocks to Read at Once.
+///
+/// We normally read blocks one at a time, but the subchannel queries for ISRC
+/// and MCN data are really small and endlessly repeated, so we can grab a few
+/// at a time without much risk.
+const SUBQ_CHUNK_SIZE: u8 = 16;
+
+/// # Sub-Q Reads.
+///
+/// The number of `SUBQ_CHUNK_SIZE` chunks to read.
+const SUBQ_NUM_CHUNKS: u8 = 16;
 
 thread_local! {
 	/// # Sector Shitlist.
@@ -271,24 +263,40 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Pull Sub-Q data from the track, parsing and returning the first valid
 	/// ISRC, if any.
 	fn read_isrc(&self, track: Track) -> Option<Isrc> {
+		// The total number of sectors we'd possibly be reading from.
+		const TOTAL_BLOCKS: i32 = SUBQ_CHUNK_SIZE as i32 * SUBQ_NUM_CHUNKS as i32;
+
 		if track.is_htoa() { return None; }
 
 		let rng = track.sector_range_normalized();
 		let mut start = i32::try_from(rng.start).ok()?;
 		let end = i32::try_from(rng.end).ok()?;
 
-		// Prefer the middle of the track.
-		if start + 512 < end {
-			start = start.midpoint(end) - 128;
+		// It's highly unlikely a track would ever be shorter than our chunk
+		// size, but if it is, there'd be nothing for us to do.
+		if end <= start + i32::from(SUBQ_CHUNK_SIZE) {
+			std::hint::cold_path();
+			return None;
 		}
 
-		// Should be able to read en masse for these.
-		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
-		for _ in 0..16 {
+		// Subchannel data can get muddled near the boundaries. Prefer reading
+		// from the middle if we can.
+		if start + TOTAL_BLOCKS * 2 <= end {
+			start = start.midpoint(end) - TOTAL_BLOCKS / 2;
+		}
+
+		let mut buf = SUBQ_BUF;
+		for _ in 0..SUBQ_NUM_CHUNKS {
+			// Make sure the next read is within the track bounds.
+			if end <= start + i32::from(SUBQ_CHUNK_SIZE) {
+				std::hint::cold_path();
+				return None;
+			}
+
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
-				for chunk in buf {
+				for chunk in &buf {
 					if
-						let Some(SubQ::Isrc(subq)) = SubQ::new(&chunk) &&
+						let Some(SubQ::Isrc(subq)) = SubQ::new(chunk) &&
 						let Some(isrc) = Isrc::from_subq(subq)
 					{
 						return Some(isrc);
@@ -296,7 +304,7 @@ pub(crate) trait CddaDriverExt: Sized {
 				}
 			}
 
-			start += 16;
+			start += i32::from(SUBQ_CHUNK_SIZE);
 		}
 
 		None
@@ -307,14 +315,15 @@ pub(crate) trait CddaDriverExt: Sized {
 	/// Pull Sub-Q data from the start of the disc, parsing and returning the
 	/// first valid MCN entry, if any.
 	fn read_mcn(&self) -> Option<Barcode> {
-		// Should be able to read en masse for these.
+		// Start with a small offset.
 		let mut start = 256;
-		let mut buf = [[0_u8; CD_SUBCHANNEL_SIZE as usize]; 16];
-		for _ in 0..16 {
+
+		let mut buf = SUBQ_BUF;
+		for _ in 0..SUBQ_NUM_CHUNKS {
 			if self.read_cd(buf.as_flattened_mut(), start, ReadCdOpts::Subchannel).is_ok() {
-				for chunk in buf {
+				for chunk in &buf {
 					if
-						let Some(SubQ::Mcn(subq)) = SubQ::new(&chunk) &&
+						let Some(SubQ::Mcn(subq)) = SubQ::new(chunk) &&
 						let Some(barcode) = Barcode::from_subq(subq)
 					{
 						return Some(barcode);
@@ -322,7 +331,7 @@ pub(crate) trait CddaDriverExt: Sized {
 				}
 			}
 
-			start += 16;
+			start += i32::from(SUBQ_CHUNK_SIZE);
 		}
 
 		None
@@ -343,8 +352,7 @@ pub(crate) trait CddaDriverNewExt: Sized {
 	///
 	/// This will return an error if initialization fails, or if the provided
 	/// device path is obviously wrong.
-	fn new<P>(dev: Option<P>) -> Result<Self, RipRipError>
-	where P: AsRef<Path>;
+	fn new(dev: Option<PathBuf>) -> Result<Self, RipRipError>;
 }
 
 
@@ -502,6 +510,34 @@ const fn msf_to_lsn(m: u8, s: u8, f: u8) -> i32 {
 
 	// Convert to LSN.
 	lba - (CD_LEADIN as i32)
+}
+
+/// # Open Error.
+///
+/// Most points of failure return a `DeviceOpen` error. This method handles the
+/// somewhat tedious conversion of the path for use with that variant.
+fn open_err(dev: Option<&Path>) -> RipRipError {
+	RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
+}
+
+/// # Is Block/Char Device.
+///
+/// Verify a path exists and maps to a block or character device.
+fn path_is_block_char_device(dev: &Path) -> Result<Metadata, RipRipError> {
+	use std::os::unix::fs::FileTypeExt;
+
+	let Ok(meta) = std::fs::metadata(dev) else {
+		log!(@trace [dev] "Unable to read device metadata.");
+		return Err(open_err(Some(dev)));
+	};
+
+	// Make sure it is a block or char device.
+	let kind = meta.file_type();
+	if kind.is_block_device() || kind.is_char_device() { Ok(meta) }
+	else {
+		log!(@trace [dev] "Path is not for block or character device.");
+		Err(open_err(Some(dev)))
+	}
 }
 
 /// # Set Bad Sector.
