@@ -68,8 +68,6 @@ struct SgIoHdr {
 	/// # Max Sense Length.
 	///
 	/// The length of `sbp`.
-	///
-	/// TODO: can this be zero?
 	mx_sb_len: u8,
 
 	/// # UNUSED: Scatter Gather Count.
@@ -205,7 +203,7 @@ impl TransportExt for SgIoInstance {
 		let dxfer_direction: i32 = if buf.is_empty() { -1 } else { -3 };
 
 		// Buffer for the sense data.
-		let mut sense = [0_u8; MX_SB_LEN as usize];
+		let mut sense = const { [0_u8; MX_SB_LEN as usize] };
 
 		// Put it all together. Ug. Haha.
 		let mut hdr = SgIoHdr {
