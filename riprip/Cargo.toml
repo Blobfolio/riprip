@@ -131,13 +131,8 @@ description = "Rip one or more specific tracks (rather than the whole disc). Mul
 duplicate = true
 
 [dependencies]
-argyle = "0.16.*"
-dactyl = "0.14.*"
-oxford_join = "0.8.*"
-
-[dependencies.fyi_msg]
-version = "2.7.*"
-features = [ "signals" ]
-
-[dependencies.riprip_core]
-path = "../riprip_core"
+argyle =      { workspace = true }
+dactyl =      { workspace = true }
+fyi_msg =     { workspace = true }
+oxford_join = { workspace = true }
+riprip_core = { workspace = true }
