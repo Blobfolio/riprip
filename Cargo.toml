@@ -5,6 +5,33 @@ members = [
     "riprip_core",
 ]
 
+[workspace.dependencies]
+argyle = "0.16.*"
+crc32fast = "1.5.*"
+dactyl = "0.14.*"
+encoding_rs = "0.8.*"
+fastrand = "2"
+oxford_join = "0.8.*"
+tempfile = "3.8.0"
+trimothy = "0.10.*"
+utc2k = "0.21.*"
+
+[workspace.dependencies.cdtoc]
+version = "0.14.*"
+default-features = false
+
+[workspace.dependencies.fyi_msg]
+version = "2.7.*"
+features = ["signals"]
+
+[workspace.dependencies.minreq]
+version = "3.0.*"
+default-features = false
+features = ["https"]
+
+[workspace.dependencies.riprip_core]
+path = "riprip_core"
+
 [profile.release]
 lto = true
 codegen-units = 1

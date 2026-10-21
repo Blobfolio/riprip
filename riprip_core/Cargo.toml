@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.10.0"
+version = "0.10.1"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -10,25 +10,16 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-cdtoc = "0.14.*"
-crc32fast = "1.5.*"
-dactyl = "0.14.*"
-encoding_rs = "0.8.*"
-tempfile = "3.8.0"
-trimothy = "0.10.*"
-utc2k = "0.21.*"
-
-[dependencies.fyi_msg]
-version = "2.7.*"
-features = [ "signals" ]
-
-[dependencies.minreq]
-version = "3.0.*"
-default-features = false
-features = [ "https" ]
-
-[dependencies.oxford_join]
-version = "0.8.*"
+cdtoc =       { workspace = true, features = ["accuraterip", "cddb", "ctdb", "musicbrainz"] }
+crc32fast =   { workspace = true }
+dactyl =      { workspace = true }
+encoding_rs = { workspace = true }
+fyi_msg =     { workspace = true }
+minreq =      { workspace = true }
+oxford_join = { workspace = true }
+tempfile =    { workspace = true }
+trimothy =    { workspace = true }
+utc2k =       { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies.rustix]
 version = "1.1.*"
@@ -41,13 +32,9 @@ objc2-core-foundation = { version = "0.3.2", features = [ "CFBase", "CFDictionar
 rusb = "0.9.*"
 
 [build-dependencies]
-dactyl = "0.14.*"
-oxford_join = "0.8.*"
-
-[build-dependencies.cdtoc]
-version = "0.14.*"
-default-features = false
-features = [ "accuraterip" ]
+cdtoc =       { workspace = true, features = ["accuraterip"] }
+dactyl =      { workspace = true }
+oxford_join = { workspace = true }
 
 [dev-dependencies]
-fastrand = "2"
+fastrand = { workspace = true }
