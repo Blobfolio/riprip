@@ -438,6 +438,7 @@ fn download(url: &str, dst: &Path) -> Option<Vec<u8>> {
 	let res = match minreq::get(url)
 		.with_header("user-agent", UA)
 		.with_timeout(15)
+		.with_max_headers_size(Some(32_768_usize))
 		.send()
 	{
 		Ok(v) => v,
