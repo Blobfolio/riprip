@@ -68,7 +68,7 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
-use oxford_join::JoinFmt;
+use oxford_join::join;
 use riprip_core::{
 	Disc,
 	DriveVendorModel,
@@ -372,7 +372,7 @@ fn rip_summary_tracks(opts: &RipOptions) -> String {
 		),
 		_ => set.pop().map_or_else(String::new, |last| format!(
 			concat!("{}", csi!(reset, dim), ", and ", csi!(reset, bold), "{}"),
-			JoinFmt::new(set.into_iter(), concat!(csi!(reset, dim), ", ", csi!(reset, bold))),
+			join!((concat!(csi!(reset, dim), ", ", csi!(reset, bold))), set.iter()),
 			last,
 		)),
 	}

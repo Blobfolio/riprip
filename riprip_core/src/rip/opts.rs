@@ -7,6 +7,7 @@ use crate::{
 	ReadOffset,
 	TrackRange,
 };
+use oxford_join::join;
 use std::{
 	fmt,
 	num::NonZeroU16,
@@ -117,8 +118,6 @@ impl Default for RipOptions {
 
 impl fmt::Display for RipOptions {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		use oxford_join::JoinFmt;
-
 		#[derive(Copy, Clone)]
 		/// # Track Number(s).
 		enum OptTrack {
@@ -164,13 +163,13 @@ impl fmt::Display for RipOptions {
 		write!(
 			f,
 			"-t{}",
-			JoinFmt::new(
+			join!(
+				',',
 				self.tracks_rng().map(|rng| {
 					let (a, b) = rng.into_inner();
 					if a == b { OptTrack::One(a) }
 					else { OptTrack::Rng(a, b) }
 				}),
-				",",
 			)
 		)
 	}

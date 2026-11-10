@@ -10,7 +10,7 @@ use dactyl::{
 	NiceSeparator,
 	NiceU16,
 };
-use oxford_join::JoinFmt;
+use oxford_join::join;
 use std::{
 	collections::BTreeMap,
 	env,
@@ -86,7 +86,7 @@ const DRIVE_CACHES: [(VendorModel, u16); {}] = [
 ];
 "#,
 		parsed.len(),
-		JoinFmt::new(parsed.into_iter().map(|(x, y)| VendorModelSize(x, y)), ", "),
+		join!(", ", parsed.iter().map(|(x, y)| VendorModelSize(*x, *y))),
 	)
 }
 
@@ -122,7 +122,7 @@ static DRIVE_OFFSETS: [(VendorModel, ReadOffset); {}] = [
 ];
 "#,
 		parsed.len(),
-		JoinFmt::new(parsed.into_iter().map(|(x, y)| VendorModelOffset(x, y)), ", "),
+		join!(", ", parsed.iter().map(|(x, y)| VendorModelOffset(*x, *y))),
 	)
 }
 
