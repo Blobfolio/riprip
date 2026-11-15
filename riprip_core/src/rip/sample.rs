@@ -439,7 +439,6 @@ impl std::iter::FusedIterator for RipSectorSamples<'_> {}
 
 
 
-#[expect(clippy::missing_docs_in_private_items, reason = "Self-explanatory.")]
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 /// # Contentious Rip Sample.
 ///
@@ -451,9 +450,16 @@ impl std::iter::FusedIterator for RipSectorSamples<'_> {}
 /// This is also eight bytes smaller than a `Vec<(Sample, u8)>`, which isn't
 /// anything to sneeze at given the scale of data we're working with. Haha.
 pub(crate) enum ContentiousSample {
+	/// # One Candidate.
 	Maybe1((Sample, u8)),
+
+	/// # Two Candidates.
 	Maybe2([(Sample, u8); 2]),
+
+	/// # Three Candidates.
 	Maybe3([(Sample, u8); 3]),
+
+	/// # Three Candidates with Strict C2 Handling.
 	Strict([(Sample, u8); 3]),
 }
 

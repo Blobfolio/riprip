@@ -266,7 +266,7 @@ mod test {
 		assert!(iter.next().is_none());
 
 		// Make sure goodness/badness works.
-		for v in &mut buf.0 { *v = 0; }
+		buf.0.fill(0);
 		assert!(buf.all_good());
 		assert!(buf.samples().all(|(_, err)| ! err), "Missing goodness!");
 

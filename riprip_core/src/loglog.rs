@@ -29,6 +29,10 @@ impl LogLog {
 	#[cfg_attr(any(test, miri), inline(always))]
 	#[cfg_attr(
 		any(test, miri),
+		expect(clippy::missing_const_for_fn, reason = "Only the test logger is a no-op."),
+	)]
+	#[cfg_attr(
+		any(test, miri),
 		expect(unused_variables, reason = "Logging is no-op for test/miri."),
 	)]
 	/// # (Maybe) Log Something.

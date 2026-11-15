@@ -160,7 +160,7 @@ const fn is_ean13(src: &[u8; 13]) -> bool {
 	}
 
 	// The last digit is the check.
-    let chk: u16 =
+	let chk: u16 =
 		if src[12] == b'0' { 10 }
 		else { (src[12] ^ b'0') as u16 };
 

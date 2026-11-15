@@ -532,9 +532,7 @@ mod test {
 	#[test]
 	fn t_cdtext() {
 		let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("skel/cdtext");
-		if ! dir.is_dir() {
-			panic!("Invalid cdtext test directory.");
-		}
+		assert!(dir.is_dir(), "Invalid cdtext test directory.");
 
 		// Find all the files. Haha.
 		let mut bins = BTreeMap::<String, PathBuf>::new();
