@@ -9,8 +9,8 @@ Somewhat useful documentation:
 
 
 mod mmc;
-#[cfg(target_os = "macos")] mod libusb;
-#[cfg(target_os = "linux")] mod sg_io;
+#[cfg(target_os = "macos")]   mod libusb;
+#[cfg(target_os = "linux")]   mod sg_io;
 #[cfg(target_os = "windows")] mod spti;
 
 
@@ -521,10 +521,10 @@ fn open_err(dev: Option<&Path>) -> RipRipError {
 	RipRipError::DeviceOpen(dev.map(|v| v.to_string_lossy().into_owned()))
 }
 
-/// # Is Block/Char Device.
+#[cfg(unix)]
+/// # Is Block/Char Device?
 ///
 /// Verify a path exists and maps to a block or character device.
-#[cfg(unix)]
 fn path_is_block_char_device(dev: &Path) -> Result<std::fs::Metadata, RipRipError> {
 	use std::os::unix::fs::FileTypeExt;
 
