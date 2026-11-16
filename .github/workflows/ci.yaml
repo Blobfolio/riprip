@@ -84,6 +84,5 @@ jobs:
     - name: Build (Vendored)
       run: |
         cargo clean
-        mkdir -p .cargo
         cargo vendor --locked >> .cargo/config.toml
         cargo build --locked --offline --target ${{ matrix.target }}

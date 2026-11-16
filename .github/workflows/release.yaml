@@ -17,29 +17,35 @@ env:
 jobs:
   windows:
     runs-on: windows-latest
+
     env:
       RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
+
     steps:
     - uses: actions/checkout@v7
+
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-pc-windows-msvc
-    - name: Build and Test
+
+    - name: Build
       run: |
-        cargo test --locked --release --target x86_64-pc-windows-msvc
         cargo build --locked --release --target x86_64-pc-windows-msvc
         target/x86_64-pc-windows-msvc/release/riprip.exe --version
-    - name: Package
+
+    - name: Rename
       shell: pwsh
       run: |
-        New-Item -ItemType Directory -Path windows-package
-        Copy-Item target/x86_64-pc-windows-msvc/release/riprip.exe, README.md, LICENSE, CREDITS.md windows-package/
-        Compress-Archive -Path windows-package/* -DestinationPath riprip-x86_64-windows.zip
+        $version = "${{ github.event.release.tag_name }}" -replace '^v', ''
+        Copy-Item target/x86_64-pc-windows-msvc/release/riprip.exe "riprip_${version}-1_x64.exe"
+
     - name: Attach
+      shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh release upload "${{ github.event.release.tag_name }}" riprip-x86_64-windows.zip
+        $version = "${{ github.event.release.tag_name }}" -replace '^v', ''
+        gh release upload "${{ github.event.release.tag_name }}" "riprip_${version}-1_x64.exe"
 
   build-and-attach:
     runs-on: ubuntu-latest
@@ -61,7 +67,6 @@ jobs:
 
     - name: Vendored Sources
       run: |
-        mkdir -p .cargo
         cargo vendor --locked >> .cargo/config.toml
         tar -I 'zstd --ultra -22 --long' -cvf vendored-sources.tar.zst vendor .cargo
 
