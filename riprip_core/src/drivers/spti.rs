@@ -297,7 +297,7 @@ fn device_path(dev: &Path) -> Option<PathBuf> {
 			r"\\.\{}:",
 			char::from(letter.to_ascii_uppercase())
 		))),
-		[b'C' | b'c', b'D' | b'd', b'R' | b'r', b'O' | b'o', b'M' | b'm', rest @ ..] if rest.iter().all(u8::is_ascii_digit) => Some(PathBuf::from(format!(
+		[b'C' | b'c', b'D' | b'd', b'R' | b'r', b'O' | b'o', b'M' | b'm', rest @ ..] if ! rest.is_empty() && rest.iter().all(u8::is_ascii_digit) => Some(PathBuf::from(format!(
 			r"\\.\CdRom{}",
 			oxford_join::join!(rest.iter().copied().map(char::from)),
 		))),
