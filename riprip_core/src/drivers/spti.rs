@@ -297,7 +297,7 @@ fn device_path(dev: &Path) -> Option<PathBuf> {
 			r"\\.\{}:",
 			char::from(letter.to_ascii_uppercase())
 		))),
-		[b'C', b'd', b'R', b'o', b'm', rest @ ..] if rest.iter().all(u8::is_ascii_digit) => Some(PathBuf::from(format!(
+		[b'C' | b'c', b'D' | b'd', b'R' | b'r', b'O' | b'o', b'M' | b'm', rest @ ..] if rest.iter().all(u8::is_ascii_digit) => Some(PathBuf::from(format!(
 			r"\\.\CdRom{}",
 			oxford_join::join!(rest.iter().copied().map(char::from)),
 		))),
@@ -351,6 +351,11 @@ mod tests {
 			device_path(Path::new(r"\\.\cdrom12")),
 			Some(PathBuf::from(r"\\.\CdRom12")),
 		);
+		assert_eq!(
+			device_path(Path::new(r"\\.\CDROM012345")),
+			Some(PathBuf::from(r"\\.\CdRom012345")),
+		);
+
 		for name in [
 			"",
 			"D",
@@ -360,6 +365,7 @@ mod tests {
 			r"\\.\PhysicalDrive0",
 			r"\\server\share",
 			"CdRom",
+			"CdRom12.",
 			"CdRom-1",
 		] {
 			assert_eq!(device_path(Path::new(name)), None, "accepted {name}");
