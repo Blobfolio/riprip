@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.10.2
+    Version:   0.10.3
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2026-11-13 03:41:22 UTC
+    Generated: 2026-11-16 03:11:23 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -11,7 +11,7 @@
 | [aws-lc-sys](https://github.com/aws/aws-lc-rs) | 0.47.0 | AWS-LC | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) |
 | [bitflags](https://github.com/bitflags/bitflags) | 2.13.2 | The Rust Project Developers | MIT OR Apache-2.0 |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | RustCrypto Developers | MIT OR Apache-2.0 |
-| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.11.1 |  | MIT OR Apache-2.0 |
+| [cc](https://github.com/rust-lang/cc-rs) ⚒️ | 1.11.2 |  | MIT OR Apache-2.0 |
 | [**cdtoc**](https://github.com/Blobfolio/cdtoc) | 0.14.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.5 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
 | [cmake](https://github.com/rust-lang/cmake-rs) ⚒️ | 0.1.58 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
@@ -28,8 +28,8 @@
 | [fastrand](https://github.com/smol-rs/fastrand) | 2.5.0 | [Stjepan Glavina](mailto:stjepang@gmail.com) | Apache-2.0 OR MIT |
 | [find-msvc-tools](https://github.com/rust-lang/cc-rs) ⚒️ | 0.1.15 |  | MIT OR Apache-2.0 |
 | [fs_extra](https://github.com/webdesus/fs_extra) ⚒️ | 1.3.0 | [Denis Kurilenko](mailto:webdesus@gmail.com) | MIT |
-| [fyi_ansi](https://github.com/Blobfolio/fyi) | 2.7.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
-| [**fyi_msg**](https://github.com/Blobfolio/fyi) | 2.7.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [fyi_ansi](https://github.com/Blobfolio/fyi) | 2.8.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**fyi_msg**](https://github.com/Blobfolio/fyi) | 2.8.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [getrandom](https://github.com/rust-random/getrandom) | 0.4.3 | The Rand Project Developers | MIT OR Apache-2.0 |
 | [hybrid-array](https://github.com/RustCrypto/hybrid-array) | 0.4.15 | RustCrypto Developers | MIT OR Apache-2.0 |
 | [jobserver](https://github.com/rust-lang/jobserver-rs) ⚒️ | 0.1.35 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
@@ -41,7 +41,7 @@
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
 | [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.9.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [pkg-config](https://github.com/rust-lang/pkg-config-rs) ⚒️ | 0.3.34 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.10.2 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.10.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [**rustix**](https://github.com/bytecodealliance/rustix) | 1.1.6 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.46 |  | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.16.0 |  | MIT OR Apache-2.0 |

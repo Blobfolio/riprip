@@ -57,9 +57,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.1"
+version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
+checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -215,21 +215,22 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fyi_ansi"
-version = "2.7.2"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d274b78908411546544baec7d7bf38417a69c7f4ce61266a5fe8204fd5c1bc7"
+checksum = "50c04697290ba4d76f853c151be471cecea499a160ca6fbce93a23ab3d44af86"
 
 [[package]]
 name = "fyi_msg"
-version = "2.7.2"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e4b7d210cbca94425bd9f9fd3e2783d2f0d6cd7ccfe8ddc95f592fa0bedd114"
+checksum = "fbd9698d482394f48456b53f92042b9284dc587c87c53b913d2d2caefcd746c5"
 dependencies = [
  "dactyl",
  "fyi_ansi",
  "signal-hook",
  "terminal_size",
  "unicode-width",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -322,9 +323,9 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nix"
-version = "0.31.3"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -414,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "riprip"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "argyle",
  "dactyl",
@@ -425,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "riprip_core"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "cdtoc",
  "crc32fast",

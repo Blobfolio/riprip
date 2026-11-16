@@ -1,6 +1,6 @@
 [package]
 name = "riprip_core"
-version = "0.10.2"
+version = "0.10.3"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -26,7 +26,7 @@ version = "1.1.*"
 features = [ "fs" ]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nix = { version = "0.31.*", features = ["fs", "user"] }
+nix = { version = "0.32.*", features = ["fs", "user"] }
 objc2-io-kit = "0.3.2"
 objc2-core-foundation = { version = "0.3.2", features = [ "CFBase", "CFDictionary", "CFNumber", "CFString" ] }
 rusb = "0.9.*"
