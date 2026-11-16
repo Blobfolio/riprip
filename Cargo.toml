@@ -21,7 +21,7 @@ version = "0.14.*"
 default-features = false
 
 [workspace.dependencies.fyi_msg]
-version = "2.7.*"
+version = "2.8.*"
 features = ["signals"]
 
 [workspace.dependencies.minreq]
