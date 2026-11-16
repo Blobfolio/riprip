@@ -6,7 +6,7 @@
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
 
 
-Rip Rip Hooray! is a specialized audio CD-ripper for Linux, Mac, and x64 Windows that is optimized for _track recovery_.
+Rip Rip Hooray! is a specialized audio CD-ripper for Linux, Mac, and Windows[^1] command lines that is optimized for _track recovery_.
 
 <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-a.webp" width="30%" alt="Rip Rip rip settings confirmation screen."></img> <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-b.webp" width="60%" alt="Rip Rip rip settings confirmation screen."></img>
 
@@ -48,7 +48,7 @@ Rip Rip can also be used to summarize a disc's track layout, and calculate and d
 
 ## Requirements
 
-Rip Rip Hooray! is a command line application for 64-bit Linux, Mac, and Windows systems. Windows builds target x64 Windows 10 or later. It's fully self-contained and has no runtime dependencies beyond the operating system.
+Rip Rip Hooray! is a command line application for 64-bit Linux, Mac, and Windows[^2] systems. It's fully self-contained and has no runtime dependencies beyond the operating system.
 
 
 ### Optical Drive
@@ -178,55 +178,27 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 ## Installation
 
-### Windows x64
+Debian and Ubuntu users can grab the x86-64-v3 `.deb` package attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-Build with [Rust](https://rustup.rs/) using the `x86_64-pc-windows-msvc` toolchain and Visual Studio Build Tools with the **Desktop development with C++** workload (including the Windows SDK). The TLS dependency also requires CMake and NASM on `PATH`.
+Windows users can grab the pre-built x64 `.exe` attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest).
 
-```powershell
-cargo build --release --locked --target x86_64-pc-windows-msvc
-.\target\x86_64-pc-windows-msvc\release\riprip.exe --version
-```
+To get Rip Rip up and running on other supported systems, it just needs to be built from source.
 
-The resulting `riprip.exe` runs from PowerShell, Command Prompt, or Windows Terminal. It automatically selects the first accessible optical drive containing a supported audio disc. To choose a drive explicitly:
-
-```powershell
-riprip.exe --dev D: --no-rip
-riprip.exe --dev D:
-```
-
-Drive roots such as `D:\` and device names such as `\\.\D:` or `\\.\CdRom0` are also accepted. Windows SCSI pass-through requires read/write access to the optical device; if opening it is denied, run the terminal as Administrator. Ripped audio and recovery state are saved under `_riprip` in the current directory, as on Linux and Mac.
-
-Windows uses the operating system's SCSI pass-through interface; no ASPI or replacement USB driver is required. The same C2 and MMC drive requirements apply. Ctrl+C and Ctrl+Break request a graceful stop so the current recovery state can be saved. Closing the terminal or ending the process forcibly cannot guarantee a save.
-
-The release workflow builds and attaches `riprip-x86_64-windows.zip` to newly published releases.
-
-### Linux and Mac
-
-Pre-built x86-64-v3 `.deb` packages for Debian and Ubuntu are attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
-
-To get Rip Rip up and running on other 64-bit Linux and Mac systems, it just needs to be built from source.
-
-There are only three pre-requisites:
+There are a few pre-requisites, but unless this is the first package you've ever tried to build, you probably already have them:
 
 * [Rust](https://rustup.rs/) (latest stable)
-* `clang` or `gcc`
-* [`cmake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
+* `clang` or `gcc` (Linux), `Xcode` (macOS)[^3], `MSVC` (Windows)[^4]
+* [`CMake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
 
 > [!NOTE]
-> 
-> Apple users will additionally need to configure Xcode.
-> 
-> ```bash
-> # Install Apple's command line tools.
-> xcode-select --install
-> 
-> # The above should give you clang, among other things.
-> clang --version
-> ```
+> Some systems might also need `NASM`, but you can probably skip it unless you get a build error.
 
 Once you've got those things squared away, a single command'll do the trick:
 
 ```bash
+# Make sure Rust is up-to-date.
+rustup update stable
+
 # See "cargo install --help" for more options.
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
@@ -257,4 +229,14 @@ cargo build \
     --release \
     --locked \
     --offline
+
+# Hooray?
+./target/release/riprip --version
 ```
+
+
+
+[^1]: Windows command line kinda sucks, but it's a little better when run through [Windows Terminal](https://en.wikipedia.org/wiki/Windows_Terminal).
+[^2]: Windows support is limited x64 Windows 10 and later.
+[^3]: Apple users can configure Xcode by running: `xcode-select --install`
+[^4]: The Windows [rustup](https://rustup.rs/) installer configures `MSVC` by default.
