@@ -1,7 +1,7 @@
 /*!
 # Rip Rip Hooray: CD I/O Drivers.
 
-This module abstracts the different CD I/O drivers for Linux and macOS.
+This module abstracts the different CD I/O drivers for Linux, macOS, and Windows.
 
 Somewhat useful documentation:
 <https://www.t10.org/ftp/t10/document.97/97-117r0.pdf>
@@ -11,6 +11,7 @@ Somewhat useful documentation:
 mod mmc;
 #[cfg(target_os = "macos")] mod libusb;
 #[cfg(target_os = "linux")] mod sg_io;
+#[cfg(target_os = "windows")] mod spti;
 
 
 
@@ -34,7 +35,6 @@ use dactyl::NoHash;
 use std::{
 	cell::RefCell,
 	collections::HashSet,
-	fs::Metadata,
 	num::NonZeroU8,
 	path::{
 		Path,
@@ -53,7 +53,8 @@ use std::{
 pub(crate) type CddaDriver = cfg_select!{
 	target_os = "linux" => sg_io::SgIoInstance,
 	target_os = "macos" => libusb::LibusbInstance,
-	_ => compile_error!("Rip Rip requires Linux or MacOS."),
+	target_os = "windows" => spti::SptiInstance,
+	_ => compile_error!("Rip Rip requires Linux, macOS, or Windows."),
 };
 
 
@@ -523,7 +524,8 @@ fn open_err(dev: Option<&Path>) -> RipRipError {
 /// # Is Block/Char Device.
 ///
 /// Verify a path exists and maps to a block or character device.
-fn path_is_block_char_device(dev: &Path) -> Result<Metadata, RipRipError> {
+#[cfg(unix)]
+fn path_is_block_char_device(dev: &Path) -> Result<std::fs::Metadata, RipRipError> {
 	use std::os::unix::fs::FileTypeExt;
 
 	let Ok(meta) = std::fs::metadata(dev) else {

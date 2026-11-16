@@ -444,6 +444,7 @@ dependencies = [
  "tempfile",
  "trimothy",
  "utc2k",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

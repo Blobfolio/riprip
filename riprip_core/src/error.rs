@@ -94,8 +94,8 @@ DRIVE SETTINGS:"), ansi!((dim, violet) "
                       M suffix are treated as MiB, otherwise KiB are assumed.
                       [default: auto or 0; max: 65,535]", ansi!((dim, violet) "
                       ---------------------------------------------------------"), "
-    -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom. [default: auto]", ansi!((dim, violet) "
+    -d, --dev <PATH>  The optical drive containing the CD of interest, like
+                      /dev/cdrom on Linux or D: on Windows. [default: auto]", ansi!((dim, violet) "
                       ---------------------------------------------------------"), "
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to

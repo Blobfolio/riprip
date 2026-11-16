@@ -15,6 +15,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc
+    - name: Build and Test
+      run: |
+        cargo test --locked --release --target x86_64-pc-windows-msvc
+        cargo build --locked --release --target x86_64-pc-windows-msvc
+        target/x86_64-pc-windows-msvc/release/riprip.exe --version
+    - name: Package
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path windows-package
+        Copy-Item target/x86_64-pc-windows-msvc/release/riprip.exe, README.md, LICENSE, CREDITS.md windows-package/
+        Compress-Archive -Path windows-package/* -DestinationPath riprip-x86_64-windows.zip
+    - name: Attach
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release upload "${{ github.event.release.tag_name }}" riprip-x86_64-windows.zip
+
   build-and-attach:
     runs-on: ubuntu-latest
 
@@ -35,8 +61,8 @@ jobs:
 
     - name: Vendored Sources
       run: |
-        mkdir .cargo
-        cargo vendor --locked > .cargo/config.toml
+        mkdir -p .cargo
+        cargo vendor --locked >> .cargo/config.toml
         tar -I 'zstd --ultra -22 --long' -cvf vendored-sources.tar.zst vendor .cargo
 
     - name: Attach

@@ -24,16 +24,22 @@ jobs:
         target:
         - x86_64-unknown-linux-gnu
         - aarch64-apple-darwin
+        - x86_64-pc-windows-msvc
         include:
         - target: x86_64-unknown-linux-gnu
           os:     ubuntu-latest
+          rustflags: "-D warnings"
         - target: aarch64-apple-darwin
           os:     macos-latest
+          rustflags: "-D warnings"
+        - target: x86_64-pc-windows-msvc
+          os:     windows-latest
+          rustflags: "-D warnings -C target-feature=+crt-static"
 
     runs-on: ${{matrix.os}}
 
     env:
-      RUSTFLAGS: "-D warnings"
+      RUSTFLAGS: ${{ matrix.rustflags }}
 
     steps:
     - uses: actions/checkout@v7
@@ -56,6 +62,12 @@ jobs:
       run: |
         cargo build --release --target ${{ matrix.target }}
 
+    - name: Windows CLI Smoke Test
+      if: runner.os == 'Windows'
+      run: |
+        target/${{ matrix.target }}/release/riprip.exe --version
+        target/${{ matrix.target }}/release/riprip.exe --help
+
     - name: Clippy
       run: |
         cargo clippy --release --target ${{ matrix.target }}
@@ -72,6 +84,6 @@ jobs:
     - name: Build (Vendored)
       run: |
         cargo clean
-        mkdir .cargo
-        cargo vendor --locked > .cargo/config.toml
+        mkdir -p .cargo
+        cargo vendor --locked >> .cargo/config.toml
         cargo build --locked --offline --target ${{ matrix.target }}

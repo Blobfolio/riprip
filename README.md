@@ -6,7 +6,7 @@
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
 
 
-Rip Rip Hooray! is a specialized audio CD-ripper for Linux/Mac that is optimized for _track recovery_.
+Rip Rip Hooray! is a specialized audio CD-ripper for Linux, Mac, and x64 Windows that is optimized for _track recovery_.
 
 <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-a.webp" width="30%" alt="Rip Rip rip settings confirmation screen."></img> <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-b.webp" width="60%" alt="Rip Rip rip settings confirmation screen."></img>
 
@@ -48,7 +48,7 @@ Rip Rip can also be used to summarize a disc's track layout, and calculate and d
 
 ## Requirements
 
-Rip Rip Hooray! is a command line application for 64-bit Linux and Mac systems. It's fully self-contained and has no runtime dependencies.
+Rip Rip Hooray! is a command line application for 64-bit Linux, Mac, and Windows systems. Windows builds target x64 Windows 10 or later. It's fully self-contained and has no runtime dependencies beyond the operating system.
 
 
 ### Optical Drive
@@ -177,6 +177,30 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 
 ## Installation
+
+### Windows x64
+
+Build with [Rust](https://rustup.rs/) using the `x86_64-pc-windows-msvc` toolchain and Visual Studio Build Tools with the **Desktop development with C++** workload (including the Windows SDK). The TLS dependency also requires CMake and NASM on `PATH`.
+
+```powershell
+cargo build --release --locked --target x86_64-pc-windows-msvc
+.\target\x86_64-pc-windows-msvc\release\riprip.exe --version
+```
+
+The resulting `riprip.exe` runs from PowerShell, Command Prompt, or Windows Terminal. It automatically selects the first accessible optical drive containing a supported audio disc. To choose a drive explicitly:
+
+```powershell
+riprip.exe --dev D: --no-rip
+riprip.exe --dev D:
+```
+
+Drive roots such as `D:\` and device names such as `\\.\D:` or `\\.\CdRom0` are also accepted. Windows SCSI pass-through requires read/write access to the optical device; if opening it is denied, run the terminal as Administrator. Ripped audio and recovery state are saved under `_riprip` in the current directory, as on Linux and Mac.
+
+Windows uses the operating system's SCSI pass-through interface; no ASPI or replacement USB driver is required. The same C2 and MMC drive requirements apply. Ctrl+C and Ctrl+Break request a graceful stop so the current recovery state can be saved. Closing the terminal or ending the process forcibly cannot guarantee a save.
+
+The release workflow builds and attaches `riprip-x86_64-windows.zip` to newly published releases.
+
+### Linux and Mac
 
 Pre-built x86-64-v3 `.deb` packages for Debian and Ubuntu are attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 

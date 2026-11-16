@@ -102,7 +102,7 @@ description = "Consider a track accurately ripped â€” i.e. stop working on it â€
 short = "-d"
 long = "--dev"
 label = "<PATH>"
-description = "The device path for the optical drive containing the CD of interest, like /dev/cdrom. [default: auto]"
+description = "The optical drive containing the CD of interest, like /dev/cdrom on Linux or D: on Windows. [default: auto]"
 path = true
 
 [[package.metadata.bashman.options]]
