@@ -1,8 +1,8 @@
 # Project Dependencies
     Package:   riprip
-    Version:   0.10.3
+    Version:   0.11.0
     Target:    x86_64-unknown-linux-gnu
-    Generated: 2026-11-16 03:11:23 UTC
+    Generated: 2026-11-17 04:11:14 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -41,7 +41,7 @@
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | [Aleksey Kladov](mailto:aleksey.kladov@gmail.com) | MIT OR Apache-2.0 |
 | [**oxford_join**](https://github.com/Blobfolio/oxford_join) | 0.9.1 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [pkg-config](https://github.com/rust-lang/pkg-config-rs) ⚒️ | 0.3.34 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
-| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.10.3 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**riprip_core**](https://github.com/Blobfolio/riprip) | 0.11.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [**rustix**](https://github.com/bytecodealliance/rustix) | 1.1.6 | [Dan Gohman](mailto:dev@sunfishcode.online) and [Jakub Konka](mailto:kubkon@jakubkonka.com) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.46 |  | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.16.0 |  | MIT OR Apache-2.0 |

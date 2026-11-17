@@ -1,6 +1,6 @@
-.TH "RIP RIP HOORAY!" "1" "November 2026" "riprip v0.10.3" "User Commands"
+.TH "RIP RIP HOORAY!" "1" "November 2026" "riprip v0.11.0" "User Commands"
 .SH NAME
-RIP RIP HOORAY! \- Manual page for riprip v0.10.3.
+RIP RIP HOORAY! \- Manual page for riprip v0.11.0.
 .SH DESCRIPTION
 A specialized audio CD\-ripper optimized for incremental data recovery.
 .SS USAGE:
@@ -55,7 +55,7 @@ Drive cache can interfere with re\-read accuracy. If your drive caches data, use
 Consider a track accurately ripped — i.e. stop working on it — when AccurateRip and/or CUETools matches are found with a confidence of at least <NUM>. [default: 3; range: 1..=10]
 .TP
 \fB\-d\fR, \fB\-\-dev\fR <PATH>
-The optical drive containing the CD of interest, like /dev/cdrom on Linux or D: on Windows. [default: auto]
+The device path for the optical drive containing the CD of interest, like /dev/sr0. [default: auto]
 .TP
 \fB\-o\fR, \fB\-\-offset\fR <SAMPLES>
 The AccurateRip, et al, sample read offset to apply to data retrieved from the drive. [default: auto or 0; range: ±5880]

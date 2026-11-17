@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "riprip"
-version = "0.10.3"
+version = "0.11.0"
 dependencies = [
  "argyle",
  "dactyl",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "riprip_core"
-version = "0.10.3"
+version = "0.11.0"
 dependencies = [
  "cdtoc",
  "crc32fast",
