@@ -47,7 +47,7 @@ jobs:
         $version = "${{ github.event.release.tag_name }}" -replace '^v', ''
         gh release upload "${{ github.event.release.tag_name }}" "riprip_${version}-1_x64.exe"
 
-  build-and-attach:
+  vendored-sources:
     runs-on: ubuntu-latest
 
     env:
