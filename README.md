@@ -110,6 +110,9 @@ First things first, rip the entire disc and see what happens!
 riprip
 ```
 
+> [!NOTE]
+> If the current user lacks read/write access to the drive, you might need to run `sudo riprip` instead.[^2]
+
 Rip Rip will check each track against both the [AccurateRip](https://accuraterip.com/) and [CUETools](https://cue.tools/wiki/CUETools_Database) databases to verify its accuracy, letting you know which were rescued, and which need more work.
 
 If _all_ tracks verify, hooray! You're done!
@@ -189,7 +192,7 @@ To get Rip Rip up and running on other supported systems, it just needs to be bu
 There are a few pre-requisites, but unless this is the first package you've ever tried to build, you probably already have them:
 
 * [Rust](https://rustup.rs/) (latest stable)
-* `clang` or `gcc` (Linux), `Xcode` (macOS)[^2], `MSVC` (Windows)
+* `clang` or `gcc` (Linux), `Xcode` (macOS)[^3], `MSVC` (Windows)
 * [`CMake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
 
 > [!NOTE]
@@ -240,4 +243,5 @@ cargo build \
 
 
 [^1]: The Windows Command Line Experience™ frankly sucks. Haha.
-[^2]: To install Xcode, run: `xcode-select --install`
+[^2]: To enable "sudo" on Windows, see [here](https://learn.microsoft.com/en-us/windows/advanced-settings/sudo/).
+[^3]: To install Xcode, run: `xcode-select --install`
