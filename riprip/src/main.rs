@@ -109,6 +109,9 @@ const _: () = {
 ///
 /// This lets us bubble up startup errors so they can be pretty-printed.
 fn main() -> ExitCode {
+	#[cfg(target_os = "windows")]
+	fyi_msg::enable_console_ansi();
+
 	match main__() {
 		Ok(()) => ExitCode::SUCCESS,
 		Err(e @ (RipRipError::PrintHelp | RipRipError::PrintVersion)) => {

@@ -95,7 +95,9 @@ DRIVE SETTINGS:"), ansi!((dim, violet) "
                       [default: auto or 0; max: 65,535]", ansi!((dim, violet) "
                       ---------------------------------------------------------"), "
     -d, --dev <PATH>  The device path for the optical drive containing the CD
-                      of interest, like /dev/cdrom. [default: auto]", ansi!((dim, violet) "
+                      of interest, like ",
+                      cfg_select! { windows => "D:", _ => "/dev/sr0" },
+                      ". [default: auto]", ansi!((dim, violet) "
                       ---------------------------------------------------------"), "
     -o, --offset <SAMPLES>
                       The AccurateRip, et al, sample read offset to apply to

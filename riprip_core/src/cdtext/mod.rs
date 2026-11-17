@@ -566,7 +566,7 @@ mod test {
 			};
 
 			// Read both.
-			let txt_v = std::fs::read_to_string(&txt).unwrap();
+			let txt_v = std::fs::read_to_string(&txt).unwrap().replace("\r\n", "\n");
 			let mut bin_v = std::fs::read(&bin).unwrap();
 
 			// None of the tests are empty.

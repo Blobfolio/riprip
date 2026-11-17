@@ -6,7 +6,7 @@
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
 
 
-Rip Rip Hooray! is a specialized audio CD-ripper for Linux/Mac that is optimized for _track recovery_.
+Rip Rip Hooray! is a specialized audio CD-ripper for Linux and macOS that is optimized for _track recovery_.
 
 <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-a.webp" width="30%" alt="Rip Rip rip settings confirmation screen."></img> <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-b.webp" width="60%" alt="Rip Rip rip settings confirmation screen."></img>
 
@@ -48,7 +48,9 @@ Rip Rip can also be used to summarize a disc's track layout, and calculate and d
 
 ## Requirements
 
-Rip Rip Hooray! is a command line application for 64-bit Linux and Mac systems. It's fully self-contained and has no runtime dependencies.
+Rip Rip Hooray! is a command line application for 64-bit Linux and macOS, though it'll technically run on x64 Windows 11[^1] too if that's all you've got.
+
+It's fully self-contained and has no other runtime dependencies.
 
 
 ### Optical Drive
@@ -107,6 +109,9 @@ First things first, rip the entire disc and see what happens!
 # Rip the whole disc!
 riprip
 ```
+
+> [!NOTE]
+> Some systems will require you run `sudo riprip`[^2] instead.
 
 Rip Rip will check each track against both the [AccurateRip](https://accuraterip.com/) and [CUETools](https://cue.tools/wiki/CUETools_Database) databases to verify its accuracy, letting you know which were rescued, and which need more work.
 
@@ -178,31 +183,27 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 ## Installation
 
-Pre-built x86-64-v3 `.deb` packages for Debian and Ubuntu are attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
+Debian and Ubuntu users can grab the x86-64-v3 `.deb` package attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-To get Rip Rip up and running on other 64-bit Linux and Mac systems, it just needs to be built from source.
+(Homebrew integration for macOS is [coming soon](https://github.com/Blobfolio/riprip/issues/18).)
 
-There are only three pre-requisites:
+To get Rip Rip up and running on other supported systems, it just needs to be built from source.
+
+There are a few pre-requisites, but unless this is the first package you've ever tried to build, you probably already have them:
 
 * [Rust](https://rustup.rs/) (latest stable)
-* `clang` or `gcc`
-* [`cmake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
+* `clang` or `gcc` (Linux), `Xcode` (macOS)[^3], `MSVC` (Windows)
+* [`CMake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
 
 > [!NOTE]
-> 
-> Apple users will additionally need to configure Xcode.
-> 
-> ```bash
-> # Install Apple's command line tools.
-> xcode-select --install
-> 
-> # The above should give you clang, among other things.
-> clang --version
-> ```
+> Some systems might also need `NASM`, but you can probably skip it unless you get a build error.
 
 Once you've got those things squared away, a single command'll do the trick:
 
 ```bash
+# Make sure Rust is up-to-date.
+rustup update stable
+
 # See "cargo install --help" for more options.
 cargo install \
     --git https://github.com/Blobfolio/riprip.git \
@@ -213,6 +214,7 @@ riprip --version
 ```
 
 If you run into any issues or would like to help make Rip Rip available on more platforms, [let us know](https://github.com/Blobfolio/riprip/issues/new)!
+
 
 ### Offline/Vendored Builds
 
@@ -233,4 +235,13 @@ cargo build \
     --release \
     --locked \
     --offline
+
+# Hooray?
+./target/release/riprip --version
 ```
+
+
+
+[^1]: The Windows Command Line Experience™ frankly sucks. Haha.
+[^2]: To enable "sudo" on Windows, see [here](https://learn.microsoft.com/en-us/windows/advanced-settings/sudo/).
+[^3]: To install Xcode, run: `xcode-select --install`

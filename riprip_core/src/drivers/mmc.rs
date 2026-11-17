@@ -490,7 +490,7 @@ impl CommandDescriptorBlock {
 		}
 	}
 
-	#[cfg(target_os = "linux")]
+	#[cfg(any(target_os = "linux", target_os = "windows"))]
 	#[must_use]
 	/// # As Slice.
 	pub(super) const fn as_slice(&self) -> &[u8] {
