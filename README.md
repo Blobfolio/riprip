@@ -111,7 +111,7 @@ riprip
 ```
 
 > [!NOTE]
-> If the current user lacks read/write access to the drive, you might need to run `sudo riprip` instead.[^2]
+> Some systems will require you run `sudo riprip`[^2] instead.
 
 Rip Rip will check each track against both the [AccurateRip](https://accuraterip.com/) and [CUETools](https://cue.tools/wiki/CUETools_Database) databases to verify its accuracy, letting you know which were rescued, and which need more work.
 
