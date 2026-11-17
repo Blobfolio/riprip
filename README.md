@@ -6,7 +6,7 @@
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/riprip/issues)
 
 
-Rip Rip Hooray! is a specialized audio CD-ripper for Linux, Mac, and Windows[^1] command lines that is optimized for _track recovery_.
+Rip Rip Hooray! is a specialized audio CD-ripper for Linux and macOS that is optimized for _track recovery_.
 
 <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-a.webp" width="30%" alt="Rip Rip rip settings confirmation screen."></img> <img src="https://github.com/Blobfolio/riprip/raw/master/riprip_core/skel/riprip-b.webp" width="60%" alt="Rip Rip rip settings confirmation screen."></img>
 
@@ -48,7 +48,9 @@ Rip Rip can also be used to summarize a disc's track layout, and calculate and d
 
 ## Requirements
 
-Rip Rip Hooray! is a command line application for 64-bit Linux, Mac, and Windows[^2] systems. It's fully self-contained and has no runtime dependencies beyond the operating system.
+Rip Rip Hooray! is a command line application for 64-bit Linux and macOS, though it'll technically run on x64 Windows 11[^1] too if that's all you've got.
+
+It's fully self-contained and has no other runtime dependencies.
 
 
 ### Optical Drive
@@ -180,14 +182,14 @@ Optical drives and drivers are weird, so please don't hesitate to open an [issue
 
 Debian and Ubuntu users can grab the x86-64-v3 `.deb` package attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest), and Arch Linux users can install the same through [AUR](https://aur.archlinux.org/packages/riprip-bin) (thanks @Dominiquini!).
 
-Windows users can grab the pre-built x64 `.exe` attached to the [latest release](https://github.com/Blobfolio/riprip/releases/latest).
+(Homebrew integration for macOS is [coming soon](https://github.com/Blobfolio/riprip/issues/18).)
 
 To get Rip Rip up and running on other supported systems, it just needs to be built from source.
 
 There are a few pre-requisites, but unless this is the first package you've ever tried to build, you probably already have them:
 
 * [Rust](https://rustup.rs/) (latest stable)
-* `clang` or `gcc` (Linux), `Xcode` (macOS)[^3], `MSVC` (Windows)[^4]
+* `clang` or `gcc` (Linux), `Xcode` (macOS)[^2], `MSVC` (Windows)
 * [`CMake`](https://github.com/aws/aws-lc-rs/blob/main/aws-lc-sys/CMakeLists.txt#L4C32-L4C42)
 
 > [!NOTE]
@@ -209,6 +211,7 @@ riprip --version
 ```
 
 If you run into any issues or would like to help make Rip Rip available on more platforms, [let us know](https://github.com/Blobfolio/riprip/issues/new)!
+
 
 ### Offline/Vendored Builds
 
@@ -236,7 +239,5 @@ cargo build \
 
 
 
-[^1]: Windows command line kinda sucks, but it's a little better when run through [Windows Terminal](https://en.wikipedia.org/wiki/Windows_Terminal).
-[^2]: Windows support is limited x64 Windows 10 and later.
-[^3]: Apple users can configure Xcode by running: `xcode-select --install`
-[^4]: The Windows [rustup](https://rustup.rs/) installer configures `MSVC` by default.
+[^1]: The Windows Command Line Experience™ frankly sucks. Haha.
+[^2]: To install Xcode, run: `xcode-select --install`

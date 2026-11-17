@@ -15,39 +15,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  windows:
-    runs-on: windows-latest
-
-    env:
-      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
-
-    steps:
-    - uses: actions/checkout@v7
-
-    - uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: x86_64-pc-windows-msvc
-
-    - name: Build
-      run: |
-        cargo build --locked --release --target x86_64-pc-windows-msvc
-        target/x86_64-pc-windows-msvc/release/riprip.exe --version
-
-    - name: Rename
-      shell: pwsh
-      run: |
-        $version = "${{ github.event.release.tag_name }}" -replace '^v', ''
-        Copy-Item target/x86_64-pc-windows-msvc/release/riprip.exe "riprip_${version}-1_x64.exe"
-
-    - name: Attach
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $version = "${{ github.event.release.tag_name }}" -replace '^v', ''
-        gh release upload "${{ github.event.release.tag_name }}" "riprip_${version}-1_x64.exe"
-
-  vendored-sources:
+  build-and-attach:
     runs-on: ubuntu-latest
 
     env:
