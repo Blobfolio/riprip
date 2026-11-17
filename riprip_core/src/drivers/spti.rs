@@ -272,7 +272,7 @@ fn adapter_alignment(device: &File) -> Result<NonZeroUsize, RipRipError> {
 	if
 		(returned as usize) < required ||
 		! alignment.is_power_of_two() ||
-		usize::from(u16::MAX) < alignment.get()
+		512 < alignment.get()
 	{
 		return Err(RipRipError::Internal(
 			"adapter_alignment",
