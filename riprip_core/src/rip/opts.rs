@@ -38,6 +38,9 @@ const FLAG_SYNC: u8 =       0b0010_0000;
 /// # FLAG: Verbose.
 const FLAG_VERBOSE: u8 =    0b0100_0000;
 
+/// # FLAG: Attempt CTDB repair after physical reads.
+const FLAG_CTDB_REPAIR: u8 = 0b1000_0000;
+
 /// # FLAG: Default.
 const FLAG_DEFAULT: u8 = FLAG_RESUME;
 
@@ -140,6 +143,7 @@ impl fmt::Display for RipOptions {
 
 		// All the easy stuff.
 		if self.backwards() { f.write_str("--backwards ")?; }
+		if self.ctdb_repair() { f.write_str("--ctdb-repair ")?; }
 		if let Some(cache) = self.cache {
 			write!(f, "-c{cache} ")?;
 		}
@@ -197,6 +201,14 @@ macro_rules! with_flag {
 
 /// ## Setters.
 impl RipOptions {
+	with_flag!(
+		with_ctdb_repair,
+		FLAG_CTDB_REPAIR,
+		"# Experimental CTDB Repair.",
+		"",
+		"Attempt checksum-verified CTDB recovery after the physical rip.",
+	);
+
 	with_flag!(
 		with_backwards,
 		FLAG_BACKWARDS,
@@ -443,6 +455,7 @@ macro_rules! get_flag {
 /// # Getters.
 impl RipOptions {
 	get_flag!(backwards, FLAG_BACKWARDS, "Rip Backwards");
+	get_flag!(ctdb_repair, FLAG_CTDB_REPAIR, "Attempt CTDB Repair");
 	get_flag!(strict, FLAG_STRICT, "Strict C2 Error Pointers");
 	get_flag!(flip_flop, FLAG_FLIP_FLOP, "Alternate Rip Read Order");
 	get_flag!(reset, FLAG_RESET, "Reset Counts");

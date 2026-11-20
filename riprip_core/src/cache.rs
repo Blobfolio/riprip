@@ -171,11 +171,21 @@ pub(super) fn cache_prefix(toc: &Toc) -> &'static str {
 /// This will return an error if there are problems determining the cache
 /// location.
 pub(crate) fn state_path(toc: &Toc, track: Track) -> Result<PathBuf, RipRipError> {
-	cache_path(format!(
+	cache_path(state_name(toc, track))
+}
+
+/// Locate a saved state without creating any cache directories.
+pub(crate) fn state_read_path(toc: &Toc, track: Track) -> std::io::Result<PathBuf> {
+	Ok(std::env::current_dir()?.join(CACHE_BASE).join(state_name(toc, track)))
+}
+
+/// Relative path shared by state readers and writers.
+fn state_name(toc: &Toc, track: Track) -> String {
+	format!(
 		"{CACHE_SCRATCH}/{}__{:02}.state",
 		cache_prefix(toc),
 		track.number()
-	))
+	)
 }
 
 /// # Track Path.

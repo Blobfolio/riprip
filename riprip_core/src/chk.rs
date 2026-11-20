@@ -43,7 +43,7 @@ const CTDB_WIGGLE: usize = CTDB_WIGGLE_SAMPLES * BYTES_PER_SAMPLE as usize;
 const CTDB_WIGGLE_SAMPLES: usize = SAMPLE_OVERREAD as usize;
 
 /// # User Agent.
-const UA: &str = concat!(
+pub(crate) const UA: &str = concat!(
 	"Mozilla/5.0 (X11; Linux x86_64; rv:",
 	env!("CARGO_PKG_VERSION"),
 	") RipRip/",
@@ -73,19 +73,15 @@ const UA: &str = concat!(
 /// AccurateRip is pressing-specific and their database only accepts
 /// submissions from two Windows-only programs, so the match pool is limited
 /// compared to CUETools.
-pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
+pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample], cache_only: bool)
 -> Option<(u8, u8)> {
 	// Short-circuit: does not apply to HTOA.
 	if track.is_htoa() { return None; }
 
 	// Fetch/cache the checksums.
 	let ar = toc.accuraterip_id();
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ar.bin", cache_prefix(toc))).ok()?;
-	let chk = std::fs::read(&dst).ok()
-		.or_else(|| {
-			let chk = download(&ar.checksum_url(), &dst)?;
-			Some(chk)
-		})
+	let name = format!("{CACHE_SCRATCH}/{}__chk-ar.bin", cache_prefix(toc));
+	let chk = lookup_data(&name, || ar.checksum_url(), cache_only)
 		.and_then(|chk|
 			if let Ok(v) = ar.parse_checksums(&chk) { Some(v) }
 			else {
@@ -203,17 +199,13 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 /// Also of note: CUETools submissions are published more or less immediately
 /// and require no second opinion, so this method will return `0` for any value
 /// less than `2` to avoid confusion.
-pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u16> {
+pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample], cache_only: bool)
+-> Option<u16> {
 	// Short-circuit: does not apply to HTOA.
 	if track.is_htoa() { return None; }
 
 	// Fetch/cache the checksums.
-	let dst = cache_path(format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", cache_prefix(toc))).ok()?;
-	let mut chk = std::fs::read(&dst).ok()
-		.or_else(|| {
-			let chk = download(&toc.ctdb_checksum_url(), &dst)?;
-			Some(chk)
-		})
+	let mut chk = lookup_data(&ctdb_cache_name(toc), || toc.ctdb_checksum_url(), cache_only)
 		.and_then(|chk| {
 			if
 				let Ok(chk2) = std::str::from_utf8(&chk) &&
@@ -340,6 +332,22 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 	Some(if confidence < 2 { 0 } else { confidence })
 }
 
+/// Relative path of the CTDB lookup shared by verification and repair.
+pub(crate) fn ctdb_cache_name(toc: &Toc) -> String {
+	format!("{CACHE_SCRATCH}/{}__chk-ctdb.xml", cache_prefix(toc))
+}
+
+/// Read a verification lookup, optionally allowing a download and a cache write.
+fn lookup_data(name: &str, url: impl FnOnce() -> String, cache_only: bool) -> Option<Vec<u8>> {
+	if cache_only {
+		let path = std::env::current_dir().ok()?.join(crate::CACHE_BASE).join(name);
+		std::fs::read(path).ok()
+	}
+	else {
+		let path = cache_path(name).ok()?;
+		std::fs::read(&path).ok().or_else(|| download(&url(), &path))
+	}
+}
 
 
 /// # CTDB Offset Checksumming (Negative).

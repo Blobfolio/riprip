@@ -74,6 +74,11 @@ impl Add for TrackQuality {
 }
 
 impl TrackQuality {
+	/// Count verified PCM and physical evidence outside the verified interval.
+	pub(super) const fn from_ctdb(confirmed: u32, likely: u32, maybe: u32, bad: u32) -> Self {
+		Self { confirmed, likely, maybe, bad, contentious: 0, confused: false }
+	}
+
 	/// # From Slice.
 	///
 	/// Count up all the different statuses in a given track slice.
