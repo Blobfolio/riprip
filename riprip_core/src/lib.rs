@@ -140,7 +140,7 @@ use count;
 
 
 
-/// # 16-bit Stereo Sample (raw PCM bytes).
+/// # 16-bit Stereo Sample (raw PCM bytes, little endian).
 type Sample = [u8; 4];
 
 /// # Ripper::Finish Return Type.

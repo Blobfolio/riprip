@@ -57,9 +57,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.2"
+version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
+checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -69,9 +69,9 @@ dependencies = [
 
 [[package]]
 name = "cdtoc"
-version = "0.14.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5a264efeb5ae8acf68da2d860524c5148e9665e92c599166422a3471488c0cc"
+checksum = "63855b46b3163fdc15a6a8b8c84af00b1485b6a06b3ef97cb2ebf95382082bd0"
 dependencies = [
  "dactyl",
  "sha1",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "riprip"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "argyle",
  "dactyl",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "riprip_core"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "cdtoc",
  "crc32fast",
@@ -731,6 +731,6 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "zeroize"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
+checksum = "85ccff8a4805aba1eaa4cd4afcd49f7557dd2cf5fd79ffc37f8959466effc5aa"
