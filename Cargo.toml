@@ -17,7 +17,7 @@ trimothy = "0.10.*"
 utc2k = "0.21.*"
 
 [workspace.dependencies.cdtoc]
-version = "0.14.*"
+version = "0.15.*"
 default-features = false
 
 [workspace.dependencies.fyi_msg]

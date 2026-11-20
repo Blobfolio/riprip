@@ -17,11 +17,14 @@ use crc32fast::Hasher as Crc;
 use cdtoc::{
 	Toc,
 	Track,
+	CtdbTrackChecksums,
 };
 use dactyl::traits::NiceInflection;
 use std::{
-	collections::BTreeMap,
-	num::Wrapping,
+	num::{
+		NonZeroU8,
+		Wrapping,
+	},
 	path::Path,
 	sync::{
 		Arc,
@@ -145,8 +148,8 @@ pub(crate) fn chk_accuraterip(toc: &Toc, track: Track, data: &[RipSample])
 	let crc2 = (crc2.0 & 0xFFFF_FFFF) as u32;
 
 	let out = (
-		chk.get(&crc1).copied().unwrap_or(0),
-		chk.get(&crc2).copied().unwrap_or(0),
+		chk.get(&crc1).copied().map_or(0, NonZeroU8::get),
+		chk.get(&crc2).copied().map_or(0, NonZeroU8::get),
 	);
 	log!(
 		@debug
@@ -293,7 +296,7 @@ pub(crate) fn chk_ctdb(toc: &Toc, track: Track, data: &[RipSample]) -> Option<u1
 
 	// Check it!
 	if let Some(v) = chk.remove(&crc) {
-		confidence += v;
+		confidence += v.get();
 		log!(
 			@debug
 			"CUETools checksum {crc:08x} has {} (track {}).",
@@ -349,7 +352,7 @@ fn chk_ctdb_neg(
 	start: &[u8],
 	middle: &crc32fast::Hasher,
 	end: &[u8],
-	chk: &Arc<Mutex<BTreeMap<u32, u16>>>,
+	chk: &Arc<Mutex<CtdbTrackChecksums>>,
 	confidence: &AtomicU16,
 ) {
 	for shift in 1..=CTDB_WIGGLE_SAMPLES {
@@ -376,7 +379,7 @@ fn chk_ctdb_neg(
 					track.number(),
 					shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
 				);
-				confidence.fetch_add(v, Relaxed);
+				confidence.fetch_add(v.get(), Relaxed);
 			}
 		}
 	}
@@ -392,7 +395,7 @@ fn chk_ctdb_pos(
 	start: &[u8],
 	middle: &crc32fast::Hasher,
 	end: &[u8],
-	chk: &Arc<Mutex<BTreeMap<u32, u16>>>,
+	chk: &Arc<Mutex<CtdbTrackChecksums>>,
 	confidence: &AtomicU16,
 ) {
 	for shift in 1..=CTDB_WIGGLE_SAMPLES {
@@ -420,7 +423,7 @@ fn chk_ctdb_pos(
 					track.number(),
 					shift=shift.wrapping_div(usize::from(BYTES_PER_SAMPLE)),
 				);
-				confidence.fetch_add(v, Relaxed);
+				confidence.fetch_add(v.get(), Relaxed);
 			}
 		}
 	}
