@@ -152,6 +152,108 @@ There are a number of advanced options that can come in handy for tricky situati
 Good luck!
 
 
+### Experimental CTDB repair
+
+```sh
+riprip --ctdb-assess
+riprip --ctdb-repair --passes 3
+```
+
+`--ctdb-assess` reads the inserted disc's TOC and the saved rip states. It reports
+available CTDB parity, the distribution of uncertain samples across codewords,
+and whether a proposed correction passed CTDB verification. Assessment is
+read-only, and drive access is limited to disc identification. It uses the
+same confidence threshold as ripping (`--confidence`, default 3).
+
+`--ctdb-repair` checks a complete saved rip before reading again, then checks
+newly saved evidence after each physical pass. A verified repair skips further
+reads of the covered audio. Subsequent passes can still read an uncertain,
+reachable guard window or hidden track-one audio. Failed checks leave the
+physical passes scheduled. Lookup and parity data are reused during the rip.
+The repair can use saved states from earlier sessions and other drives, and
+agreeing read-ahead samples at track boundaries.
+Successful repairs update the affected WAVs at their normal `_riprip/`
+paths. Rip Rip stages every replacement before installing any of them and
+keeps temporary backups for rollback if installation fails. The original
+drive observations stay in the recovery files for subsequent physical rereads.
+During resume, Rip Rip keeps verified WAVs while their fingerprints match,
+until the physical audio independently verifies or a new CTDB repair succeeds.
+
+#### Format and verification
+
+Rip Rip uses `cdtoc` to parse CTDB v3 lookups and their cached responses.
+Supported entries advertise 8 or 16 syndrome rows. Rip Rip downloads the
+little-endian parity over HTTPS and checks its first lane against the lookup
+syndrome before decoding.
+[CTDB overview](https://cue.tools/wiki/CTDB)
+[CUETools lookup client](https://github.com/gchudov/cuetools.net/blob/master/CUETools.CTDB/CUEToolsDB.cs)
+[Syndrome serialization](https://github.com/gchudov/cuetools.net/blob/master/CUETools.Parity/Parity2Syndrome.cs)
+
+CTDB uses a stride of 5,880 stereo frames. Each left or right 16-bit word
+belongs to one of 11,760 interleaved Reed–Solomon codewords over GF(2¹⁶),
+with primitive polynomial `0x1100B`. For an audio image of `D` frames and
+stride `W`, the zero-offset window starts at `W` and contains
+`(floor(D / W) - 2) * W` frames. The decoder checks alignments from −5,879
+through +5,879 stereo frames. It writes repairs at the original local sample
+positions, using the drive-corrected coordinates already stored by Rip Rip.
+Compatible references have the same audio track lengths as the disc. Track
+CRCs use those boundaries within the protected audio window.
+[CUETools interleave and offset behavior](https://github.com/gchudov/cuetools.net/blob/master/CUETools.AccurateRip/CDRepair.cs)
+[CUETools track CRC behavior](https://github.com/gchudov/cuetools.net/blob/master/CUETools.AccurateRip/AccurateRip.cs)
+
+For each codeword with `p` syndrome rows, the guaranteed decoding bound is
+`2 * unknown_errors + known_erasures <= p`. A contiguous burst and the same
+number of errors separated by whole strides can put very different loads on
+the codewords. Assessment shows the peak load and how many codewords exceed
+the bound under different assumptions. C2 and unread positions are candidate
+erasures, and weak reads can provide additional location hints. The decoder
+combines the local and reference syndromes, removes the known erasure terms
+for Berlekamp–Massey, searches the shortened codeword for roots, and solves a
+Vandermonde system for the correction magnitudes. It checks every syndrome
+before proposing a correction. Acceptance requires the disc CRC and every
+available, applicable track CRC for the record. Corrections also preserve PCM
+protected by the existing AccurateRip or CTDB checks.
+[Reed–Solomon finite-field specification](https://www.rfc-editor.org/rfc/rfc5510)
+[Errors-and-erasures decoding](https://ntrs.nasa.gov/api/citations/19890010958/downloads/19890010958.pdf)
+
+CTDB coverage excludes hidden track-one audio and the data session of an Enhanced
+CD. The leading and trailing guard windows are excluded at the verified
+pressing offset. The trailing window includes the remainder after division by
+5,880. Assessment reports uncertain frames outside coverage when present. A
+record with different audio track lengths or an unsupported stride cannot be
+used. Assessment and repair hold one disc PCM image and its quality data in
+memory and load one track's saved state at a time.
+
+The Rust decoder was written independently from the finite-field and
+Reed–Solomon mathematics. The CUETools code was used to identify interoperable
+record fields, sample positions, and checksum coverage. Rip Rip and its existing
+`cdtoc` dependency use the WTFPL.
+
+#### Repair tests
+
+The regular test suite uses deterministic PCM and an independent reference
+syndrome generator. It covers isolated and distributed errors, a sector and
+bursts, crossing track boundaries, both offset signs, mixed errors and
+erasures, misleading C2 flags, exact and exceeded capacity, preservation of
+protected samples, conflicting offset repairs, and rejection of incorrect CRCs.
+
+The physical fixture is the 11-track Enhanced CD with CTDB TOCID
+`L7S9zvGxE.4JzQLS4Yh67L6..ZM-` and recovery record `90691`. Its
+128,209,284 stereo frames matched AccurateRip and CTDB. Injected damage
+combining a complete sector, a three-sector burst, distributed and
+track-boundary errors, and lanes at the 16-row correction limit was restored
+byte for byte using the live parity. With seventeen erasures in one
+codeword, the decoder rejected the damaged copy. The ignored test reads the
+local fixture from `RIPRIP_CTDB_DISC_FIXTURE`, with the WAVs in `_riprip/` and
+the CTDB parity at `90691.syndrome`.
+
+A Windows CLI assessment preserved the SHA-256 hashes of all 13 files in
+the test workspace. The in-place export test uses that saved audio and
+parity and injects 589 changed channel words into a track state. It checks
+the normal WAV paths against the original rip byte for byte. It also checks
+that the drive observations are preserved and a later unverified resume
+retains the repaired WAV.
+
 ### Debugging and Troubleshooting.
 
 If a disc is giving you trouble or you simply want a record of the proceedings, set the `-v`/`--verbose` flag to have Rip Rip emit a log to STDOUT.

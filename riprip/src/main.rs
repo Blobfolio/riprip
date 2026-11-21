@@ -137,6 +137,7 @@ fn main__() -> Result<(), RipRipError> {
 		no_rip,
 		no_summary,
 		status,
+		assess,
 	) = cli::parse()?;
 
 	// Quiet?
@@ -160,10 +161,14 @@ fn main__() -> Result<(), RipRipError> {
 	}
 
 	// Go ahead and leave if there's no ripping to do.
-	if no_rip { return Ok(()); }
+	if no_rip && !assess { return Ok(()); }
 
 	// Set up progress and killswitch in case they're needed.
 	let killed = KillSwitch::from(Progless::sigint_keepalive());
+	if assess {
+		disc.assess_ctdb_repair(&opts, killed);
+		return if killed.killed() { Err(RipRipError::Killed) } else { Ok(()) };
+	}
 	let progress = Progless::default();
 
 	// Just checking the status?

@@ -539,6 +539,11 @@ impl Disc {
 		Some((bin, txt))
 	}
 
+	/// Assess experimental CTDB repair using the saved recovery state, with no disk writes.
+	pub fn assess_ctdb_repair(&self, opts: &RipOptions, killed: KillSwitch) {
+		crate::rip::ctdb::assess(&self.toc, opts, killed);
+	}
+
 	/// # Save CD-Text Data.
 	///
 	/// Try to save the raw and decoded CD-Text data to disk.

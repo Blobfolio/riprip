@@ -3,6 +3,7 @@
 */
 
 pub(super) mod buf;
+pub(super) mod ctdb;
 pub(super) mod data;
 mod iter;
 pub(super) mod opts;
@@ -29,6 +30,7 @@ use crate::{
 	RipState,
 	SavedRips,
 	SECTOR_OVERREAD,
+	SAMPLES_PER_SECTOR,
 	state_path,
 	TrackRange,
 };
@@ -88,6 +90,12 @@ pub(crate) struct Ripper<'a> {
 
 	/// # Total Sectors (across all passes, plus one)
 	total: NonZeroU32,
+
+	/// Number of passes actually started.
+	passes_run: u8,
+
+	/// Verified WAVs produced for tracks outside the requested physical reads.
+	repaired: SavedRips,
 }
 
 impl<'a> Ripper<'a> {
@@ -126,10 +134,12 @@ impl<'a> Ripper<'a> {
 			opts: *opts,
 			tracks,
 			total,
+			passes_run: 0,
+			repaired: SavedRips::new(),
 		})
 	}
 
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+	#[expect(clippy::cast_possible_truncation, reason = "Track count fits u32.")]
 	/// # Rip All Passes and Tracks!
 	///
 	/// This sets up some shared buffers, the progress bar, etc., then loops
@@ -166,6 +176,9 @@ impl<'a> Ripper<'a> {
 
 		// Load a bunch of other stuff!
 		let toc = self.disc.toc();
+		let resume = self.opts.resume();
+		let mut ctdb = self.opts.ctdb_repair().then(ctdb::Session::new);
+		let mut checked_states = false;
 		progress.reset(self.total);
 		progress.set_title(Some(Msg::new(("Initializing", AnsiColor::Misc199), standby_msg())));
 		let mut state = RipState::new(toc, first_track, &self.opts)?;
@@ -174,7 +187,6 @@ impl<'a> Ripper<'a> {
 		// Before we run through the passes, let's set up the initial quality,
 		// etc. But only if we're resuming.
 		if self.opts.resume() {
-			let mut first_track = None;
 			for entry in self.tracks.values_mut() {
 				if
 					! killed.killed() &&
@@ -187,11 +199,6 @@ impl<'a> Ripper<'a> {
 					}
 				}
 
-				// Note the first non-skippable track so we can reset afterward.
-				if first_track.is_none() && ! entry.skippable() {
-					first_track.replace(entry.track);
-				}
-
 				progress.increment();
 			}
 
@@ -199,12 +206,16 @@ impl<'a> Ripper<'a> {
 			// during this pass if applicable.
 			self.opts = self.opts.with_reset(false);
 
-			// Reset the loaded track to the first one we'll actually be
-			// ripping.
-			if let Some(first_track) = first_track {
-				state.replace(first_track, &self.opts)?;
+			// Fully saved audio can be repaired before another drive pass.
+			if let Some(session) = &mut ctdb &&
+				toc.audio_tracks().all(|track| state_path(toc, track).is_ok_and(|path| path.is_file()))
+			{
+				self.try_ctdb(session, resume, 0, progress, killed);
+				checked_states = true;
 			}
-			// Nothing to do!
+			if let Some(first_track) = self.tracks.values().find(|entry| !entry.skippable()) {
+				state.replace(first_track.track, &self.opts)?;
+			}
 			else {
 				progress.finish();
 				return Ok(());
@@ -215,6 +226,7 @@ impl<'a> Ripper<'a> {
 
 		// Loop each pass!
 		for pass in 1..=self.opts.passes() {
+			self.passes_run = pass;
 			// Fire up the log if we're logging.
 			share.log.bump_pass();
 
@@ -228,6 +240,7 @@ impl<'a> Ripper<'a> {
 
 			// Loop each track!
 			for entry in self.tracks.values_mut() {
+				entry.pass_saved = false;
 				// Skip the work if we aborted or already confirmed the track
 				// is complete.
 				if entry.skippable() { continue; }
@@ -250,6 +263,14 @@ impl<'a> Ripper<'a> {
 					if skip != 0 { progress.increment_n(skip); }
 					let _res = share.progress.push_msg(happy_track_msg(entry.track));
 				}
+			}
+
+			if let Some(session) = &mut ctdb && !killed.killed() {
+				if !checked_states || self.tracks.values().any(|entry| entry.pass_saved && !entry.track.is_htoa()) {
+					self.try_ctdb(session, resume, pass, progress, killed);
+					checked_states = true;
+				}
+				if self.tracks.values().all(RipEntry::skippable) { break; }
 			}
 
 			if pass < self.opts.passes() {
@@ -314,6 +335,40 @@ impl<'a> Ripper<'a> {
 }
 
 impl Ripper<'_> {
+	/// Verify the current snapshot and drop future reads of verified audio.
+	fn try_ctdb(&mut self, session: &mut ctdb::Session, resume: bool, pass: u8,
+		progress: &Progless, killed: KillSwitch) {
+		let unavailable: Vec<_> = self.tracks.values().filter_map(|entry| {
+			(!entry.state_saved.unwrap_or(resume)).then_some(entry.track.number())
+		}).collect();
+		let refresh: Vec<_> = self.tracks.values().filter_map(|entry| {
+			(entry.pass_saved && entry.ctdb_coverage.is_some()).then_some(entry.track.number())
+		}).collect();
+		let toc = self.disc.toc();
+		progress.set_title(Some(Msg::new(("Verifying", AnsiColor::Misc199), "Checking CTDB repair…")));
+		let mut outcome = session.check(toc, &self.opts.with_resume(resume), killed,
+			ctdb::Mode::Repair { unavailable: &unavailable, refresh: &refresh });
+		let passes_left = u32::from(self.opts.passes() - pass);
+		for (&number, entry) in &mut self.tracks {
+			let was_skippable = entry.skippable();
+			if let Some((path, ar, ctdb)) = outcome.tracks.remove(&number) {
+				entry.dst = Some(path);
+				entry.ar = ar;
+				entry.ctdb = ctdb;
+			}
+			if let Some(coverage) = outcome.coverage.remove(&number) {
+				entry.ctdb = Some(outcome.confidence);
+				if !entry.quality.1.is_confirmed() { entry.quality.1 = coverage.quality; }
+				entry.ctdb_coverage = Some(coverage);
+				if entry.dst.is_none() { entry.dst = crate::cache::track_path(toc, entry.track).ok(); }
+			}
+			if !was_skippable && entry.skippable() {
+				progress.increment_n(passes_left * entry.sectors);
+			}
+		}
+		self.repaired.extend(outcome.tracks);
+	}
+
 	/// # Summarize.
 	///
 	/// Print a colored bar, some numbers, and a status for the rip as a whole.
@@ -327,11 +382,12 @@ impl Ripper<'_> {
 
 		// Print some words.
 		let ripped = self.tracks.values().filter(|t| t.dst.is_some()).count();
+		let passes = if self.opts.ctdb_repair() { self.passes_run } else { self.opts.passes() };
 		let elapsed = NiceElapsed::from(self.now.elapsed());
 		Msg::new(("Ripped", AnsiColor::Misc199), format!(
 			"{}, {}, in {elapsed}.",
 			ripped.nice_inflect("track", "tracks"),
-			self.opts.passes().nice_inflect("pass", "passes"),
+			passes.nice_inflect("pass", "passes"),
 		))
 			.with_newline(true)
 			.eprint();
@@ -471,7 +527,8 @@ impl Ripper<'_> {
 	/// path and AccurateRip/CTDB match counts, indexed by track number.
 	pub(crate) fn finish(self) -> Option<SavedRips> {
 		let conf = self.opts.confidence();
-		let out: SavedRips = self.tracks.into_iter()
+		let mut out = self.repaired;
+		out.extend(self.tracks.into_iter()
 			.filter_map(|(k, v)| {
 				let dst = v.dst?;
 				let ar =
@@ -482,7 +539,7 @@ impl Ripper<'_> {
 					else { v.ctdb.filter(|&v1| u16::from(conf) <= v1) };
 				Some((k, (dst, ar, ctdb)))
 			})
-			.collect();
+			);
 
 		if out.is_empty() { None }
 		else { Some(out) }
@@ -515,6 +572,15 @@ struct RipEntry {
 
 	/// # CTDB Confidence.
 	ctdb: Option<u16>,
+
+	/// Result of this run's most recent attempt to save the sample evidence.
+	state_saved: Option<bool>,
+
+	/// Whether this pass saved new evidence for CTDB.
+	pass_saved: bool,
+
+	/// Available guard work after CTDB confirms the covered portion.
+	ctdb_coverage: Option<ctdb::Coverage>,
 }
 
 impl RipEntry {
@@ -555,6 +621,9 @@ impl RipEntry {
 			quality: (quality, quality),
 			ar: None,
 			ctdb: None,
+			state_saved: None,
+			pass_saved: false,
+			ctdb_coverage: None,
 		})
 	}
 }
@@ -598,11 +667,17 @@ impl RipEntry {
 		let rip_rng = state.sector_rip_range();
 
 		for (read_lsn, sector) in state.offset_rip_iter(opts)? {
+			let first = read_lsn * i32::from(SAMPLES_PER_SECTOR) - i32::from(opts.offset().samples());
+			let guard = self.ctdb_coverage.as_ref();
+			let needed = |n| guard.is_none_or(|guard| {
+				guard.needs_sample(first + i32::try_from(n).expect("sample index within a sector"))
+			});
 			// We can skip this block if the user aborted or there's
 			// nothing to refine.
 			if
 				share.killed.killed() ||
-				sector.iter().all(|v| v.is_likely(opts.rereads()))
+				sector.iter().enumerate().all(|(n, v)| !needed(n) ||
+					(v.is_likely(opts.rereads()) && !(guard.is_some() && matches!(v, crate::RipSample::Lead))))
 			{
 				share.progress.increment();
 				continue;
@@ -641,8 +716,11 @@ impl RipEntry {
 				Ok(all_good) => if ! share.killed.killed() {
 					// Patch the data, unless the user just aborted, as that
 					// will probably have messed up the data.
-					for (old, (new, c2_err)) in sector.iter_mut().zip(share.buf.samples()) {
-						old.update(new, c2_err, all_good);
+					for (n, (old, (new, c2_err))) in sector.iter_mut().zip(share.buf.samples()).enumerate() {
+						if needed(n) {
+							if guard.is_some() && matches!(old, crate::RipSample::Lead) { *old = crate::RipSample::Tbd; }
+							old.update(new, c2_err, all_good);
+						}
 					}
 				},
 				// Silently skip generic read errors.
@@ -673,7 +751,7 @@ impl RipEntry {
 		}
 
 		// Reverify if we changed any data, or haven't verified yet.
-		self.quality.1 = state.track_quality(opts);
+		self.quality.1 = self.ctdb_coverage.as_ref().map_or_else(|| state.track_quality(opts), |guard| guard.quality);
 		if self.ar.is_none() || self.ctdb.is_none() || before != state.quick_hash() {
 			self.verify(state, opts, share.progress);
 		}
@@ -687,16 +765,35 @@ impl RipEntry {
 				self.track.number(),
 				"Saving the state…",
 			);
-			let _res = state.save_state();
+			let result = state.save_state();
+			self.state_saved = Some(result.is_ok());
+			self.pass_saved = result.is_ok();
 		}
 
 		// Don't forget to extract the track. Do this after every pass
 		// in case people want to fuck with CUETools immediately.
 		if self.dst.is_none() || changed {
-			self.dst.replace(state.save_track()?);
+			self.export_track(state, opts)?;
 		}
 
 		Ok(self.skippable())
+	}
+
+	/// Prefer an already verified WAV to a resumed, unverified physical export.
+	fn export_track(&mut self, state: &RipState, opts: &RipOptions) -> Result<(), RipRipError> {
+		let _lock = ctdb::output::lock(state.toc()).ok();
+		let path = crate::cache::track_path(state.toc(), self.track)?;
+		if opts.resume() && opts.confidence() > max_confidence(self.ar, self.ctdb) &&
+			let Some(confidence) = ctdb::output::confidence(state.toc(), self.track, &path)
+		{
+			self.ar = None;
+			self.ctdb = Some(confidence);
+			self.dst.replace(path);
+		}
+		else {
+			self.dst.replace(state.save_track()?);
+		}
+		Ok(())
 	}
 
 	/// # Skippable?
@@ -708,8 +805,9 @@ impl RipEntry {
 	/// sector skipping that would normally happen. Aside from avoiding an
 	/// unnecessary loop, this prevents us having to read/decompress/deserialize
 	/// the state data at all.
-	const fn skippable(&self) -> bool {
-		self.dst.is_some() && self.quality.1.is_confirmed()
+	fn skippable(&self) -> bool {
+		self.dst.is_some() && (self.quality.1.is_confirmed() ||
+			self.ctdb_coverage.as_ref().is_some_and(|coverage| !coverage.needs_reads))
 	}
 
 	/// # Verify Entry.
@@ -728,7 +826,7 @@ impl RipEntry {
 		if self.track.is_htoa() { return false; }
 
 		// Check AccurateRip and CTDB in separate threads.
-		(self.ar, self.ctdb) = verify_track(self.track, state);
+		(self.ar, self.ctdb) = verify_track(self.track, state, false);
 
 		// If we're confirmed and the state isn't, update the state and our
 		// quality snapshot.
@@ -757,11 +855,11 @@ impl RipEntry {
 	-> Result<bool, RipRipError> {
 		if ! state.is_new() {
 			log!(@debug "Checking rip state for track {}.", self.track.number());
-			(self.ar, self.ctdb) = verify_track(self.track, state);
+			(self.ar, self.ctdb) = verify_track(self.track, state, false);
 			if opts.confidence() <= max_confidence(self.ar, self.ctdb) {
 				let tmp = TrackQuality::new_confirmed(self.quality.1.total());
 				self.quality = (tmp, tmp);
-				self.dst.replace(state.save_track()?);
+				self.export_track(state, opts)?;
 				return Ok(true);
 			}
 
@@ -953,17 +1051,20 @@ const fn track_idx_to_bits(idx: u8) -> u128 {
 ///
 /// Check the track rip against both the AccurateRip and CUETools databases.
 /// To improve performance, this performs each check in a separate thread.
-fn verify_track(track: Track, state: &RipState) -> (Option<(u8, u8)>, Option<u16>) {
+fn verify_track(track: Track, state: &RipState, cache_only: bool)
+-> (Option<(u8, u8)>, Option<u16>) {
 	std::thread::scope(|s| {
 		let ar = s.spawn(|| chk_accuraterip(
 			state.toc(),
 			track,
 			state.track_slice(),
+			cache_only,
 		));
 		let ctdb = s.spawn(|| chk_ctdb(
 			state.toc(),
 			track,
 			state.rip_slice(),
+			cache_only,
 		));
 		(
 			ar.join().ok().flatten().map(|(v1, v2)| (v1.min(99), v2.min(99))),
